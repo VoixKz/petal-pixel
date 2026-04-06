@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package flower.v1;
+
+option go_package = "flower-backend/gen/go/flower/v1;flowerv1";
+
+// FlowerService manages flower creation, retrieval, and minting workflows.
+service FlowerService {
+  // Creates a deterministic flower profile from the provided person name.
+  rpc CreateFlower(CreateFlowerRequest) returns (CreateFlowerResponse);
+  // Retrieves a flower by its ID.
+  rpc GetFlower(GetFlowerRequest) returns (GetFlowerResponse);
+  // Prepares blockchain minting data for an existing flower and wallet.
+  rpc PrepareMint(PrepareMintRequest) returns (PrepareMintResponse);
+  // Confirms a submitted mint transaction for the specified flower.
+  rpc ConfirmMint(ConfirmMintRequest) returns (ConfirmMintResponse);
+}
+
+message FlowerParams {
+  // Generator versions so you can change algorithms safely.
+  string algo_version = 1;
+  string schema_version = 2;
+
+  // Deterministic seed derived from input name.
+  uint64 seed = 3;
+
+  // Example parameters (expand as your frontend needs).
+  uint32 petal_count = 4;
+  float petal_length = 5;
+  float petal_width = 6;
+  float curvature = 7;
+  float stem_height = 8;
+  float hue = 9;
+}
+
+message CreateFlowerRequest {
+  string person_name = 1;
+}
+
+message CreateFlowerResponse {
+  string flower_id = 1;
+  FlowerParams params = 2;
+}
+
+message GetFlowerRequest {
+  string flower_id = 1;
+}
+
+message GetFlowerResponse {
+  string flower_id = 1;
+  FlowerParams params = 2;
+}
+
+message PrepareMintRequest {
+  string flower_id = 1;
+  string wallet_address = 2;
+}
+
+message PrepareMintResponse {
+  string flower_id = 1;
+  uint64 chain_id = 2;
+  string contract_address = 3;
+  string token_uri = 4;
+
+  // For a simple mint(to, tokenURI) function, returning typed args is often easiest.
+  string mint_to = 5;
+  string mint_token_uri = 6;
+
+  // Optional: ABI-encoded calldata (filled in later).
+  bytes mint_calldata = 7;
+}
+
+message ConfirmMintRequest {
+  string flower_id = 1;
+  string tx_hash = 2;
+}
+
+message ConfirmMintResponse {
+  string flower_id = 1;
+  string tx_hash = 2;
+}

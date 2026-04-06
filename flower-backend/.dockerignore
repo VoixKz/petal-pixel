@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+README.md
+PROJECT_DOCUMENTATION.md
+API.md
+node_modules
+tmp
+.vscode
+.idea
