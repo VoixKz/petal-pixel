@@ -209,6 +209,7 @@ copy petal-pixel-studio\.env.example petal-pixel-studio\.env
 | Variable | Description |
 |---|---|
 | `DB_DSN` | Supabase PostgreSQL connection string (from your Supabase project settings) |
+| `S3_*` | Supabase Storage S3 endpoint, keys, bucket, and public base URL (see `flower-backend/.env.example`) |
 | `CHAIN_ID` | `1337` (matches Anvil default in `Taskfile.yml`) |
 | `NFT_CONTRACT_ADDRESS` | Auto-written by `task deploy` into `.task.env` — leave as `0x000…` initially |
 
@@ -230,6 +231,7 @@ In your Supabase dashboard → **SQL Editor**, run the files in order:
 petal-pixel-studio/supabase/migrations/20260321201338_*.sql
 petal-pixel-studio/supabase/migrations/20260405140000_user_flowers.sql
 petal-pixel-studio/supabase/migrations/20260405150000_user_flowers_full_data.sql
+petal-pixel-studio/supabase/migrations/20260408120000_profiles_rls_and_user_flowers_updated_at.sql
 ```
 
 ### 6. Run everything

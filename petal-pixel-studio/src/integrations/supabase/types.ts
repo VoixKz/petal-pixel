@@ -7,13 +7,106 @@ export type Json =
     | Json[]
 
 export type Database = {
-    // Allows to automatically instantiate createClient with right options
-    // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
     __InternalSupabase: {
         PostgrestVersion: "14.4"
     }
     public: {
         Tables: {
+            flowers: {
+                Row: {
+                    algo_version: string
+                    created_at: string
+                    flower_id: string
+                    params: Json
+                    person_name: string
+                    schema_version: string
+                    seed: number
+                }
+                Insert: {
+                    algo_version: string
+                    created_at?: string
+                    flower_id: string
+                    params: Json
+                    person_name: string
+                    schema_version: string
+                    seed: number
+                }
+                Update: {
+                    algo_version?: string
+                    created_at?: string
+                    flower_id?: string
+                    params?: Json
+                    person_name?: string
+                    schema_version?: string
+                    seed?: number
+                }
+                Relationships: []
+            }
+            goose_db_version: {
+                Row: {
+                    id: number
+                    is_applied: boolean
+                    tstamp: string
+                    version_id: number
+                }
+                Insert: {
+                    id?: number
+                    is_applied: boolean
+                    tstamp?: string
+                    version_id: number
+                }
+                Update: {
+                    id?: number
+                    is_applied?: boolean
+                    tstamp?: string
+                    version_id?: number
+                }
+                Relationships: []
+            }
+            mints: {
+                Row: {
+                    chain_id: number | null
+                    contract_address: string | null
+                    created_at: string
+                    flower_id: string
+                    status: string
+                    token_uri: string | null
+                    tx_hash: string | null
+                    updated_at: string
+                    wallet_address: string
+                }
+                Insert: {
+                    chain_id?: number | null
+                    contract_address?: string | null
+                    created_at?: string
+                    flower_id: string
+                    status: string
+                    token_uri?: string | null
+                    tx_hash?: string | null
+                    updated_at?: string
+                    wallet_address: string
+                }
+                Update: {
+                    chain_id?: number | null
+                    contract_address?: string | null
+                    created_at?: string
+                    flower_id?: string
+                    status?: string
+                    token_uri?: string | null
+                    tx_hash?: string | null
+                    updated_at?: string
+                    wallet_address?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "mints_flower_id_fkey"
+                        columns: ["flower_id"]
+                        isOneToOne: true
+                        referencedRelation: "flowers"
+                        referencedColumns: ["flower_id"]
+                    },
+                ]
+            }
             profiles: {
                 Row: {
                     avatar_url: string | null
@@ -46,40 +139,43 @@ export type Database = {
             }
             user_flowers: {
                 Row: {
-                    id: string
-                    user_id: string
-                    flower_id: string
-                    saved_name: string | null
-                    params: Json | null
-                    generation_word: string | null
-                    is_minted: boolean
-                    tx_hash: string | null
-                    token_uri: string | null
                     created_at: string
+                    flower_id: string
+                    generation_word: string | null
+                    id: string
+                    is_minted: boolean
+                    params: Json | null
+                    saved_name: string | null
+                    token_uri: string | null
+                    tx_hash: string | null
+                    updated_at: string
+                    user_id: string
                 }
                 Insert: {
-                    id?: string
-                    user_id: string
-                    flower_id: string
-                    saved_name?: string | null
-                    params?: Json | null
-                    generation_word?: string | null
-                    is_minted?: boolean
-                    tx_hash?: string | null
-                    token_uri?: string | null
                     created_at?: string
+                    flower_id: string
+                    generation_word?: string | null
+                    id?: string
+                    is_minted?: boolean
+                    params?: Json | null
+                    saved_name?: string | null
+                    token_uri?: string | null
+                    tx_hash?: string | null
+                    updated_at?: string
+                    user_id: string
                 }
                 Update: {
-                    id?: string
-                    user_id?: string
-                    flower_id?: string
-                    saved_name?: string | null
-                    params?: Json | null
-                    generation_word?: string | null
-                    is_minted?: boolean
-                    tx_hash?: string | null
-                    token_uri?: string | null
                     created_at?: string
+                    flower_id?: string
+                    generation_word?: string | null
+                    id?: string
+                    is_minted?: boolean
+                    params?: Json | null
+                    saved_name?: string | null
+                    token_uri?: string | null
+                    tx_hash?: string | null
+                    updated_at?: string
+                    user_id?: string
                 }
                 Relationships: []
             }

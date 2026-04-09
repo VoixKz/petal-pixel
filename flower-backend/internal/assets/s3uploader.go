@@ -24,7 +24,7 @@ type S3Uploader struct {
 }
 
 type S3Config struct {
-	Endpoint        string // e.g. http://localhost:9000 for MinIO
+	Endpoint        string // e.g. https://<ref>.storage.supabase.co/storage/v1/s3 or MinIO URL
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey string

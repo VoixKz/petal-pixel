@@ -1,0 +1,18 @@
+[profile.default]
+# This repo uses a nonstandard layout:
+# - contracts live in `contracts/`
+# - scripts live in `script/`
+src = "contracts"
+script = "script"
+out = "out"
+libs = ["../lib"]
+
+# Monorepo note:
+# Dependencies are installed at the repo root `lib/` (ignored by git) because
+# `forge install` expects a Git repository root and this project lives in a subdir.
+remappings = [
+  "@openzeppelin/=../lib/openzeppelin-contracts/",
+]
+
+# Keep defaults for the rest unless needed later.
+

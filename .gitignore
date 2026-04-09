@@ -9,6 +9,7 @@
 # ── Foundry deps & build artifacts ───────────────────────────────────
 # lib/ is managed by `forge install` (see flower-backend/.gitmodules / foundry.lock)
 flower-backend/lib/
+/lib/
 flower-backend/broadcast/
 flower-backend/cache/
 flower-backend/out/
@@ -47,6 +48,7 @@ pnpm-debug.log*
 # ── OS / IDE ─────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+.cursor/
 .vscode/
 .idea/
 *.suo

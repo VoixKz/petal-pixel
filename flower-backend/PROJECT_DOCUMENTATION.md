@@ -8,7 +8,7 @@ Main responsibilities:
 - Generate deterministic flower parameters from a person name.
 - Persist flower and mint lifecycle data in PostgreSQL.
 - Build NFT metadata JSON.
-- Upload metadata to S3-compatible storage (for example MinIO).
+- Upload metadata to S3-compatible storage (Supabase Storage S3 API in the default setup).
 - Return mint preparation data for an ERC-721 contract.
 
 This project exposes gRPC only (no REST/HTTP API endpoints).
@@ -63,7 +63,7 @@ Purpose:
 
 Services:
 - postgres: local PostgreSQL 16 with healthcheck.
-- minio: S3-compatible object storage for metadata.
+- Supabase Storage (S3 protocol): public object URLs for NFT metadata JSON.
 
 ### buf.yaml
 Purpose:

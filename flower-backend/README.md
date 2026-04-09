@@ -7,7 +7,7 @@ Go gRPC backend for procedural flower generation and NFT mint preparation.
 - Generates deterministic flower parameters from a person name.
 - Stores flowers and mint lifecycle states in PostgreSQL.
 - Builds ERC-721 metadata JSON for each flower.
-- Uploads metadata to S3-compatible storage (MinIO/S3).
+- Uploads metadata to S3-compatible storage (Supabase Storage S3 API by default; any S3-compatible endpoint works).
 - Exposes gRPC and gRPC-web endpoints for frontend integration.
 
 ## Tech stack
@@ -58,11 +58,13 @@ Minimum for full mint flow:
 - CHAIN_ID
 - NFT_CONTRACT_ADDRESS
 
-### 3. Optional local infra (MinIO)
+### 3. Object storage (Supabase)
 
-```bash
-docker compose up -d
-```
+Create a Storage bucket in the Supabase dashboard, enable **S3 protocol** access, issue S3 access keys, and set `S3_*` in `.env` (see `.env.example`). Keep **`S3_FORCE_PATH_STYLE=true`**: with `false`, the AWS SDK uses a `flower.*.storage.supabase.co` host and TLS handshakes fail.
+
+Use a **public** bucket (or public path policy) so NFT `token_uri` URLs resolve without signed cookies.
+
+The `docker-compose.yml` file is intentionally empty of services; add MinIO locally only if you want offline S3.
 
 ### 4. Run server
 

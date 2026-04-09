@@ -169,14 +169,13 @@ grpcurl -plaintext \
 - **Database**
   - `DB_DSN` (Postgres DSN)
   - `DB_AUTO_MIGRATE` (`true`/`false`)
-- **S3 / MinIO**
-  - `S3_ENDPOINT`
-  - `S3_REGION` (default `us-east-1`)
-  - `S3_ACCESS_KEY`
-  - `S3_SECRET_KEY`
+- **S3 (e.g. Supabase Storage)**
+  - `S3_ENDPOINT` (Supabase: `https://<ref>.storage.supabase.co/storage/v1/s3`)
+  - `S3_REGION` (match project region; default in code `us-east-1` if unset)
+  - `S3_ACCESS_KEY` / `S3_SECRET_KEY` (Supabase Storage S3 credentials)
   - `S3_BUCKET` (default `flower`)
-  - `S3_PUBLIC_BASE_URL`
-  - `S3_FORCE_PATH_STYLE` (default `true`, set to `false` to disable)
+  - `S3_PUBLIC_BASE_URL` (Supabase public objects: `https://<ref>.supabase.co/storage/v1/object/public/<bucket>`)
+  - `S3_FORCE_PATH_STYLE` (default `true`; keep `true` for Supabase — `false` makes the SDK use `bucket.*.storage.supabase.co`, which fails TLS)
 - **Chain**
   - `CHAIN_ID` (default `11155111` / Sepolia)
   - `NFT_CONTRACT_ADDRESS`

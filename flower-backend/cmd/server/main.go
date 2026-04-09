@@ -49,6 +49,7 @@ func main() {
 	s3SecretKey := os.Getenv("S3_SECRET_KEY")
 	s3Bucket := env("S3_BUCKET", "flower")
 	s3PublicBaseURL := os.Getenv("S3_PUBLIC_BASE_URL")
+	// Default true. Supabase Storage S3 also needs path style (virtual-hosted breaks TLS: bucket as subdomain).
 	s3ForcePathStyle := os.Getenv("S3_FORCE_PATH_STYLE") != "false"
 
 	var database *db.DB

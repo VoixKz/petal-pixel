@@ -19,7 +19,19 @@ try {
   if (-not $pk) { $pk = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" }
 
   # Deploy (broadcast) and capture output
-  $out = (& forge script $DeployScript --rpc-url $RpcUrl --broadcast --private-key $pk 2>&1) -join "`n"
+  # Forge prints some warnings to stderr (e.g. EIP-3855), which PowerShell can treat as errors
+  # when $ErrorActionPreference is Stop. Only fail on non-zero exit codes.
+  $prevEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  $outLines = & forge script $DeployScript --rpc-url $RpcUrl --broadcast --private-key $pk 2>&1
+  $exit = $LASTEXITCODE
+  $ErrorActionPreference = $prevEap
+
+  $out = ($outLines | ForEach-Object { $_.ToString() }) -join "`n"
+  if ($exit -ne 0) {
+    Write-Host $out
+    throw "forge script failed with exit code $exit"
+  }
 
   # Prefer reading the broadcast artifact (stable across Foundry versions).
   # Example: flower-backend/broadcast/Deploy.s.sol/31337/run-latest.json
