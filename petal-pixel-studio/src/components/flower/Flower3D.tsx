@@ -31,7 +31,7 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
       return createParametricBloomGeometry(params.flowerType, params.bloomParams);
     }
     return createClassicFlowerGeometry(params.classicParams);
-  }, [params]);
+  }, [params.flowerType, params.classicParams, params.roseParams, params.bloomParams]);
 
   useEffect(() => {
     return () => {
@@ -63,7 +63,7 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
       emissive: new THREE.Color(params.colorB),
       emissiveIntensity: params.glowIntensity * 0.16,
     });
-  }, [params]);
+  }, [params.flowerType, params.material, params.colorA, params.colorB, params.glowIntensity]);
 
   useEffect(() => {
     return () => {
