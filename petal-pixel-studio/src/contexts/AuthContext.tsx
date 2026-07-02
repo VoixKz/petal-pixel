@@ -7,6 +7,7 @@ import {
 } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useFlowerStore } from "@/stores/flowerStore";
 import { useNavigate } from "react-router-dom";
 
 interface Profile {
@@ -116,6 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setUser(null);
         setProfile(null);
+        useFlowerStore.getState().resetFlowerStore();
     };
 
     const verifyOtp = async (email: string, token: string) => {
