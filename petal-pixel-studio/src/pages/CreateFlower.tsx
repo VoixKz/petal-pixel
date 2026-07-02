@@ -439,6 +439,20 @@ export default function CreateFlower() {
       return;
     }
 
+    // Defect #4: never mint a regenerated-but-unsaved flower. If the on-chain
+    // flowerId isn't yet persisted (edit mode with unsaved changes, or the
+    // params.flowerId doesn't match any saved backendFlowerId), save first so the
+    // mint is recorded against a real savedFlowers row.
+    const savedFlowers = useFlowerStore.getState().savedFlowers;
+    const isPersisted = savedFlowers.some((f) => f.backendFlowerId === params.flowerId);
+    if (hasUnsavedChanges || !isPersisted) {
+      const saved = await handleSave();
+      if (!saved) {
+        // handleSave already toasted the reason (e.g. missing title). Abort mint.
+        return;
+      }
+    }
+
     if (!walletAddress) {
       await handleConnectWallet();
       if (!walletAddress && !window.ethereum) return;
