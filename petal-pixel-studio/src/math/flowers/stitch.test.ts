@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stitchQuads } from "@/math/flowers/stitch";
+import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
 
 describe("stitchQuads", () => {
   it("produces 6 indices (2 triangles) for a 2x2 grid of 4 valid vertices", () => {
@@ -51,18 +51,53 @@ describe("stitchQuads", () => {
     expect(indices.length).toBe(12); // 2 quads × 2 tris × 3 indices
   });
 
-  it("skips zero-area triangles (coincident vertices produce cross magnitude < 1e-6)", () => {
-    // A degenerate quad where all 4 corners are index 0 (same position → zero area).
-    // stitchQuads skips on |cross| < 1e-6, but we can't test that without positions.
-    // Instead test the negative-index skip which is the reachable path in pure index logic.
-    // This is a structural guard; geometry-based skip is covered by geometry tests.
+  it("emits no triangles when all four corners share one index (all-equal)", () => {
     const indexGrid = [
       [0, 0],
       [0, 0],
     ];
     const indices: number[] = [];
-    // Should NOT throw; may emit 6 indices (callers' geometry dedup handles this)
-    expect(() => stitchQuads(indexGrid, indices)).not.toThrow();
+    stitchQuads(indexGrid, indices);
+    expect(indices.length).toBe(0);
+  });
+
+  it("skips a triangle when ANY TWO corners coincide (pole/collapsed-row sliver)", () => {
+    // A collapsed top row (both top corners = pole index 0) with a distinct bottom edge.
+    //   0--0
+    //   |  |
+    //   1--2
+    // Triangle 1 (tl=0, bl=1, tr=0): tl===tr → skipped.
+    // Triangle 2 (tr=0, bl=1, br=2): all distinct → kept (3 indices).
+    const indexGrid = [
+      [0, 0],
+      [1, 2],
+    ];
+    const indices: number[] = [];
+    stitchQuads(indexGrid, indices);
+    expect(indices).toEqual([0, 1, 2]);
+  });
+});
+
+describe("filterZeroAreaTriangles", () => {
+  it("drops triangles with distinct indices but (near-)coincident positions", () => {
+    // 4 vertices: 0,1 at the same spot (pinched), 2 and 3 distinct.
+    const positions = [
+      0, 0, 0, // v0
+      0, 0, 0, // v1 (coincident with v0)
+      1, 0, 0, // v2
+      0, 1, 0, // v3
+    ];
+    // Tri A (0,1,2) has a zero-length edge 0-1 → zero area → dropped.
+    // Tri B (0,2,3) is a real right triangle → kept.
+    const indices = [0, 1, 2, 0, 2, 3];
+    const kept = filterZeroAreaTriangles(positions, indices);
+    expect(kept).toEqual([0, 2, 3]);
+  });
+
+  it("keeps all triangles when every triangle has real area", () => {
+    const positions = [0, 0, 0, 1, 0, 0, 0, 1, 0];
+    const indices = [0, 1, 2];
+    expect(filterZeroAreaTriangles(positions, indices)).toEqual([0, 1, 2]);
   });
 
   it("handles an empty grid without error", () => {

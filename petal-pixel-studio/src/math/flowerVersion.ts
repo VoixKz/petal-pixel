@@ -8,5 +8,7 @@
  * Once `family?: FlowerFamily` is added to FlowerParams the Pick<> form is valid.
  */
 export function isV2(p: { algoVersion: string; family?: string | null }): boolean {
-  return p.algoVersion === "v2" && p.family != null;
+  // `!!p.family` also rejects an empty-string family, so a malformed backend
+  // response can never misroute a record onto the v2 render path.
+  return p.algoVersion === "v2" && !!p.family;
 }

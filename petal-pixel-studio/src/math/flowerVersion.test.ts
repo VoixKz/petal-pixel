@@ -18,4 +18,9 @@ describe("isV2", () => {
   it("is false when family is set but algoVersion is not v2", () => {
     expect(isV2({ algoVersion: "v1", family: "rose" })).toBe(false);
   });
+
+  it("is false for an empty-string or null family (malformed backend response)", () => {
+    expect(isV2({ algoVersion: "v2", family: "" })).toBe(false);
+    expect(isV2({ algoVersion: "v2", family: null })).toBe(false);
+  });
 });
