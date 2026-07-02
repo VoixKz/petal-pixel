@@ -2,6 +2,7 @@ package grpcapi
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	flowerv1 "flower-backend/gen/go/flower/v1"
@@ -274,6 +275,11 @@ func setProtoShape(out *flowerv1.FlowerParams, p flower.Params) {
 			SatShift: p.Superformula.SatShift,
 			BriShift: p.Superformula.BriShift,
 		}}
+	default:
+		// GenerateFromName always sets exactly one shape pointer. Reaching here
+		// means a flower.Params was built outside the generator with no shape —
+		// fail loudly rather than emit a shapeless FlowerParams.
+		panic(fmt.Sprintf("setProtoShape: flower.Params has no shape pointer set (family=%q)", p.Family))
 	}
 }
 
