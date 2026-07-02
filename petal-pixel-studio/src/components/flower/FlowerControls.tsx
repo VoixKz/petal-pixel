@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useFlowerStore } from '@/stores/flowerStore';
 import { Layers, Wand2, Palette, Play } from 'lucide-react';
 import { BLOOM_TYPES, FLOWER_TYPES } from '@/math/flowerTypes';
+import { mapPetalCount, mapPetalDepth, mapPetalSize, type SliderMapping } from './sliderMapping';
 
 function SliderControl({
   label,
@@ -91,6 +92,21 @@ export function FlowerControls() {
   const isRose = params.flowerType === 'rose';
   const isBloom = BLOOM_TYPES.includes(params.flowerType);
 
+  const readMapped = (m: SliderMapping): number => {
+    if (m.param === 'classic') return params.classicParams[m.key as keyof typeof params.classicParams] as number;
+    if (m.param === 'bloom') return params.bloomParams[m.key as keyof typeof params.bloomParams] as number;
+    return params.roseParams[m.key as keyof typeof params.roseParams] as number;
+  };
+  const writeMapped = (m: SliderMapping, v: number) => {
+    if (m.param === 'classic') setClassicParam(m.key as keyof typeof params.classicParams, v as never);
+    else if (m.param === 'bloom') setBloomParam(m.key as keyof typeof params.bloomParams, v as never);
+    else setRoseParam(m.key as keyof typeof params.roseParams, v as never);
+  };
+
+  const countMap = mapPetalCount(params.flowerType);
+  const sizeMap = mapPetalSize(params.flowerType);
+  const depthMap = mapPetalDepth(params.flowerType);
+
   return (
     <aside className="w-72 h-full bg-card border-l border-border flex flex-col shrink-0">
       <div className="p-4 border-b border-border">
@@ -118,9 +134,21 @@ export function FlowerControls() {
               ))}
             </div>
           </div>
-          <SliderControl label="Petal Count" value={params.petalCount} min={3} max={20} step={1} onChange={(v) => setParam('petalCount', v)} />
-          <SliderControl label="Petal Length" value={params.petalLength} min={0.3} max={2.5} step={0.05} onChange={(v) => setParam('petalLength', v)} />
-          <SliderControl label="Petal Sharpness" value={params.petalSharpness} min={0} max={1} onChange={(v) => setParam('petalSharpness', v)} />
+          {countMap && (
+            <SliderControl label="Petal Count" value={readMapped(countMap)}
+              min={countMap.min} max={countMap.max} step={countMap.step}
+              onChange={(v) => writeMapped(countMap, v)} />
+          )}
+          {sizeMap && (
+            <SliderControl label="Petal Size" value={readMapped(sizeMap)}
+              min={sizeMap.min} max={sizeMap.max} step={sizeMap.step}
+              onChange={(v) => writeMapped(sizeMap, v)} />
+          )}
+          {depthMap && (
+            <SliderControl label="Petal Depth" value={readMapped(depthMap)}
+              min={depthMap.min} max={depthMap.max} step={depthMap.step}
+              onChange={(v) => writeMapped(depthMap, v)} />
+          )}
           <ToggleControl label="Stem (coming soon)" value={params.stemEnabled} onChange={(v) => setParam('stemEnabled', v)} />
         </Section>
 
@@ -159,10 +187,7 @@ export function FlowerControls() {
             </>
           )}
 
-          <SliderControl label="Noise Intensity" value={params.noiseIntensity} min={0} max={1} onChange={(v) => setParam('noiseIntensity', v)} />
-          <SliderControl label="Frequency" value={params.frequency} min={1} max={10} step={0.5} onChange={(v) => setParam('frequency', v)} />
           <SliderControl label="Rotation" value={params.rotation} min={0} max={360} step={1} onChange={(v) => setParam('rotation', v)} />
-          <SliderControl label="Symmetry" value={params.symmetry} min={2} max={12} step={1} onChange={(v) => setParam('symmetry', v)} />
         </Section>
 
         <div className="h-px bg-border" />
