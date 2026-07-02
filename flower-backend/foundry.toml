@@ -1,18 +1,14 @@
 [profile.default]
-# This repo uses a nonstandard layout:
-# - contracts live in `contracts/`
-# - scripts live in `script/`
 src = "contracts"
 script = "script"
 out = "out"
+# OZ v5.6.1 ERC721 requires solc >= 0.8.24; pin for reproducible container builds.
+solc = "0.8.28"
+# Dependencies are git submodules at the repo root (one level up), because
+# `forge install` requires the Git repo root. See root .gitmodules.
 libs = ["../lib"]
-
-# Monorepo note:
-# Dependencies are installed at the repo root `lib/` (ignored by git) because
-# `forge install` expects a Git repository root and this project lives in a subdir.
 remappings = [
-  "@openzeppelin/=../lib/openzeppelin-contracts/",
+    "@openzeppelin/=../lib/openzeppelin-contracts/",
+    "forge-std/=../lib/openzeppelin-contracts/lib/forge-std/src/",
 ]
-
-# Keep defaults for the rest unless needed later.
 
