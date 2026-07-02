@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RoseParams } from "@/math/flowerTypes";
 import { degToRad, hsbToThreeColor } from "@/math/supplement";
+import { samplePalette } from "@/math/palette";
 
 const ROSE_COLS = 600;
 const ROSE_ROWS = 30;
@@ -66,7 +67,9 @@ export function createRoseFlowerGeometry(params: RoseParams) {
   let vertexIndex = 0;
   for (let r = 0; r <= rows; r += 1) {
     const rowT = r * rD;
-    const rowColor = hsbToThreeColor(340, 100, -20 + rowT * 120);
+    const rowColor = params.palette
+      ? samplePalette(params.palette.stops, rowT)
+      : hsbToThreeColor(340, 100, -20 + rowT * 120);
     const centerBud = THREE.MathUtils.smoothstep(rowT, 0.05, 0.35);
 
     for (let theta = 0; theta <= cols; theta += 1) {

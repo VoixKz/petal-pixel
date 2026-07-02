@@ -1,4 +1,5 @@
 import { asinDeg, hsbToThreeColor, sinDeg } from "@/math/supplement";
+import { samplePalette } from "@/math/palette";
 import type { BloomParams, FlowerType } from "@/math/flowerTypes";
 
 export interface BloomProfile {
@@ -31,7 +32,10 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
         const v = 1 - (((10.4 * params.petalFreq * theta) % 360) / 180);
         return 1 - 0.5 * Math.pow((5 / 4) * Math.pow(v, 2) - 1 / 12, 2) * params.petalAmp;
       },
-      color: (r, params) => hsbToThreeColor(335, -r * 40 + 100 + params.satShift, r * 50 + 50 + params.briShift),
+      color: (r, params) =>
+        params.palette
+          ? samplePalette(params.palette.stops, r)
+          : hsbToThreeColor(335, -r * 40 + 100 + params.satShift, r * 50 + 50 + params.briShift),
     };
   }
 
@@ -50,7 +54,10 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
         0.75 +
         (Math.abs(asinDeg(sinDeg(2.75 * params.petalFreq * theta)) + 80 * sinDeg(2.75 * params.petalFreq * theta)) / 480) *
           params.petalAmp,
-      color: (r, params) => hsbToThreeColor(335, -r * 5 + 10 + params.satShift, r * 50 + 50 + params.briShift),
+      color: (r, params) =>
+        params.palette
+          ? samplePalette(params.palette.stops, r)
+          : hsbToThreeColor(335, -r * 5 + 10 + params.satShift, r * 50 + 50 + params.briShift),
     };
   }
 
@@ -69,7 +76,10 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
         0.5 +
         (Math.abs(asinDeg(sinDeg(2.25 * params.petalFreq * theta)) + 120 * sinDeg(2.25 * params.petalFreq * theta)) / 360) *
           params.petalAmp,
-      color: (r, params) => hsbToThreeColor(310, (r * 50 - 30) * 3 + 5 + params.satShift, 100 + params.briShift),
+      color: (r, params) =>
+        params.palette
+          ? samplePalette(params.palette.stops, r)
+          : hsbToThreeColor(310, (r * 50 - 30) * 3 + 5 + params.satShift, 100 + params.briShift),
     };
   }
 
@@ -87,6 +97,9 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
       0.6 +
       (Math.abs(asinDeg(sinDeg(4.75 * params.petalFreq * theta)) + 420 * sinDeg(4.75 * params.petalFreq * theta)) / 2000) *
         params.petalAmp,
-    color: (r, params) => hsbToThreeColor(20 - r * 20, 80 - r * 40 + params.satShift, 60 + r * 40 + params.briShift),
+    color: (r, params) =>
+      params.palette
+        ? samplePalette(params.palette.stops, r)
+        : hsbToThreeColor(20 - r * 20, 80 - r * 40 + params.satShift, 60 + r * 40 + params.briShift),
   };
 }
