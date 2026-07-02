@@ -20,7 +20,7 @@
 
 Petal Pixel is a full-stack Web3 application where users:
 
-1. **Generate** a unique procedural flower by entering a word (used as a seed) and tweaking visual parameters via real-time sliders.
+1. **Generate** a unique procedural flower by entering a name or phrase (used as a seed) and tweaking visual parameters via real-time sliders. The v2 generator (`algo_version: "v2"`) emits a full render-ready parameter set with hybrid palettes and nine flower families — including the new `sunflower`, `rhodonea`, and `superformula` 3D forms — while already-saved v1 flowers keep rendering unchanged.
 2. **Save** the flower to their account; all data is persisted in Supabase so it appears on every device they log in from.
 3. **Mint** it as an ERC-721 NFT on a local Ethereum network (Anvil), receiving a transaction hash and token URI.
 
@@ -117,6 +117,8 @@ flowchart TD
 |---|---|
 | Docker Compose (`docker-compose.yml`) | One-command startup (`docker compose up -d --build`) and shutdown (`docker compose down`) |
 | `tools/docker/deploy.sh` | Forge script → broadcast → extract contract address → pass to backend |
+| `tools/docker/buf.sh` | Regenerate proto stubs (Go + frontend TS) via pinned `bufbuild/buf:1.47.2` — no host Buf/Go needed |
+| `docker compose run --rm codegen` | Same codegen as `buf.sh`, as an optional Compose service (under the `tools` profile, so it stays out of `docker compose up`) |
 
 ---
 
@@ -205,6 +207,13 @@ confirmations — it never talks to the chain itself.
 
 ### gRPC-Web over REST
 The frontend communicates with the Go backend using the ConnectRPC protocol (gRPC-Web), providing typed, contract-first API calls with zero manual serialisation. The Protobuf schema lives in `flower-backend/proto/` and is compiled by the Buf CLI into TypeScript stubs in `petal-pixel-studio/src/gen/` and Go stubs in `flower-backend/gen/`.
+
+Neither Buf nor Go needs to be installed on the host: `tools/docker/buf.sh`
+(or `docker compose run --rm codegen`) runs the pinned `bufbuild/buf:1.47.2`
+image, and the Go test suite runs via `golang:1.25-alpine` — Docker is the only
+required toolchain. The generated stubs (`flower-backend/gen/go` and
+`petal-pixel-studio/src/gen`) are committed to git; because the image tag is
+pinned, regenerating from an unchanged `.proto` produces a zero diff.
 
 ### Supabase as single source of truth
 All flower data (including the full `params` JSON) is written to `user_flowers` in Supabase on every save. `loadFromBackend` in `flowerStore.ts` queries Supabase directly on app mount, so the flower gallery is identical on every device and browser the user signs in from. `localStorage` is used only as a fallback cache.
