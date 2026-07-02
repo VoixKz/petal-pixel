@@ -53,17 +53,7 @@ func (s *FlowerServer) CreateFlower(ctx context.Context, req *flowerv1.CreateFlo
 
 	return &flowerv1.CreateFlowerResponse{
 		FlowerId: flowerID,
-		Params: &flowerv1.FlowerParams{
-			AlgoVersion:   p.AlgoVersion,
-			SchemaVersion: p.SchemaVersion,
-			Seed:          p.Seed,
-			PetalCount:    p.PetalCount,
-			PetalLength:   p.PetalLength,
-			PetalWidth:    p.PetalWidth,
-			Curvature:     p.Curvature,
-			StemHeight:    p.StemHeight,
-			Hue:           p.Hue,
-		},
+		Params:   toProtoParams(p),
 	}, nil
 }
 
@@ -81,17 +71,7 @@ func (s *FlowerServer) GetFlower(ctx context.Context, req *flowerv1.GetFlowerReq
 	}
 	return &flowerv1.GetFlowerResponse{
 		FlowerId: f.FlowerID,
-		Params: &flowerv1.FlowerParams{
-			AlgoVersion:   f.Params.AlgoVersion,
-			SchemaVersion: f.Params.SchemaVersion,
-			Seed:          f.Params.Seed,
-			PetalCount:    f.Params.PetalCount,
-			PetalLength:   f.Params.PetalLength,
-			PetalWidth:    f.Params.PetalWidth,
-			Curvature:     f.Params.Curvature,
-			StemHeight:    f.Params.StemHeight,
-			Hue:           f.Params.Hue,
-		},
+		Params:   toProtoParams(f.Params),
 	}, nil
 }
 
@@ -158,5 +138,142 @@ func (s *FlowerServer) ConfirmMint(ctx context.Context, req *flowerv1.ConfirmMin
 		return nil, err
 	}
 	return &flowerv1.ConfirmMintResponse{FlowerId: flowerID, TxHash: txHash}, nil
+}
+
+// toProtoParams maps the generator's flower.Params onto the wire FlowerParams:
+// the 6 v1 scalars (fields 1-9, always populated for back-compat), family (10),
+// the baked palette (11), and the single oneof shape case matching p.Family (12-17).
+func toProtoParams(p flower.Params) *flowerv1.FlowerParams {
+	out := &flowerv1.FlowerParams{
+		AlgoVersion:   p.AlgoVersion,
+		SchemaVersion: p.SchemaVersion,
+		Seed:          p.Seed,
+		PetalCount:    p.PetalCount,
+		PetalLength:   p.PetalLength,
+		PetalWidth:    p.PetalWidth,
+		Curvature:     p.Curvature,
+		StemHeight:    p.StemHeight,
+		Hue:           p.Hue,
+		Family:        p.Family,
+		Palette:       toProtoPalette(p.Palette),
+	}
+	setProtoShape(out, p)
+	return out
+}
+
+func toProtoPalette(pal *flower.PaletteSpec) *flowerv1.PaletteSpec {
+	if pal == nil {
+		return nil
+	}
+	stops := make([]*flowerv1.ColorStop, 0, len(pal.Stops))
+	for _, s := range pal.Stops {
+		stops = append(stops, &flowerv1.ColorStop{
+			Position: s.Position,
+			Hex:      s.Hex,
+			R:        s.R,
+			G:        s.G,
+			B:        s.B,
+		})
+	}
+	return &flowerv1.PaletteSpec{
+		Id:       pal.ID,
+		Stops:    stops,
+		HueShift: pal.HueShift,
+		SatShift: pal.SatShift,
+		BriShift: pal.BriShift,
+	}
+}
+
+// setProtoShape sets exactly one oneof case on out, driven by p's populated
+// per-family pointer (which the generator sets consistently with p.Family).
+func setProtoShape(out *flowerv1.FlowerParams, p flower.Params) {
+	switch {
+	case p.Classic != nil:
+		out.Shape = &flowerv1.FlowerParams_Classic{Classic: &flowerv1.ClassicParams{
+			Rows:    p.Classic.Rows,
+			Cols:    p.Classic.Cols,
+			PNum:    p.Classic.PNum,
+			FD:      p.Classic.FD,
+			PLen:    p.Classic.PLen,
+			PSharp:  p.Classic.PSharp,
+			FHeight: p.Classic.FHeight,
+			Curve1:  p.Classic.Curve1,
+			Curve2:  p.Classic.Curve2,
+			B:       p.Classic.B,
+			BNum:    p.Classic.BNum,
+		}}
+	case p.Rose != nil:
+		out.Shape = &flowerv1.FlowerParams_Rose{Rose: &flowerv1.RoseParams{
+			Opening:  p.Rose.Opening,
+			VDensity: p.Rose.VDensity,
+			PAlign:   p.Rose.PAlign,
+			Curve1:   p.Rose.Curve1,
+			Curve2:   p.Rose.Curve2,
+		}}
+	case p.Bloom != nil:
+		out.Shape = &flowerv1.FlowerParams_Bloom{Bloom: &flowerv1.BloomParams{
+			Scale:     p.Bloom.Scale,
+			Opening:   p.Bloom.Opening,
+			Density:   p.Bloom.Density,
+			PetalFreq: p.Bloom.PetalFreq,
+			PetalAmp:  p.Bloom.PetalAmp,
+			HangDown:  p.Bloom.HangDown,
+			Fade:      p.Bloom.Fade,
+			ThetaStep: p.Bloom.ThetaStep,
+			RStep:     p.Bloom.RStep,
+			SatShift:  p.Bloom.SatShift,
+			BriShift:  p.Bloom.BriShift,
+		}}
+	case p.Sunflower != nil:
+		out.Shape = &flowerv1.FlowerParams_Sunflower{Sunflower: &flowerv1.SunflowerParams{
+			Scale:        p.Sunflower.Scale,
+			FloretRings:  p.Sunflower.FloretRings,
+			FloretSpokes: p.Sunflower.FloretSpokes,
+			DomeHeight:   p.Sunflower.DomeHeight,
+			DiscRatio:    p.Sunflower.DiscRatio,
+			RayPetals:    p.Sunflower.RayPetals,
+			RayLength:    p.Sunflower.RayLength,
+			RayWidth:     p.Sunflower.RayWidth,
+			SeedPacking:  p.Sunflower.SeedPacking,
+			SatShift:     p.Sunflower.SatShift,
+			BriShift:     p.Sunflower.BriShift,
+		}}
+	case p.Rhodonea != nil:
+		out.Shape = &flowerv1.FlowerParams_Rhodonea{Rhodonea: &flowerv1.RhodoneaParams{
+			Radius:        p.Rhodonea.Radius,
+			K:             p.Rhodonea.K,
+			PetalSpan:     p.Rhodonea.PetalSpan,
+			WidthProfile:  p.Rhodonea.WidthProfile,
+			HeightProfile: p.Rhodonea.HeightProfile,
+			Thickness:     p.Rhodonea.Thickness,
+			Curl:          p.Rhodonea.Curl,
+			LengthSeg:     p.Rhodonea.LengthSeg,
+			WidthSeg:      p.Rhodonea.WidthSeg,
+			SatShift:      p.Rhodonea.SatShift,
+			BriShift:      p.Rhodonea.BriShift,
+		}}
+	case p.Superformula != nil:
+		// Proto Go field names use uppercase initialism: N1A, N2A, N3A, N1B, N2B, N3B.
+		// flower.SuperformulaParams uses mixed case: N1a, N2a, N3a, N1b, N2b, N3b.
+		out.Shape = &flowerv1.FlowerParams_Superformula{Superformula: &flowerv1.SuperformulaParams{
+			Scale:    p.Superformula.Scale,
+			M1:       p.Superformula.M1,
+			N1A:      p.Superformula.N1a,
+			N2A:      p.Superformula.N2a,
+			N3A:      p.Superformula.N3a,
+			A1:       p.Superformula.A1,
+			B1:       p.Superformula.B1,
+			M2:       p.Superformula.M2,
+			N1B:      p.Superformula.N1b,
+			N2B:      p.Superformula.N2b,
+			N3B:      p.Superformula.N3b,
+			A2:       p.Superformula.A2,
+			B2:       p.Superformula.B2,
+			USeg:     p.Superformula.USeg,
+			VSeg:     p.Superformula.VSeg,
+			SatShift: p.Superformula.SatShift,
+			BriShift: p.Superformula.BriShift,
+		}}
+	}
 }
 
