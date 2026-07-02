@@ -70,6 +70,9 @@ describe("markMintedByBackendFlowerId", () => {
       .markMintedByBackendFlowerId("flower-1", "0xbeef", undefined);
 
     expect(ok).toBe(true);
+    const flower = useFlowerStore.getState().savedFlowers[0];
+    expect(flower.isMinted).toBe(true);
+    expect(flower.txHash).toBe("0xbeef");
   });
 
   it("returns true (no-op sync) when there is no signed-in user", async () => {
@@ -81,5 +84,7 @@ describe("markMintedByBackendFlowerId", () => {
 
     expect(ok).toBe(true);
     expect(updateMock).not.toHaveBeenCalled();
+    // Optimistic local update still applies even without a signed-in user.
+    expect(useFlowerStore.getState().savedFlowers[0].isMinted).toBe(true);
   });
 });
