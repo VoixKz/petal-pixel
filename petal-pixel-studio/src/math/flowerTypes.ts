@@ -1,7 +1,70 @@
+import type { Palette } from "@/math/palette";
+
 export const FLOWER_TYPES = ["classic", "rose", "zinnia", "camellia", "lotus", "dahlia"] as const;
 export type FlowerType = (typeof FLOWER_TYPES)[number];
 
 export const BLOOM_TYPES: FlowerType[] = ["zinnia", "camellia", "lotus", "dahlia"];
+
+export const V2_FAMILIES = [
+  "classic",
+  "rose",
+  "zinnia",
+  "camellia",
+  "lotus",
+  "dahlia",
+  "sunflower",
+  "rhodonea",
+  "superformula",
+] as const;
+export type FlowerFamily = (typeof V2_FAMILIES)[number];
+
+export interface SunflowerParams {
+  scale: number;
+  floretRings: number;
+  floretSpokes: number;
+  domeHeight: number;
+  discRatio: number;
+  rayPetals: number;
+  rayLength: number;
+  rayWidth: number;
+  seedPacking: number;
+  satShift: number;
+  briShift: number;
+}
+
+export interface RhodoneaParams {
+  radius: number;
+  k: number;
+  petalSpan: number;
+  widthProfile: number;
+  heightProfile: number;
+  thickness: number;
+  curl: number;
+  lengthSeg: number;
+  widthSeg: number;
+  satShift: number;
+  briShift: number;
+}
+
+export interface SuperformulaParams {
+  scale: number;
+  m1: number;
+  n1a: number;
+  n2a: number;
+  n3a: number;
+  a1: number;
+  b1: number;
+  m2: number;
+  n1b: number;
+  n2b: number;
+  n3b: number;
+  a2: number;
+  b2: number;
+  uSeg: number;
+  vSeg: number;
+  satShift: number;
+  briShift: number;
+}
 
 export interface ClassicParams {
   rows: number;
@@ -15,6 +78,7 @@ export interface ClassicParams {
   curve2: number;
   b: number;
   bNum: number;
+  palette?: Palette;
 }
 
 export interface RoseParams {
@@ -23,6 +87,7 @@ export interface RoseParams {
   pAlign: number;
   curve1: number;
   curve2: number;
+  palette?: Palette;
 }
 
 export interface BloomParams {
@@ -37,6 +102,7 @@ export interface BloomParams {
   rStep: number;
   satShift: number;
   briShift: number;
+  palette?: Palette;
 }
 
 export const DEFAULT_CLASSIC_PARAMS: ClassicParams = {
