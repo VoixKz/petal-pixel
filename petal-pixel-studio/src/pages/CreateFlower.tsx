@@ -205,6 +205,23 @@ function UnsavedChangesDialog({
   );
 }
 
+// Runs the Supabase-backed save and reports the outcome via toast.
+// Returns true only on success; on failure surfaces the error and returns false.
+export async function runSaveFlow(
+  saveFlower: () => Promise<void>,
+  successMessage: string,
+): Promise<boolean> {
+  try {
+    await saveFlower();
+    toast.success(successMessage);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save flower';
+    toast.error(message);
+    return false;
+  }
+}
+
 export default function CreateFlower() {
   const location = useLocation();
 
@@ -285,7 +302,7 @@ export default function CreateFlower() {
 
   // Bug 4: guard browser refresh / tab close
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
     if (hasUnsavedChanges) {
       window.addEventListener('beforeunload', handler);
     }
@@ -378,26 +395,31 @@ export default function CreateFlower() {
     setTitle(value);
   };
 
-  const handleSave = async () => {
-    if (isSaving) return;
+  const handleSave = async (): Promise<boolean> => {
+    if (isSaving) return false;
     if (!params.flowerId) {
       toast.error('Generate a flower first before saving.');
-      return;
+      return false;
     }
     if (!titleInput.trim()) {
       toast.error('Give your flower a title before saving.');
-      return;
+      return false;
     }
     setIsSaving(true);
     try {
       setTitle(titleInput.trim());
-      await saveFlower();
-      // Reset dirty tracking after a successful save
-      originalParamsRef.current = JSON.stringify(useFlowerStore.getState().params);
-      originalWordRef.current = wordInput;
-      originalTitleRef.current = titleInput.trim();
-      setParamsDirty(false);
-      toast.success(isEditMode ? 'Flower updated!' : 'Flower saved to your collection!');
+      const ok = await runSaveFlow(
+        saveFlower,
+        isEditMode ? 'Flower updated!' : 'Flower saved to your collection!',
+      );
+      if (ok) {
+        // Reset dirty tracking after a successful save
+        originalParamsRef.current = JSON.stringify(useFlowerStore.getState().params);
+        originalWordRef.current = wordInput;
+        originalTitleRef.current = titleInput.trim();
+        setParamsDirty(false);
+      }
+      return ok;
     } finally {
       setIsSaving(false);
     }
@@ -474,7 +496,7 @@ export default function CreateFlower() {
       {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
           isSaving={isSaving}
-          onSaveAndLeave={async () => { await handleSave(); blocker.proceed(); }}
+          onSaveAndLeave={async () => { if (await handleSave()) blocker.proceed(); }}
           onDiscard={() => { clearEditMode(); blocker.proceed(); }}
           onStay={() => blocker.reset()}
         />
