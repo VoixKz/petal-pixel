@@ -1,0 +1,127 @@
+name: petal-pixel
+
+volumes:
+  pgdata:
+  minio-data:
+  contract-data:
+
+services:
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:stable
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["anvil --chain-id 1337 --host 0.0.0.0"]
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  deploy:
+    image: ghcr.io/foundry-rs/foundry:stable
+    user: root
+    entrypoint: ["/bin/sh", "/work/deploy.sh"]
+    working_dir: /work/flower-backend
+    environment:
+      RPC_URL: http://anvil:8545
+      CHAIN_ID: "1337"
+    volumes:
+      - ./flower-backend:/work/flower-backend
+      - ./lib:/work/lib
+      - ./tools/docker/deploy.sh:/work/deploy.sh:ro
+      - contract-data:/shared
+    depends_on:
+      anvil:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: flower
+      POSTGRES_PASSWORD: flower
+      POSTGRES_DB: flower
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flower -d flower"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: flower
+      MINIO_ROOT_PASSWORD: flowersecret
+    ports:
+      - "9000:9000"   # S3 API — must be host-published: browsers fetch token URIs from it
+      - "9001:9001"   # web console (user: flower / flowersecret)
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set local http://minio:9000 flower flowersecret 2>/dev/null; do
+          echo "minio-init: waiting for minio..."; sleep 1;
+        done
+        mc mb -p local/flower
+        mc anonymous set download local/flower
+        echo "minio-init: bucket 'flower' ready (anonymous download enabled)"
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+
+  backend:
+    build: ./flower-backend
+    ports:
+      - "50051:50051"
+    environment:
+      GRPC_ADDR: ":50051"
+      DB_DSN: postgresql://flower:flower@postgres:5432/flower?sslmode=disable
+      DB_AUTO_MIGRATE: "true"
+      CHAIN_ID: "1337"
+      GRPC_WEB_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY: flower
+      S3_SECRET_KEY: flowersecret
+      S3_BUCKET: flower
+      # Browser-facing URL for token URIs — must be the host-published MinIO port.
+      S3_PUBLIC_BASE_URL: http://localhost:9000/flower
+      S3_FORCE_PATH_STYLE: "true"
+    volumes:
+      - contract-data:/shared:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      deploy:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  frontend:
+    build: ./petal-pixel-studio
+    ports:
+      - "8080:8080"
+    environment:
+      # Browser-resolved URLs -> localhost + published ports.
+      VITE_FLOWER_BACKEND_URL: http://localhost:50051
+      VITE_CHAIN_ID: "1337"
+      VITE_RPC_URL: http://127.0.0.1:8545
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-https://dozlnqogfzlufpkmkwxn.supabase.co}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-sb_publishable_placeholder_restore_supabase_project_first}
+    volumes:
+      - ./petal-pixel-studio:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
