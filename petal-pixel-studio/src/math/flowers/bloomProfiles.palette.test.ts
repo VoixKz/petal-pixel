@@ -30,6 +30,22 @@ describe("bloomProfiles color: v1 identity (no palette)", () => {
     expect(c.b).toBeCloseTo(legacy.b, 12);
   });
 
+  it("camellia matches the legacy ramp for a sample r", () => {
+    const c = getBloomProfile("camellia").color(R, baseParams);
+    const legacy = hsbToThreeColor(335, -R * 5 + 10 + 0, R * 50 + 50 + 0);
+    expect(c.r).toBeCloseTo(legacy.r, 12);
+    expect(c.g).toBeCloseTo(legacy.g, 12);
+    expect(c.b).toBeCloseTo(legacy.b, 12);
+  });
+
+  it("lotus matches the legacy ramp for a sample r", () => {
+    const c = getBloomProfile("lotus").color(R, baseParams);
+    const legacy = hsbToThreeColor(310, (R * 50 - 30) * 3 + 5 + 0, 100 + 0);
+    expect(c.r).toBeCloseTo(legacy.r, 12);
+    expect(c.g).toBeCloseTo(legacy.g, 12);
+    expect(c.b).toBeCloseTo(legacy.b, 12);
+  });
+
   it("dahlia (default) matches the legacy ramp for a sample r", () => {
     const c = getBloomProfile("dahlia").color(R, baseParams);
     const legacy = hsbToThreeColor(20 - R * 20, 80 - R * 40 + 0, 60 + R * 40 + 0);
