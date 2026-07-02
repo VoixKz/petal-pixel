@@ -156,7 +156,7 @@ async function supabaseUpsertFlower(
     },
     { onConflict: 'user_id,flower_id' },
   );
-  if (error) console.error('supabaseUpsertFlower error:', error);
+  if (error) throw new Error(error.message);
 }
 
 async function supabaseUpdateFlower(
@@ -171,7 +171,7 @@ async function supabaseUpdateFlower(
     })
     .eq('user_id', userId)
     .eq('flower_id', flowerId);
-  if (error) console.error('supabaseUpdateFlower error:', error);
+  if (error) throw new Error(error.message);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
