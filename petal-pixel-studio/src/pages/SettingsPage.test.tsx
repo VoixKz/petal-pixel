@@ -26,14 +26,19 @@ describe("SettingsPage a11y", () => {
     });
   });
 
-  it("toggles the email-notifications switch via keyboard", () => {
+  it("switch is focusable and toggles on activation (keyboard-accessible via native <button>)", () => {
     renderPage();
     const emailSwitch = screen.getByRole("switch", { name: /email notifications/i });
     const before = emailSwitch.getAttribute("aria-checked");
+    // Guard against a focusability regression: a real keyboard user must be able to
+    // Tab to the control. Radix Switch renders a native <button>, so it must not be
+    // removed from the tab order.
+    expect(emailSwitch).not.toHaveAttribute("tabindex", "-1");
     emailSwitch.focus();
     expect(emailSwitch).toHaveFocus();
-    // Radix Switch toggles via click (native <button> converts Space/Enter to click in real browsers;
-    // jsdom does not simulate that conversion, so we fire the resulting click directly)
+    // Keyboard accessibility is guaranteed by the native <button>: browsers convert
+    // Space/Enter to a click. jsdom does not simulate that conversion, so we fire the
+    // resulting click directly to assert the toggle wiring.
     fireEvent.click(emailSwitch);
     expect(emailSwitch.getAttribute("aria-checked")).not.toBe(before);
   });
