@@ -453,14 +453,18 @@ export default function CreateFlower() {
       }
     }
 
-    if (!walletAddress) {
-      await handleConnectWallet();
-      if (!walletAddress && !window.ethereum) return;
-    }
-
     if (!window.ethereum) {
       toast.error('Ethereum provider not found.');
       return;
+    }
+
+    // Defect #5: do NOT read the walletAddress state var here — it is stale in
+    // this closure right after handleConnectWallet(). Use the returned address.
+    let address = walletAddress;
+    if (!address) {
+      const connected = await handleConnectWallet();
+      if (!connected) return; // rejected / no wallet — handleConnectWallet already toasted
+      address = connected;
     }
 
     setIsMinting(true);
@@ -492,8 +496,12 @@ export default function CreateFlower() {
       const tokenUri = prepared.mintTokenUri || prepared.tokenUri;
       if (tokenUri) setMintTokenUri(tokenUri);
 
-      await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined);
-      toast.success('NFT minted and confirmed in backend');
+      const synced = await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined);
+      if (synced) {
+        toast.success('NFT minted and confirmed in backend');
+      } else {
+        toast.warning('Minted on-chain but failed to sync to your collection');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Mint failed';
       if (message.toLowerCase().includes('not_found') || message.toLowerCase().includes('not found')) {
