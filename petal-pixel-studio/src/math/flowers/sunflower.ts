@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { SunflowerParams } from "@/math/flowerTypes";
 import type { Palette } from "@/math/palette";
 import { samplePaletteInto } from "@/math/palette";
-import { stitchQuads } from "@/math/flowers/stitch";
+import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
 import { degToRad } from "@/math/supplement";
 
 // Fixed math constant (NOT a param): 180 * (3 - sqrt(5)).
@@ -29,8 +29,8 @@ export function createSunflowerGeometry(
   const briShift = params.briShift;
 
   // --- Vertex-cap guard: shrink grid resolution to fit MAX_VERTICES. ---
-  let rings = Math.max(4, Math.round(params.floretRings));
-  let spokes = Math.max(12, Math.round(params.floretSpokes));
+  let rings = Math.max(40, Math.round(params.floretRings));
+  let spokes = Math.max(120, Math.round(params.floretSpokes));
   const rayPetals = Math.max(3, Math.round(params.rayPetals));
 
   // Estimate vertex count: disc rings (skip center, +1 for center vertex) + ray petals
@@ -40,8 +40,8 @@ export function createSunflowerGeometry(
     rayPetals * (RAY_RADIAL_SEG + 1) * (RAY_CROSS_SEG + 1);
   if (est > MAX_VERTICES) {
     const shrink = Math.sqrt(MAX_VERTICES / est);
-    rings = Math.max(4, Math.round(rings * shrink));
-    spokes = Math.max(12, Math.round(spokes * shrink));
+    rings = Math.max(40, Math.round(rings * shrink));
+    spokes = Math.max(120, Math.round(spokes * shrink));
   }
 
   const positions: number[] = [];
@@ -71,10 +71,12 @@ export function createSunflowerGeometry(
   // push a single center vertex, then fan it to ring i=1.
   const discR = discRatio * scale;
   const Nf = Math.max(1, rings * spokes);
-  // c is the phyllotaxis packing constant; used to scale seedBump amplitude.
-  const c = (seedPacking * discR) / Math.sqrt(Nf);
   const phGA = degToRad(GOLDEN_ANGLE_DEG);
-  const k1 = Math.round(Math.sqrt(Nf));
+  // seedPacking sets how many phyllotaxis spirals are visible (spiral frequency),
+  // scaling the base sqrt(Nf) count. This is its canonical role — NOT the bump
+  // amplitude (that stays fixed relative to discR so the seed texture survives
+  // at high resolution).
+  const k1 = Math.max(1, Math.round(Math.sqrt(Nf) * seedPacking));
 
   // Center vertex (t=0, palette color for center)
   const centerIdx = pushVertex(0, -(domeHeight), 0, 0);
@@ -98,7 +100,7 @@ export function createSunflowerGeometry(
       // Phyllotaxis seed-bump surface texture (plan Appendix)
       const bumpA = 0.5 * (1 + Math.cos(k1 * (alpha - t / phGA)));
       const bumpB = 0.5 * (1 + Math.cos((k1 + 1) * (alpha + t / phGA)));
-      const seedBump = 0.04 * c * bumpA * bumpB;
+      const seedBump = 0.04 * discR * bumpA * bumpB;
       radius += 0.5 * seedBump;
       const zDome = domeHeight * (1 - t * t);
       const x = radius * Math.cos(alpha);
@@ -206,30 +208,3 @@ function collapseRow(
   }
 }
 
-const _fa = new THREE.Vector3();
-const _fb = new THREE.Vector3();
-const _fc = new THREE.Vector3();
-const _fe1 = new THREE.Vector3();
-const _fe2 = new THREE.Vector3();
-
-/**
- * Remove any zero-area triangles (|cross(e1,e2)| < 1e-6) from a flat index array.
- * Returns a new filtered array.
- */
-function filterZeroAreaTriangles(positions: number[], rawIndices: number[]): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < rawIndices.length; i += 3) {
-    const ai = rawIndices[i];
-    const bi = rawIndices[i + 1];
-    const ci = rawIndices[i + 2];
-    _fa.set(positions[ai * 3], positions[ai * 3 + 1], positions[ai * 3 + 2]);
-    _fb.set(positions[bi * 3], positions[bi * 3 + 1], positions[bi * 3 + 2]);
-    _fc.set(positions[ci * 3], positions[ci * 3 + 1], positions[ci * 3 + 2]);
-    _fe1.subVectors(_fb, _fa);
-    _fe2.subVectors(_fc, _fa);
-    if (_fe1.cross(_fe2).length() >= 1e-6) {
-      out.push(ai, bi, ci);
-    }
-  }
-  return out;
-}
