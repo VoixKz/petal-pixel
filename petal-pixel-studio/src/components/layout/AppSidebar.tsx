@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Flower2, PlusCircle, Gem, CreditCard, User, Settings, LogOut, Sparkles,
@@ -17,7 +17,13 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { profile, user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <aside className="w-64 h-screen flex flex-col bg-sidebar border-r border-sidebar-border shrink-0">
@@ -72,7 +78,7 @@ export function AppSidebar() {
           </div>
         </div>
         <button
-          onClick={signOut}
+          onClick={() => void handleLogout()}
           className="flex items-center gap-3 px-3 py-2 w-full rounded-lg text-sm text-sidebar-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
         >
           <LogOut className="w-4 h-4" />
