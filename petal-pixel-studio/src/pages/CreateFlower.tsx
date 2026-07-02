@@ -336,21 +336,24 @@ export default function CreateFlower() {
     }
   };
 
-  const handleConnectWallet = async () => {
+  const handleConnectWallet = async (): Promise<string | null> => {
     if (!window.ethereum) {
       toast.error('MetaMask not found. Install MetaMask and connect to Ganache RPC.');
-      return;
+      return null;
     }
     try {
       const provider = new BrowserProvider(window.ethereum);
       await provider.send('eth_requestAccounts', []);
+      await ensureCorrectNetwork(provider);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
       setWalletAddress(address);
       toast.success(`Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
+      return address;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Wallet connection failed';
       toast.error(message);
+      return null;
     }
   };
 
@@ -558,7 +561,7 @@ export default function CreateFlower() {
             </button>
 
             <button
-              onClick={handleConnectWallet}
+              onClick={() => void handleConnectWallet()}
               title="Connect wallet"
               className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
             >
