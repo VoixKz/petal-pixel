@@ -78,7 +78,7 @@ interface FlowerStore {
   loadFlowerForEdit: (flower: SavedFlower) => void;
   clearEditMode: () => void;
   mintFlower: (id: string) => void;
-  markMintedByBackendFlowerId: (backendFlowerId: string, txHash?: string, tokenUri?: string) => Promise<void>;
+  markMintedByBackendFlowerId: (backendFlowerId: string, txHash?: string, tokenUri?: string) => Promise<boolean>;
   loadFromBackend: () => Promise<void>;
   resetParams: () => void;
 }
@@ -423,22 +423,27 @@ export const useFlowerStore = create<FlowerStore>()(
       ),
     }));
 
-    // Persist to Supabase
+    // Persist to Supabase; report failure to the caller instead of swallowing it.
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error } = await supabase.from('user_flowers')
-          .update({
-            is_minted: true,
-            tx_hash: txHash ?? null,
-            token_uri: tokenUri ?? null,
-          })
-          .eq('user_id', user.id)
-          .eq('flower_id', backendFlowerId);
-        if (error) console.error('markMintedByBackendFlowerId sync error:', error);
+      if (!user) return true; // nothing to sync (not signed in)
+
+      const { error } = await supabase.from('user_flowers')
+        .update({
+          is_minted: true,
+          tx_hash: txHash ?? null,
+          token_uri: tokenUri ?? null,
+        })
+        .eq('user_id', user.id)
+        .eq('flower_id', backendFlowerId);
+      if (error) {
+        console.error('markMintedByBackendFlowerId sync error:', error);
+        return false;
       }
+      return true;
     } catch (err) {
       console.error('markMintedByBackendFlowerId failed:', err);
+      return false;
     }
   },
 
