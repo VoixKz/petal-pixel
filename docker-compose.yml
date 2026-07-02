@@ -128,3 +128,18 @@ services:
       backend:
         condition: service_started
     restart: unless-stopped
+
+  codegen:
+    image: bufbuild/buf:1.47.2
+    profiles: ["tools"]
+    working_dir: /workspace/flower-backend
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        buf generate
+        buf generate --template buf.gen.frontend.yaml
+        echo "codegen: Go -> gen/go and TS -> ../petal-pixel-studio/src/gen regenerated"
+    volumes:
+      - .:/workspace
+    restart: "no"

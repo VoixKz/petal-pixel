@@ -31,6 +31,140 @@ message FlowerParams {
   float curvature = 7;
   float stem_height = 8;
   float hue = 9;
+
+  // v2 render contract. Populated only when algo_version == "v2".
+  // v1 clients ignore these; v2 clients render directly from them.
+  // Family selector. One of: "classic" | "rose" | "zinnia" | "camellia"
+  //   | "lotus" | "dahlia" | "sunflower" | "rhodonea" | "superformula".
+  string family = 10;
+
+  // Render-ready palette. hue_shift/sat_shift/bri_shift are ALREADY BAKED
+  // into `stops` by the Go backend; echoed here only for provenance.
+  PaletteSpec palette = 11;
+
+  // Per-family geometry parameters. Exactly one is set, matching `family`.
+  oneof shape {
+    ClassicParams      classic      = 12;
+    RoseParams         rose         = 13;
+    BloomParams        bloom        = 14;  // zinnia | camellia | lotus | dahlia
+    SunflowerParams    sunflower    = 15;
+    RhodoneaParams     rhodonea     = 16;
+    SuperformulaParams superformula = 17;
+  }
+}
+
+// A single gradient control point. Canonical wire form carries BOTH an sRGB
+// hex string (what TS samplePalette consumes) AND normalized r,g,b in [0,1].
+// position in [0,1]. Backend fills all four; consistent (hex == #RRGGBB of
+// round(r*255),round(g*255),round(b*255)).
+message ColorStop {
+  float  position = 1;   // TS field: pos
+  string hex      = 2;   // "#rrggbb", lowercase; TS samplePalette uses this
+  float  r        = 3;   // [0,1]
+  float  g        = 4;   // [0,1]
+  float  b        = 5;   // [0,1]
+}
+
+// A named gradient. `stops` already have name-derived HSB shifts BAKED IN.
+message PaletteSpec {
+  string             id        = 1;   // catalog id, e.g. "sunset_coral"
+  repeated ColorStop stops     = 2;   // >= 2, ascending position, first=0 last=1
+  float              hue_shift = 3;   // degrees, [-30,30]  (provenance)
+  float              sat_shift = 4;   // fraction, [-0.20,0.20] (provenance)
+  float              bri_shift = 5;   // fraction, [-0.15,0.15] (provenance)
+}
+
+// Mirrors frontend ClassicParams (flowerTypes.ts). rows/cols fixed 84/144.
+message ClassicParams {
+  uint32 rows     = 1;
+  uint32 cols     = 2;
+  uint32 p_num    = 3;
+  float  f_d      = 4;
+  float  p_len    = 5;
+  float  p_sharp  = 6;
+  float  f_height = 7;
+  float  curve1   = 8;
+  float  curve2   = 9;
+  float  b        = 10;
+  uint32 b_num    = 11;
+}
+
+// Mirrors frontend RoseParams.
+message RoseParams {
+  float opening   = 1;
+  float v_density = 2;
+  float p_align   = 3;
+  float curve1    = 4;
+  float curve2    = 5;
+}
+
+// Mirrors frontend BloomParams (zinnia/camellia/lotus/dahlia).
+message BloomParams {
+  float scale      = 1;
+  float opening    = 2;
+  float density    = 3;
+  float petal_freq = 4;
+  float petal_amp  = 5;
+  float hang_down  = 6;
+  float fade       = 7;
+  float theta_step = 8;
+  float r_step     = 9;
+  float sat_shift  = 10;
+  float bri_shift  = 11;
+}
+
+// NEW. Phyllotaxis domed seed-head + ray-petal rim.
+// golden angle is a fixed math constant, NOT a param.
+message SunflowerParams {
+  float  scale         = 1;   // master size (200..380)
+  uint32 floret_rings  = 2;   // radial resolution of seed head (40..150)
+  uint32 floret_spokes = 3;   // angular resolution of seed head (120..320)
+  float  dome_height   = 4;   // z-dome amplitude (0..90)
+  float  disc_ratio    = 5;   // seed-head radius / total (0.40..0.78)
+  uint32 ray_petals    = 6;   // visible ray-petal count (13..55)
+  float  ray_length    = 7;   // petal length as fraction of scale (0.25..0.75)
+  float  ray_width     = 8;   // angular half-width factor (0.40..1.20)
+  float  seed_packing  = 9;   // spiral tightness multiplier (0.70..1.40)
+  float  sat_shift     = 10;  // fraction, baked into vertex color
+  float  bri_shift     = 11;  // fraction, baked into vertex color
+}
+
+// NEW. Rose (rhodonea) r=cos(k*theta), per-petal lofted surface.
+message RhodoneaParams {
+  float  radius         = 1;   // petal length scale (180..340)
+  uint32 k              = 2;   // integer rose frequency (2..9); odd->k petals, even->2k
+  float  petal_span     = 3;   // fraction of natural half-window (0.60..1.00)
+  float  width_profile  = 4;   // max half-width / length (0.20..0.70)
+  float  height_profile = 5;   // vertical arch amplitude (0..120)
+  float  thickness      = 6;   // central bulge shell offset (0..18)
+  float  curl           = 7;   // tip curl-down (0..1)
+  uint32 length_seg     = 8;   // radial resolution per petal (12..48)
+  uint32 width_seg      = 9;   // cross resolution per petal (8..32)
+  float  sat_shift      = 10;
+  float  bri_shift      = 11;
+}
+
+// NEW. Gielis 3D via spherical product of two superformulas.
+message SuperformulaParams {
+  float  scale  = 1;   // master size (200..360)
+  // longitude superformula (theta) -> petal/lobe count around equator
+  float  m1     = 2;   // (2..16)
+  float  n1a    = 3;   // n1 of longitude (>0, 0.30..3)
+  float  n2a    = 4;   // (0.30..6)
+  float  n3a    = 5;   // (0.30..6)
+  float  a1     = 6;   // (>0, 0.60..1.60)
+  float  b1     = 7;   // (>0, 0.60..1.60)
+  // latitude superformula (phi) -> vertical bell/dome/pinch
+  float  m2     = 8;   // (0..16; 0 -> smooth revolution)
+  float  n1b    = 9;   // (>0, 0.30..3)
+  float  n2b    = 10;  // (0.30..6)
+  float  n3b    = 11;  // (0.30..6)
+  float  a2     = 12;  // (0.60..1.60)
+  float  b2     = 13;  // (0.60..1.60)
+  uint32 u_seg  = 14;  // longitude resolution (120..340)
+  uint32 v_seg  = 15;  // latitude resolution (80..200)
+  float  sat_shift = 16;
+  float  bri_shift = 17;
 }
 
 message CreateFlowerRequest {

@@ -29,12 +29,32 @@ type FlowerParams struct {
 	// Deterministic seed derived from input name.
 	Seed uint64 `protobuf:"varint,3,opt,name=seed,proto3" json:"seed,omitempty"`
 	// Example parameters (expand as your frontend needs).
-	PetalCount    uint32  `protobuf:"varint,4,opt,name=petal_count,json=petalCount,proto3" json:"petal_count,omitempty"`
-	PetalLength   float32 `protobuf:"fixed32,5,opt,name=petal_length,json=petalLength,proto3" json:"petal_length,omitempty"`
-	PetalWidth    float32 `protobuf:"fixed32,6,opt,name=petal_width,json=petalWidth,proto3" json:"petal_width,omitempty"`
-	Curvature     float32 `protobuf:"fixed32,7,opt,name=curvature,proto3" json:"curvature,omitempty"`
-	StemHeight    float32 `protobuf:"fixed32,8,opt,name=stem_height,json=stemHeight,proto3" json:"stem_height,omitempty"`
-	Hue           float32 `protobuf:"fixed32,9,opt,name=hue,proto3" json:"hue,omitempty"`
+	PetalCount  uint32  `protobuf:"varint,4,opt,name=petal_count,json=petalCount,proto3" json:"petal_count,omitempty"`
+	PetalLength float32 `protobuf:"fixed32,5,opt,name=petal_length,json=petalLength,proto3" json:"petal_length,omitempty"`
+	PetalWidth  float32 `protobuf:"fixed32,6,opt,name=petal_width,json=petalWidth,proto3" json:"petal_width,omitempty"`
+	Curvature   float32 `protobuf:"fixed32,7,opt,name=curvature,proto3" json:"curvature,omitempty"`
+	StemHeight  float32 `protobuf:"fixed32,8,opt,name=stem_height,json=stemHeight,proto3" json:"stem_height,omitempty"`
+	Hue         float32 `protobuf:"fixed32,9,opt,name=hue,proto3" json:"hue,omitempty"`
+	// v2 render contract. Populated only when algo_version == "v2".
+	// v1 clients ignore these; v2 clients render directly from them.
+	// Family selector. One of: "classic" | "rose" | "zinnia" | "camellia"
+	//
+	//	| "lotus" | "dahlia" | "sunflower" | "rhodonea" | "superformula".
+	Family string `protobuf:"bytes,10,opt,name=family,proto3" json:"family,omitempty"`
+	// Render-ready palette. hue_shift/sat_shift/bri_shift are ALREADY BAKED
+	// into `stops` by the Go backend; echoed here only for provenance.
+	Palette *PaletteSpec `protobuf:"bytes,11,opt,name=palette,proto3" json:"palette,omitempty"`
+	// Per-family geometry parameters. Exactly one is set, matching `family`.
+	//
+	// Types that are valid to be assigned to Shape:
+	//
+	//	*FlowerParams_Classic
+	//	*FlowerParams_Rose
+	//	*FlowerParams_Bloom
+	//	*FlowerParams_Sunflower
+	//	*FlowerParams_Rhodonea
+	//	*FlowerParams_Superformula
+	Shape         isFlowerParams_Shape `protobuf_oneof:"shape"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -132,6 +152,1031 @@ func (x *FlowerParams) GetHue() float32 {
 	return 0
 }
 
+func (x *FlowerParams) GetFamily() string {
+	if x != nil {
+		return x.Family
+	}
+	return ""
+}
+
+func (x *FlowerParams) GetPalette() *PaletteSpec {
+	if x != nil {
+		return x.Palette
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetShape() isFlowerParams_Shape {
+	if x != nil {
+		return x.Shape
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetClassic() *ClassicParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Classic); ok {
+			return x.Classic
+		}
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetRose() *RoseParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Rose); ok {
+			return x.Rose
+		}
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetBloom() *BloomParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Bloom); ok {
+			return x.Bloom
+		}
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetSunflower() *SunflowerParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Sunflower); ok {
+			return x.Sunflower
+		}
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetRhodonea() *RhodoneaParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Rhodonea); ok {
+			return x.Rhodonea
+		}
+	}
+	return nil
+}
+
+func (x *FlowerParams) GetSuperformula() *SuperformulaParams {
+	if x != nil {
+		if x, ok := x.Shape.(*FlowerParams_Superformula); ok {
+			return x.Superformula
+		}
+	}
+	return nil
+}
+
+type isFlowerParams_Shape interface {
+	isFlowerParams_Shape()
+}
+
+type FlowerParams_Classic struct {
+	Classic *ClassicParams `protobuf:"bytes,12,opt,name=classic,proto3,oneof"`
+}
+
+type FlowerParams_Rose struct {
+	Rose *RoseParams `protobuf:"bytes,13,opt,name=rose,proto3,oneof"`
+}
+
+type FlowerParams_Bloom struct {
+	Bloom *BloomParams `protobuf:"bytes,14,opt,name=bloom,proto3,oneof"` // zinnia | camellia | lotus | dahlia
+}
+
+type FlowerParams_Sunflower struct {
+	Sunflower *SunflowerParams `protobuf:"bytes,15,opt,name=sunflower,proto3,oneof"`
+}
+
+type FlowerParams_Rhodonea struct {
+	Rhodonea *RhodoneaParams `protobuf:"bytes,16,opt,name=rhodonea,proto3,oneof"`
+}
+
+type FlowerParams_Superformula struct {
+	Superformula *SuperformulaParams `protobuf:"bytes,17,opt,name=superformula,proto3,oneof"`
+}
+
+func (*FlowerParams_Classic) isFlowerParams_Shape() {}
+
+func (*FlowerParams_Rose) isFlowerParams_Shape() {}
+
+func (*FlowerParams_Bloom) isFlowerParams_Shape() {}
+
+func (*FlowerParams_Sunflower) isFlowerParams_Shape() {}
+
+func (*FlowerParams_Rhodonea) isFlowerParams_Shape() {}
+
+func (*FlowerParams_Superformula) isFlowerParams_Shape() {}
+
+// A single gradient control point. Canonical wire form carries BOTH an sRGB
+// hex string (what TS samplePalette consumes) AND normalized r,g,b in [0,1].
+// position in [0,1]. Backend fills all four; consistent (hex == #RRGGBB of
+// round(r*255),round(g*255),round(b*255)).
+type ColorStop struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Position      float32                `protobuf:"fixed32,1,opt,name=position,proto3" json:"position,omitempty"` // TS field: pos
+	Hex           string                 `protobuf:"bytes,2,opt,name=hex,proto3" json:"hex,omitempty"`             // "#rrggbb", lowercase; TS samplePalette uses this
+	R             float32                `protobuf:"fixed32,3,opt,name=r,proto3" json:"r,omitempty"`               // [0,1]
+	G             float32                `protobuf:"fixed32,4,opt,name=g,proto3" json:"g,omitempty"`               // [0,1]
+	B             float32                `protobuf:"fixed32,5,opt,name=b,proto3" json:"b,omitempty"`               // [0,1]
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ColorStop) Reset() {
+	*x = ColorStop{}
+	mi := &file_flower_v1_service_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ColorStop) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ColorStop) ProtoMessage() {}
+
+func (x *ColorStop) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ColorStop.ProtoReflect.Descriptor instead.
+func (*ColorStop) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ColorStop) GetPosition() float32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *ColorStop) GetHex() string {
+	if x != nil {
+		return x.Hex
+	}
+	return ""
+}
+
+func (x *ColorStop) GetR() float32 {
+	if x != nil {
+		return x.R
+	}
+	return 0
+}
+
+func (x *ColorStop) GetG() float32 {
+	if x != nil {
+		return x.G
+	}
+	return 0
+}
+
+func (x *ColorStop) GetB() float32 {
+	if x != nil {
+		return x.B
+	}
+	return 0
+}
+
+// A named gradient. `stops` already have name-derived HSB shifts BAKED IN.
+type PaletteSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`                               // catalog id, e.g. "sunset_coral"
+	Stops         []*ColorStop           `protobuf:"bytes,2,rep,name=stops,proto3" json:"stops,omitempty"`                         // >= 2, ascending position, first=0 last=1
+	HueShift      float32                `protobuf:"fixed32,3,opt,name=hue_shift,json=hueShift,proto3" json:"hue_shift,omitempty"` // degrees, [-30,30]  (provenance)
+	SatShift      float32                `protobuf:"fixed32,4,opt,name=sat_shift,json=satShift,proto3" json:"sat_shift,omitempty"` // fraction, [-0.20,0.20] (provenance)
+	BriShift      float32                `protobuf:"fixed32,5,opt,name=bri_shift,json=briShift,proto3" json:"bri_shift,omitempty"` // fraction, [-0.15,0.15] (provenance)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PaletteSpec) Reset() {
+	*x = PaletteSpec{}
+	mi := &file_flower_v1_service_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PaletteSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PaletteSpec) ProtoMessage() {}
+
+func (x *PaletteSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PaletteSpec.ProtoReflect.Descriptor instead.
+func (*PaletteSpec) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *PaletteSpec) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *PaletteSpec) GetStops() []*ColorStop {
+	if x != nil {
+		return x.Stops
+	}
+	return nil
+}
+
+func (x *PaletteSpec) GetHueShift() float32 {
+	if x != nil {
+		return x.HueShift
+	}
+	return 0
+}
+
+func (x *PaletteSpec) GetSatShift() float32 {
+	if x != nil {
+		return x.SatShift
+	}
+	return 0
+}
+
+func (x *PaletteSpec) GetBriShift() float32 {
+	if x != nil {
+		return x.BriShift
+	}
+	return 0
+}
+
+// Mirrors frontend ClassicParams (flowerTypes.ts). rows/cols fixed 84/144.
+type ClassicParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rows          uint32                 `protobuf:"varint,1,opt,name=rows,proto3" json:"rows,omitempty"`
+	Cols          uint32                 `protobuf:"varint,2,opt,name=cols,proto3" json:"cols,omitempty"`
+	PNum          uint32                 `protobuf:"varint,3,opt,name=p_num,json=pNum,proto3" json:"p_num,omitempty"`
+	FD            float32                `protobuf:"fixed32,4,opt,name=f_d,json=fD,proto3" json:"f_d,omitempty"`
+	PLen          float32                `protobuf:"fixed32,5,opt,name=p_len,json=pLen,proto3" json:"p_len,omitempty"`
+	PSharp        float32                `protobuf:"fixed32,6,opt,name=p_sharp,json=pSharp,proto3" json:"p_sharp,omitempty"`
+	FHeight       float32                `protobuf:"fixed32,7,opt,name=f_height,json=fHeight,proto3" json:"f_height,omitempty"`
+	Curve1        float32                `protobuf:"fixed32,8,opt,name=curve1,proto3" json:"curve1,omitempty"`
+	Curve2        float32                `protobuf:"fixed32,9,opt,name=curve2,proto3" json:"curve2,omitempty"`
+	B             float32                `protobuf:"fixed32,10,opt,name=b,proto3" json:"b,omitempty"`
+	BNum          uint32                 `protobuf:"varint,11,opt,name=b_num,json=bNum,proto3" json:"b_num,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClassicParams) Reset() {
+	*x = ClassicParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClassicParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClassicParams) ProtoMessage() {}
+
+func (x *ClassicParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClassicParams.ProtoReflect.Descriptor instead.
+func (*ClassicParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ClassicParams) GetRows() uint32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetCols() uint32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetPNum() uint32 {
+	if x != nil {
+		return x.PNum
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetFD() float32 {
+	if x != nil {
+		return x.FD
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetPLen() float32 {
+	if x != nil {
+		return x.PLen
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetPSharp() float32 {
+	if x != nil {
+		return x.PSharp
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetFHeight() float32 {
+	if x != nil {
+		return x.FHeight
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetCurve1() float32 {
+	if x != nil {
+		return x.Curve1
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetCurve2() float32 {
+	if x != nil {
+		return x.Curve2
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetB() float32 {
+	if x != nil {
+		return x.B
+	}
+	return 0
+}
+
+func (x *ClassicParams) GetBNum() uint32 {
+	if x != nil {
+		return x.BNum
+	}
+	return 0
+}
+
+// Mirrors frontend RoseParams.
+type RoseParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Opening       float32                `protobuf:"fixed32,1,opt,name=opening,proto3" json:"opening,omitempty"`
+	VDensity      float32                `protobuf:"fixed32,2,opt,name=v_density,json=vDensity,proto3" json:"v_density,omitempty"`
+	PAlign        float32                `protobuf:"fixed32,3,opt,name=p_align,json=pAlign,proto3" json:"p_align,omitempty"`
+	Curve1        float32                `protobuf:"fixed32,4,opt,name=curve1,proto3" json:"curve1,omitempty"`
+	Curve2        float32                `protobuf:"fixed32,5,opt,name=curve2,proto3" json:"curve2,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RoseParams) Reset() {
+	*x = RoseParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoseParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoseParams) ProtoMessage() {}
+
+func (x *RoseParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoseParams.ProtoReflect.Descriptor instead.
+func (*RoseParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RoseParams) GetOpening() float32 {
+	if x != nil {
+		return x.Opening
+	}
+	return 0
+}
+
+func (x *RoseParams) GetVDensity() float32 {
+	if x != nil {
+		return x.VDensity
+	}
+	return 0
+}
+
+func (x *RoseParams) GetPAlign() float32 {
+	if x != nil {
+		return x.PAlign
+	}
+	return 0
+}
+
+func (x *RoseParams) GetCurve1() float32 {
+	if x != nil {
+		return x.Curve1
+	}
+	return 0
+}
+
+func (x *RoseParams) GetCurve2() float32 {
+	if x != nil {
+		return x.Curve2
+	}
+	return 0
+}
+
+// Mirrors frontend BloomParams (zinnia/camellia/lotus/dahlia).
+type BloomParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scale         float32                `protobuf:"fixed32,1,opt,name=scale,proto3" json:"scale,omitempty"`
+	Opening       float32                `protobuf:"fixed32,2,opt,name=opening,proto3" json:"opening,omitempty"`
+	Density       float32                `protobuf:"fixed32,3,opt,name=density,proto3" json:"density,omitempty"`
+	PetalFreq     float32                `protobuf:"fixed32,4,opt,name=petal_freq,json=petalFreq,proto3" json:"petal_freq,omitempty"`
+	PetalAmp      float32                `protobuf:"fixed32,5,opt,name=petal_amp,json=petalAmp,proto3" json:"petal_amp,omitempty"`
+	HangDown      float32                `protobuf:"fixed32,6,opt,name=hang_down,json=hangDown,proto3" json:"hang_down,omitempty"`
+	Fade          float32                `protobuf:"fixed32,7,opt,name=fade,proto3" json:"fade,omitempty"`
+	ThetaStep     float32                `protobuf:"fixed32,8,opt,name=theta_step,json=thetaStep,proto3" json:"theta_step,omitempty"`
+	RStep         float32                `protobuf:"fixed32,9,opt,name=r_step,json=rStep,proto3" json:"r_step,omitempty"`
+	SatShift      float32                `protobuf:"fixed32,10,opt,name=sat_shift,json=satShift,proto3" json:"sat_shift,omitempty"`
+	BriShift      float32                `protobuf:"fixed32,11,opt,name=bri_shift,json=briShift,proto3" json:"bri_shift,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BloomParams) Reset() {
+	*x = BloomParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BloomParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BloomParams) ProtoMessage() {}
+
+func (x *BloomParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BloomParams.ProtoReflect.Descriptor instead.
+func (*BloomParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *BloomParams) GetScale() float32 {
+	if x != nil {
+		return x.Scale
+	}
+	return 0
+}
+
+func (x *BloomParams) GetOpening() float32 {
+	if x != nil {
+		return x.Opening
+	}
+	return 0
+}
+
+func (x *BloomParams) GetDensity() float32 {
+	if x != nil {
+		return x.Density
+	}
+	return 0
+}
+
+func (x *BloomParams) GetPetalFreq() float32 {
+	if x != nil {
+		return x.PetalFreq
+	}
+	return 0
+}
+
+func (x *BloomParams) GetPetalAmp() float32 {
+	if x != nil {
+		return x.PetalAmp
+	}
+	return 0
+}
+
+func (x *BloomParams) GetHangDown() float32 {
+	if x != nil {
+		return x.HangDown
+	}
+	return 0
+}
+
+func (x *BloomParams) GetFade() float32 {
+	if x != nil {
+		return x.Fade
+	}
+	return 0
+}
+
+func (x *BloomParams) GetThetaStep() float32 {
+	if x != nil {
+		return x.ThetaStep
+	}
+	return 0
+}
+
+func (x *BloomParams) GetRStep() float32 {
+	if x != nil {
+		return x.RStep
+	}
+	return 0
+}
+
+func (x *BloomParams) GetSatShift() float32 {
+	if x != nil {
+		return x.SatShift
+	}
+	return 0
+}
+
+func (x *BloomParams) GetBriShift() float32 {
+	if x != nil {
+		return x.BriShift
+	}
+	return 0
+}
+
+// NEW. Phyllotaxis domed seed-head + ray-petal rim.
+// golden angle is a fixed math constant, NOT a param.
+type SunflowerParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scale         float32                `protobuf:"fixed32,1,opt,name=scale,proto3" json:"scale,omitempty"`                                  // master size (200..380)
+	FloretRings   uint32                 `protobuf:"varint,2,opt,name=floret_rings,json=floretRings,proto3" json:"floret_rings,omitempty"`    // radial resolution of seed head (40..150)
+	FloretSpokes  uint32                 `protobuf:"varint,3,opt,name=floret_spokes,json=floretSpokes,proto3" json:"floret_spokes,omitempty"` // angular resolution of seed head (120..320)
+	DomeHeight    float32                `protobuf:"fixed32,4,opt,name=dome_height,json=domeHeight,proto3" json:"dome_height,omitempty"`      // z-dome amplitude (0..90)
+	DiscRatio     float32                `protobuf:"fixed32,5,opt,name=disc_ratio,json=discRatio,proto3" json:"disc_ratio,omitempty"`         // seed-head radius / total (0.40..0.78)
+	RayPetals     uint32                 `protobuf:"varint,6,opt,name=ray_petals,json=rayPetals,proto3" json:"ray_petals,omitempty"`          // visible ray-petal count (13..55)
+	RayLength     float32                `protobuf:"fixed32,7,opt,name=ray_length,json=rayLength,proto3" json:"ray_length,omitempty"`         // petal length as fraction of scale (0.25..0.75)
+	RayWidth      float32                `protobuf:"fixed32,8,opt,name=ray_width,json=rayWidth,proto3" json:"ray_width,omitempty"`            // angular half-width factor (0.40..1.20)
+	SeedPacking   float32                `protobuf:"fixed32,9,opt,name=seed_packing,json=seedPacking,proto3" json:"seed_packing,omitempty"`   // spiral tightness multiplier (0.70..1.40)
+	SatShift      float32                `protobuf:"fixed32,10,opt,name=sat_shift,json=satShift,proto3" json:"sat_shift,omitempty"`           // fraction, baked into vertex color
+	BriShift      float32                `protobuf:"fixed32,11,opt,name=bri_shift,json=briShift,proto3" json:"bri_shift,omitempty"`           // fraction, baked into vertex color
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SunflowerParams) Reset() {
+	*x = SunflowerParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SunflowerParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SunflowerParams) ProtoMessage() {}
+
+func (x *SunflowerParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SunflowerParams.ProtoReflect.Descriptor instead.
+func (*SunflowerParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SunflowerParams) GetScale() float32 {
+	if x != nil {
+		return x.Scale
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetFloretRings() uint32 {
+	if x != nil {
+		return x.FloretRings
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetFloretSpokes() uint32 {
+	if x != nil {
+		return x.FloretSpokes
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetDomeHeight() float32 {
+	if x != nil {
+		return x.DomeHeight
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetDiscRatio() float32 {
+	if x != nil {
+		return x.DiscRatio
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetRayPetals() uint32 {
+	if x != nil {
+		return x.RayPetals
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetRayLength() float32 {
+	if x != nil {
+		return x.RayLength
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetRayWidth() float32 {
+	if x != nil {
+		return x.RayWidth
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetSeedPacking() float32 {
+	if x != nil {
+		return x.SeedPacking
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetSatShift() float32 {
+	if x != nil {
+		return x.SatShift
+	}
+	return 0
+}
+
+func (x *SunflowerParams) GetBriShift() float32 {
+	if x != nil {
+		return x.BriShift
+	}
+	return 0
+}
+
+// NEW. Rose (rhodonea) r=cos(k*theta), per-petal lofted surface.
+type RhodoneaParams struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Radius        float32                `protobuf:"fixed32,1,opt,name=radius,proto3" json:"radius,omitempty"`                                    // petal length scale (180..340)
+	K             uint32                 `protobuf:"varint,2,opt,name=k,proto3" json:"k,omitempty"`                                               // integer rose frequency (2..9); odd->k petals, even->2k
+	PetalSpan     float32                `protobuf:"fixed32,3,opt,name=petal_span,json=petalSpan,proto3" json:"petal_span,omitempty"`             // fraction of natural half-window (0.60..1.00)
+	WidthProfile  float32                `protobuf:"fixed32,4,opt,name=width_profile,json=widthProfile,proto3" json:"width_profile,omitempty"`    // max half-width / length (0.20..0.70)
+	HeightProfile float32                `protobuf:"fixed32,5,opt,name=height_profile,json=heightProfile,proto3" json:"height_profile,omitempty"` // vertical arch amplitude (0..120)
+	Thickness     float32                `protobuf:"fixed32,6,opt,name=thickness,proto3" json:"thickness,omitempty"`                              // central bulge shell offset (0..18)
+	Curl          float32                `protobuf:"fixed32,7,opt,name=curl,proto3" json:"curl,omitempty"`                                        // tip curl-down (0..1)
+	LengthSeg     uint32                 `protobuf:"varint,8,opt,name=length_seg,json=lengthSeg,proto3" json:"length_seg,omitempty"`              // radial resolution per petal (12..48)
+	WidthSeg      uint32                 `protobuf:"varint,9,opt,name=width_seg,json=widthSeg,proto3" json:"width_seg,omitempty"`                 // cross resolution per petal (8..32)
+	SatShift      float32                `protobuf:"fixed32,10,opt,name=sat_shift,json=satShift,proto3" json:"sat_shift,omitempty"`
+	BriShift      float32                `protobuf:"fixed32,11,opt,name=bri_shift,json=briShift,proto3" json:"bri_shift,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RhodoneaParams) Reset() {
+	*x = RhodoneaParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RhodoneaParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RhodoneaParams) ProtoMessage() {}
+
+func (x *RhodoneaParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RhodoneaParams.ProtoReflect.Descriptor instead.
+func (*RhodoneaParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *RhodoneaParams) GetRadius() float32 {
+	if x != nil {
+		return x.Radius
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetK() uint32 {
+	if x != nil {
+		return x.K
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetPetalSpan() float32 {
+	if x != nil {
+		return x.PetalSpan
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetWidthProfile() float32 {
+	if x != nil {
+		return x.WidthProfile
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetHeightProfile() float32 {
+	if x != nil {
+		return x.HeightProfile
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetThickness() float32 {
+	if x != nil {
+		return x.Thickness
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetCurl() float32 {
+	if x != nil {
+		return x.Curl
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetLengthSeg() uint32 {
+	if x != nil {
+		return x.LengthSeg
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetWidthSeg() uint32 {
+	if x != nil {
+		return x.WidthSeg
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetSatShift() float32 {
+	if x != nil {
+		return x.SatShift
+	}
+	return 0
+}
+
+func (x *RhodoneaParams) GetBriShift() float32 {
+	if x != nil {
+		return x.BriShift
+	}
+	return 0
+}
+
+// NEW. Gielis 3D via spherical product of two superformulas.
+type SuperformulaParams struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Scale float32                `protobuf:"fixed32,1,opt,name=scale,proto3" json:"scale,omitempty"` // master size (200..360)
+	// longitude superformula (theta) -> petal/lobe count around equator
+	M1  float32 `protobuf:"fixed32,2,opt,name=m1,proto3" json:"m1,omitempty"`   // (2..16)
+	N1A float32 `protobuf:"fixed32,3,opt,name=n1a,proto3" json:"n1a,omitempty"` // n1 of longitude (>0, 0.30..3)
+	N2A float32 `protobuf:"fixed32,4,opt,name=n2a,proto3" json:"n2a,omitempty"` // (0.30..6)
+	N3A float32 `protobuf:"fixed32,5,opt,name=n3a,proto3" json:"n3a,omitempty"` // (0.30..6)
+	A1  float32 `protobuf:"fixed32,6,opt,name=a1,proto3" json:"a1,omitempty"`   // (>0, 0.60..1.60)
+	B1  float32 `protobuf:"fixed32,7,opt,name=b1,proto3" json:"b1,omitempty"`   // (>0, 0.60..1.60)
+	// latitude superformula (phi) -> vertical bell/dome/pinch
+	M2            float32 `protobuf:"fixed32,8,opt,name=m2,proto3" json:"m2,omitempty"`                 // (0..16; 0 -> smooth revolution)
+	N1B           float32 `protobuf:"fixed32,9,opt,name=n1b,proto3" json:"n1b,omitempty"`               // (>0, 0.30..3)
+	N2B           float32 `protobuf:"fixed32,10,opt,name=n2b,proto3" json:"n2b,omitempty"`              // (0.30..6)
+	N3B           float32 `protobuf:"fixed32,11,opt,name=n3b,proto3" json:"n3b,omitempty"`              // (0.30..6)
+	A2            float32 `protobuf:"fixed32,12,opt,name=a2,proto3" json:"a2,omitempty"`                // (0.60..1.60)
+	B2            float32 `protobuf:"fixed32,13,opt,name=b2,proto3" json:"b2,omitempty"`                // (0.60..1.60)
+	USeg          uint32  `protobuf:"varint,14,opt,name=u_seg,json=uSeg,proto3" json:"u_seg,omitempty"` // longitude resolution (120..340)
+	VSeg          uint32  `protobuf:"varint,15,opt,name=v_seg,json=vSeg,proto3" json:"v_seg,omitempty"` // latitude resolution (80..200)
+	SatShift      float32 `protobuf:"fixed32,16,opt,name=sat_shift,json=satShift,proto3" json:"sat_shift,omitempty"`
+	BriShift      float32 `protobuf:"fixed32,17,opt,name=bri_shift,json=briShift,proto3" json:"bri_shift,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SuperformulaParams) Reset() {
+	*x = SuperformulaParams{}
+	mi := &file_flower_v1_service_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SuperformulaParams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SuperformulaParams) ProtoMessage() {}
+
+func (x *SuperformulaParams) ProtoReflect() protoreflect.Message {
+	mi := &file_flower_v1_service_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SuperformulaParams.ProtoReflect.Descriptor instead.
+func (*SuperformulaParams) Descriptor() ([]byte, []int) {
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SuperformulaParams) GetScale() float32 {
+	if x != nil {
+		return x.Scale
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetM1() float32 {
+	if x != nil {
+		return x.M1
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN1A() float32 {
+	if x != nil {
+		return x.N1A
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN2A() float32 {
+	if x != nil {
+		return x.N2A
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN3A() float32 {
+	if x != nil {
+		return x.N3A
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetA1() float32 {
+	if x != nil {
+		return x.A1
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetB1() float32 {
+	if x != nil {
+		return x.B1
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetM2() float32 {
+	if x != nil {
+		return x.M2
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN1B() float32 {
+	if x != nil {
+		return x.N1B
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN2B() float32 {
+	if x != nil {
+		return x.N2B
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetN3B() float32 {
+	if x != nil {
+		return x.N3B
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetA2() float32 {
+	if x != nil {
+		return x.A2
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetB2() float32 {
+	if x != nil {
+		return x.B2
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetUSeg() uint32 {
+	if x != nil {
+		return x.USeg
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetVSeg() uint32 {
+	if x != nil {
+		return x.VSeg
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetSatShift() float32 {
+	if x != nil {
+		return x.SatShift
+	}
+	return 0
+}
+
+func (x *SuperformulaParams) GetBriShift() float32 {
+	if x != nil {
+		return x.BriShift
+	}
+	return 0
+}
+
 type CreateFlowerRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PersonName    string                 `protobuf:"bytes,1,opt,name=person_name,json=personName,proto3" json:"person_name,omitempty"`
@@ -141,7 +1186,7 @@ type CreateFlowerRequest struct {
 
 func (x *CreateFlowerRequest) Reset() {
 	*x = CreateFlowerRequest{}
-	mi := &file_flower_v1_service_proto_msgTypes[1]
+	mi := &file_flower_v1_service_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -153,7 +1198,7 @@ func (x *CreateFlowerRequest) String() string {
 func (*CreateFlowerRequest) ProtoMessage() {}
 
 func (x *CreateFlowerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[1]
+	mi := &file_flower_v1_service_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -166,7 +1211,7 @@ func (x *CreateFlowerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFlowerRequest.ProtoReflect.Descriptor instead.
 func (*CreateFlowerRequest) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{1}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CreateFlowerRequest) GetPersonName() string {
@@ -186,7 +1231,7 @@ type CreateFlowerResponse struct {
 
 func (x *CreateFlowerResponse) Reset() {
 	*x = CreateFlowerResponse{}
-	mi := &file_flower_v1_service_proto_msgTypes[2]
+	mi := &file_flower_v1_service_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -198,7 +1243,7 @@ func (x *CreateFlowerResponse) String() string {
 func (*CreateFlowerResponse) ProtoMessage() {}
 
 func (x *CreateFlowerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[2]
+	mi := &file_flower_v1_service_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -211,7 +1256,7 @@ func (x *CreateFlowerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFlowerResponse.ProtoReflect.Descriptor instead.
 func (*CreateFlowerResponse) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{2}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *CreateFlowerResponse) GetFlowerId() string {
@@ -237,7 +1282,7 @@ type GetFlowerRequest struct {
 
 func (x *GetFlowerRequest) Reset() {
 	*x = GetFlowerRequest{}
-	mi := &file_flower_v1_service_proto_msgTypes[3]
+	mi := &file_flower_v1_service_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -249,7 +1294,7 @@ func (x *GetFlowerRequest) String() string {
 func (*GetFlowerRequest) ProtoMessage() {}
 
 func (x *GetFlowerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[3]
+	mi := &file_flower_v1_service_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +1307,7 @@ func (x *GetFlowerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowerRequest.ProtoReflect.Descriptor instead.
 func (*GetFlowerRequest) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{3}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *GetFlowerRequest) GetFlowerId() string {
@@ -282,7 +1327,7 @@ type GetFlowerResponse struct {
 
 func (x *GetFlowerResponse) Reset() {
 	*x = GetFlowerResponse{}
-	mi := &file_flower_v1_service_proto_msgTypes[4]
+	mi := &file_flower_v1_service_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -294,7 +1339,7 @@ func (x *GetFlowerResponse) String() string {
 func (*GetFlowerResponse) ProtoMessage() {}
 
 func (x *GetFlowerResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[4]
+	mi := &file_flower_v1_service_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -307,7 +1352,7 @@ func (x *GetFlowerResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFlowerResponse.ProtoReflect.Descriptor instead.
 func (*GetFlowerResponse) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{4}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *GetFlowerResponse) GetFlowerId() string {
@@ -334,7 +1379,7 @@ type PrepareMintRequest struct {
 
 func (x *PrepareMintRequest) Reset() {
 	*x = PrepareMintRequest{}
-	mi := &file_flower_v1_service_proto_msgTypes[5]
+	mi := &file_flower_v1_service_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -346,7 +1391,7 @@ func (x *PrepareMintRequest) String() string {
 func (*PrepareMintRequest) ProtoMessage() {}
 
 func (x *PrepareMintRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[5]
+	mi := &file_flower_v1_service_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -359,7 +1404,7 @@ func (x *PrepareMintRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareMintRequest.ProtoReflect.Descriptor instead.
 func (*PrepareMintRequest) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{5}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PrepareMintRequest) GetFlowerId() string {
@@ -393,7 +1438,7 @@ type PrepareMintResponse struct {
 
 func (x *PrepareMintResponse) Reset() {
 	*x = PrepareMintResponse{}
-	mi := &file_flower_v1_service_proto_msgTypes[6]
+	mi := &file_flower_v1_service_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -405,7 +1450,7 @@ func (x *PrepareMintResponse) String() string {
 func (*PrepareMintResponse) ProtoMessage() {}
 
 func (x *PrepareMintResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[6]
+	mi := &file_flower_v1_service_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -418,7 +1463,7 @@ func (x *PrepareMintResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PrepareMintResponse.ProtoReflect.Descriptor instead.
 func (*PrepareMintResponse) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{6}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PrepareMintResponse) GetFlowerId() string {
@@ -480,7 +1525,7 @@ type ConfirmMintRequest struct {
 
 func (x *ConfirmMintRequest) Reset() {
 	*x = ConfirmMintRequest{}
-	mi := &file_flower_v1_service_proto_msgTypes[7]
+	mi := &file_flower_v1_service_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -492,7 +1537,7 @@ func (x *ConfirmMintRequest) String() string {
 func (*ConfirmMintRequest) ProtoMessage() {}
 
 func (x *ConfirmMintRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[7]
+	mi := &file_flower_v1_service_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -505,7 +1550,7 @@ func (x *ConfirmMintRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmMintRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmMintRequest) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{7}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ConfirmMintRequest) GetFlowerId() string {
@@ -532,7 +1577,7 @@ type ConfirmMintResponse struct {
 
 func (x *ConfirmMintResponse) Reset() {
 	*x = ConfirmMintResponse{}
-	mi := &file_flower_v1_service_proto_msgTypes[8]
+	mi := &file_flower_v1_service_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -544,7 +1589,7 @@ func (x *ConfirmMintResponse) String() string {
 func (*ConfirmMintResponse) ProtoMessage() {}
 
 func (x *ConfirmMintResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_flower_v1_service_proto_msgTypes[8]
+	mi := &file_flower_v1_service_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -557,7 +1602,7 @@ func (x *ConfirmMintResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmMintResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmMintResponse) Descriptor() ([]byte, []int) {
-	return file_flower_v1_service_proto_rawDescGZIP(), []int{8}
+	return file_flower_v1_service_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ConfirmMintResponse) GetFlowerId() string {
@@ -578,7 +1623,7 @@ var File_flower_v1_service_proto protoreflect.FileDescriptor
 
 const file_flower_v1_service_proto_rawDesc = "" +
 	"\n" +
-	"\x17flower/v1/service.proto\x12\tflower.v1\"\xa2\x02\n" +
+	"\x17flower/v1/service.proto\x12\tflower.v1\"\xc2\x05\n" +
 	"\fFlowerParams\x12!\n" +
 	"\falgo_version\x18\x01 \x01(\tR\valgoVersion\x12%\n" +
 	"\x0eschema_version\x18\x02 \x01(\tR\rschemaVersion\x12\x12\n" +
@@ -591,7 +1636,115 @@ const file_flower_v1_service_proto_rawDesc = "" +
 	"\tcurvature\x18\a \x01(\x02R\tcurvature\x12\x1f\n" +
 	"\vstem_height\x18\b \x01(\x02R\n" +
 	"stemHeight\x12\x10\n" +
-	"\x03hue\x18\t \x01(\x02R\x03hue\"6\n" +
+	"\x03hue\x18\t \x01(\x02R\x03hue\x12\x16\n" +
+	"\x06family\x18\n" +
+	" \x01(\tR\x06family\x120\n" +
+	"\apalette\x18\v \x01(\v2\x16.flower.v1.PaletteSpecR\apalette\x124\n" +
+	"\aclassic\x18\f \x01(\v2\x18.flower.v1.ClassicParamsH\x00R\aclassic\x12+\n" +
+	"\x04rose\x18\r \x01(\v2\x15.flower.v1.RoseParamsH\x00R\x04rose\x12.\n" +
+	"\x05bloom\x18\x0e \x01(\v2\x16.flower.v1.BloomParamsH\x00R\x05bloom\x12:\n" +
+	"\tsunflower\x18\x0f \x01(\v2\x1a.flower.v1.SunflowerParamsH\x00R\tsunflower\x127\n" +
+	"\brhodonea\x18\x10 \x01(\v2\x19.flower.v1.RhodoneaParamsH\x00R\brhodonea\x12C\n" +
+	"\fsuperformula\x18\x11 \x01(\v2\x1d.flower.v1.SuperformulaParamsH\x00R\fsuperformulaB\a\n" +
+	"\x05shape\"c\n" +
+	"\tColorStop\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\x02R\bposition\x12\x10\n" +
+	"\x03hex\x18\x02 \x01(\tR\x03hex\x12\f\n" +
+	"\x01r\x18\x03 \x01(\x02R\x01r\x12\f\n" +
+	"\x01g\x18\x04 \x01(\x02R\x01g\x12\f\n" +
+	"\x01b\x18\x05 \x01(\x02R\x01b\"\xa0\x01\n" +
+	"\vPaletteSpec\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12*\n" +
+	"\x05stops\x18\x02 \x03(\v2\x14.flower.v1.ColorStopR\x05stops\x12\x1b\n" +
+	"\thue_shift\x18\x03 \x01(\x02R\bhueShift\x12\x1b\n" +
+	"\tsat_shift\x18\x04 \x01(\x02R\bsatShift\x12\x1b\n" +
+	"\tbri_shift\x18\x05 \x01(\x02R\bbriShift\"\xf9\x01\n" +
+	"\rClassicParams\x12\x12\n" +
+	"\x04rows\x18\x01 \x01(\rR\x04rows\x12\x12\n" +
+	"\x04cols\x18\x02 \x01(\rR\x04cols\x12\x13\n" +
+	"\x05p_num\x18\x03 \x01(\rR\x04pNum\x12\x0f\n" +
+	"\x03f_d\x18\x04 \x01(\x02R\x02fD\x12\x13\n" +
+	"\x05p_len\x18\x05 \x01(\x02R\x04pLen\x12\x17\n" +
+	"\ap_sharp\x18\x06 \x01(\x02R\x06pSharp\x12\x19\n" +
+	"\bf_height\x18\a \x01(\x02R\afHeight\x12\x16\n" +
+	"\x06curve1\x18\b \x01(\x02R\x06curve1\x12\x16\n" +
+	"\x06curve2\x18\t \x01(\x02R\x06curve2\x12\f\n" +
+	"\x01b\x18\n" +
+	" \x01(\x02R\x01b\x12\x13\n" +
+	"\x05b_num\x18\v \x01(\rR\x04bNum\"\x8c\x01\n" +
+	"\n" +
+	"RoseParams\x12\x18\n" +
+	"\aopening\x18\x01 \x01(\x02R\aopening\x12\x1b\n" +
+	"\tv_density\x18\x02 \x01(\x02R\bvDensity\x12\x17\n" +
+	"\ap_align\x18\x03 \x01(\x02R\x06pAlign\x12\x16\n" +
+	"\x06curve1\x18\x04 \x01(\x02R\x06curve1\x12\x16\n" +
+	"\x06curve2\x18\x05 \x01(\x02R\x06curve2\"\xb4\x02\n" +
+	"\vBloomParams\x12\x14\n" +
+	"\x05scale\x18\x01 \x01(\x02R\x05scale\x12\x18\n" +
+	"\aopening\x18\x02 \x01(\x02R\aopening\x12\x18\n" +
+	"\adensity\x18\x03 \x01(\x02R\adensity\x12\x1d\n" +
+	"\n" +
+	"petal_freq\x18\x04 \x01(\x02R\tpetalFreq\x12\x1b\n" +
+	"\tpetal_amp\x18\x05 \x01(\x02R\bpetalAmp\x12\x1b\n" +
+	"\thang_down\x18\x06 \x01(\x02R\bhangDown\x12\x12\n" +
+	"\x04fade\x18\a \x01(\x02R\x04fade\x12\x1d\n" +
+	"\n" +
+	"theta_step\x18\b \x01(\x02R\tthetaStep\x12\x15\n" +
+	"\x06r_step\x18\t \x01(\x02R\x05rStep\x12\x1b\n" +
+	"\tsat_shift\x18\n" +
+	" \x01(\x02R\bsatShift\x12\x1b\n" +
+	"\tbri_shift\x18\v \x01(\x02R\bbriShift\"\xe7\x02\n" +
+	"\x0fSunflowerParams\x12\x14\n" +
+	"\x05scale\x18\x01 \x01(\x02R\x05scale\x12!\n" +
+	"\ffloret_rings\x18\x02 \x01(\rR\vfloretRings\x12#\n" +
+	"\rfloret_spokes\x18\x03 \x01(\rR\ffloretSpokes\x12\x1f\n" +
+	"\vdome_height\x18\x04 \x01(\x02R\n" +
+	"domeHeight\x12\x1d\n" +
+	"\n" +
+	"disc_ratio\x18\x05 \x01(\x02R\tdiscRatio\x12\x1d\n" +
+	"\n" +
+	"ray_petals\x18\x06 \x01(\rR\trayPetals\x12\x1d\n" +
+	"\n" +
+	"ray_length\x18\a \x01(\x02R\trayLength\x12\x1b\n" +
+	"\tray_width\x18\b \x01(\x02R\brayWidth\x12!\n" +
+	"\fseed_packing\x18\t \x01(\x02R\vseedPacking\x12\x1b\n" +
+	"\tsat_shift\x18\n" +
+	" \x01(\x02R\bsatShift\x12\x1b\n" +
+	"\tbri_shift\x18\v \x01(\x02R\bbriShift\"\xc9\x02\n" +
+	"\x0eRhodoneaParams\x12\x16\n" +
+	"\x06radius\x18\x01 \x01(\x02R\x06radius\x12\f\n" +
+	"\x01k\x18\x02 \x01(\rR\x01k\x12\x1d\n" +
+	"\n" +
+	"petal_span\x18\x03 \x01(\x02R\tpetalSpan\x12#\n" +
+	"\rwidth_profile\x18\x04 \x01(\x02R\fwidthProfile\x12%\n" +
+	"\x0eheight_profile\x18\x05 \x01(\x02R\rheightProfile\x12\x1c\n" +
+	"\tthickness\x18\x06 \x01(\x02R\tthickness\x12\x12\n" +
+	"\x04curl\x18\a \x01(\x02R\x04curl\x12\x1d\n" +
+	"\n" +
+	"length_seg\x18\b \x01(\rR\tlengthSeg\x12\x1b\n" +
+	"\twidth_seg\x18\t \x01(\rR\bwidthSeg\x12\x1b\n" +
+	"\tsat_shift\x18\n" +
+	" \x01(\x02R\bsatShift\x12\x1b\n" +
+	"\tbri_shift\x18\v \x01(\x02R\bbriShift\"\xda\x02\n" +
+	"\x12SuperformulaParams\x12\x14\n" +
+	"\x05scale\x18\x01 \x01(\x02R\x05scale\x12\x0e\n" +
+	"\x02m1\x18\x02 \x01(\x02R\x02m1\x12\x10\n" +
+	"\x03n1a\x18\x03 \x01(\x02R\x03n1a\x12\x10\n" +
+	"\x03n2a\x18\x04 \x01(\x02R\x03n2a\x12\x10\n" +
+	"\x03n3a\x18\x05 \x01(\x02R\x03n3a\x12\x0e\n" +
+	"\x02a1\x18\x06 \x01(\x02R\x02a1\x12\x0e\n" +
+	"\x02b1\x18\a \x01(\x02R\x02b1\x12\x0e\n" +
+	"\x02m2\x18\b \x01(\x02R\x02m2\x12\x10\n" +
+	"\x03n1b\x18\t \x01(\x02R\x03n1b\x12\x10\n" +
+	"\x03n2b\x18\n" +
+	" \x01(\x02R\x03n2b\x12\x10\n" +
+	"\x03n3b\x18\v \x01(\x02R\x03n3b\x12\x0e\n" +
+	"\x02a2\x18\f \x01(\x02R\x02a2\x12\x0e\n" +
+	"\x02b2\x18\r \x01(\x02R\x02b2\x12\x13\n" +
+	"\x05u_seg\x18\x0e \x01(\rR\x04uSeg\x12\x13\n" +
+	"\x05v_seg\x18\x0f \x01(\rR\x04vSeg\x12\x1b\n" +
+	"\tsat_shift\x18\x10 \x01(\x02R\bsatShift\x12\x1b\n" +
+	"\tbri_shift\x18\x11 \x01(\x02R\bbriShift\"6\n" +
 	"\x13CreateFlowerRequest\x12\x1f\n" +
 	"\vperson_name\x18\x01 \x01(\tR\n" +
 	"personName\"d\n" +
@@ -640,34 +1793,50 @@ func file_flower_v1_service_proto_rawDescGZIP() []byte {
 	return file_flower_v1_service_proto_rawDescData
 }
 
-var file_flower_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_flower_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_flower_v1_service_proto_goTypes = []any{
 	(*FlowerParams)(nil),         // 0: flower.v1.FlowerParams
-	(*CreateFlowerRequest)(nil),  // 1: flower.v1.CreateFlowerRequest
-	(*CreateFlowerResponse)(nil), // 2: flower.v1.CreateFlowerResponse
-	(*GetFlowerRequest)(nil),     // 3: flower.v1.GetFlowerRequest
-	(*GetFlowerResponse)(nil),    // 4: flower.v1.GetFlowerResponse
-	(*PrepareMintRequest)(nil),   // 5: flower.v1.PrepareMintRequest
-	(*PrepareMintResponse)(nil),  // 6: flower.v1.PrepareMintResponse
-	(*ConfirmMintRequest)(nil),   // 7: flower.v1.ConfirmMintRequest
-	(*ConfirmMintResponse)(nil),  // 8: flower.v1.ConfirmMintResponse
+	(*ColorStop)(nil),            // 1: flower.v1.ColorStop
+	(*PaletteSpec)(nil),          // 2: flower.v1.PaletteSpec
+	(*ClassicParams)(nil),        // 3: flower.v1.ClassicParams
+	(*RoseParams)(nil),           // 4: flower.v1.RoseParams
+	(*BloomParams)(nil),          // 5: flower.v1.BloomParams
+	(*SunflowerParams)(nil),      // 6: flower.v1.SunflowerParams
+	(*RhodoneaParams)(nil),       // 7: flower.v1.RhodoneaParams
+	(*SuperformulaParams)(nil),   // 8: flower.v1.SuperformulaParams
+	(*CreateFlowerRequest)(nil),  // 9: flower.v1.CreateFlowerRequest
+	(*CreateFlowerResponse)(nil), // 10: flower.v1.CreateFlowerResponse
+	(*GetFlowerRequest)(nil),     // 11: flower.v1.GetFlowerRequest
+	(*GetFlowerResponse)(nil),    // 12: flower.v1.GetFlowerResponse
+	(*PrepareMintRequest)(nil),   // 13: flower.v1.PrepareMintRequest
+	(*PrepareMintResponse)(nil),  // 14: flower.v1.PrepareMintResponse
+	(*ConfirmMintRequest)(nil),   // 15: flower.v1.ConfirmMintRequest
+	(*ConfirmMintResponse)(nil),  // 16: flower.v1.ConfirmMintResponse
 }
 var file_flower_v1_service_proto_depIdxs = []int32{
-	0, // 0: flower.v1.CreateFlowerResponse.params:type_name -> flower.v1.FlowerParams
-	0, // 1: flower.v1.GetFlowerResponse.params:type_name -> flower.v1.FlowerParams
-	1, // 2: flower.v1.FlowerService.CreateFlower:input_type -> flower.v1.CreateFlowerRequest
-	3, // 3: flower.v1.FlowerService.GetFlower:input_type -> flower.v1.GetFlowerRequest
-	5, // 4: flower.v1.FlowerService.PrepareMint:input_type -> flower.v1.PrepareMintRequest
-	7, // 5: flower.v1.FlowerService.ConfirmMint:input_type -> flower.v1.ConfirmMintRequest
-	2, // 6: flower.v1.FlowerService.CreateFlower:output_type -> flower.v1.CreateFlowerResponse
-	4, // 7: flower.v1.FlowerService.GetFlower:output_type -> flower.v1.GetFlowerResponse
-	6, // 8: flower.v1.FlowerService.PrepareMint:output_type -> flower.v1.PrepareMintResponse
-	8, // 9: flower.v1.FlowerService.ConfirmMint:output_type -> flower.v1.ConfirmMintResponse
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2,  // 0: flower.v1.FlowerParams.palette:type_name -> flower.v1.PaletteSpec
+	3,  // 1: flower.v1.FlowerParams.classic:type_name -> flower.v1.ClassicParams
+	4,  // 2: flower.v1.FlowerParams.rose:type_name -> flower.v1.RoseParams
+	5,  // 3: flower.v1.FlowerParams.bloom:type_name -> flower.v1.BloomParams
+	6,  // 4: flower.v1.FlowerParams.sunflower:type_name -> flower.v1.SunflowerParams
+	7,  // 5: flower.v1.FlowerParams.rhodonea:type_name -> flower.v1.RhodoneaParams
+	8,  // 6: flower.v1.FlowerParams.superformula:type_name -> flower.v1.SuperformulaParams
+	1,  // 7: flower.v1.PaletteSpec.stops:type_name -> flower.v1.ColorStop
+	0,  // 8: flower.v1.CreateFlowerResponse.params:type_name -> flower.v1.FlowerParams
+	0,  // 9: flower.v1.GetFlowerResponse.params:type_name -> flower.v1.FlowerParams
+	9,  // 10: flower.v1.FlowerService.CreateFlower:input_type -> flower.v1.CreateFlowerRequest
+	11, // 11: flower.v1.FlowerService.GetFlower:input_type -> flower.v1.GetFlowerRequest
+	13, // 12: flower.v1.FlowerService.PrepareMint:input_type -> flower.v1.PrepareMintRequest
+	15, // 13: flower.v1.FlowerService.ConfirmMint:input_type -> flower.v1.ConfirmMintRequest
+	10, // 14: flower.v1.FlowerService.CreateFlower:output_type -> flower.v1.CreateFlowerResponse
+	12, // 15: flower.v1.FlowerService.GetFlower:output_type -> flower.v1.GetFlowerResponse
+	14, // 16: flower.v1.FlowerService.PrepareMint:output_type -> flower.v1.PrepareMintResponse
+	16, // 17: flower.v1.FlowerService.ConfirmMint:output_type -> flower.v1.ConfirmMintResponse
+	14, // [14:18] is the sub-list for method output_type
+	10, // [10:14] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_flower_v1_service_proto_init() }
@@ -675,13 +1844,21 @@ func file_flower_v1_service_proto_init() {
 	if File_flower_v1_service_proto != nil {
 		return
 	}
+	file_flower_v1_service_proto_msgTypes[0].OneofWrappers = []any{
+		(*FlowerParams_Classic)(nil),
+		(*FlowerParams_Rose)(nil),
+		(*FlowerParams_Bloom)(nil),
+		(*FlowerParams_Sunflower)(nil),
+		(*FlowerParams_Rhodonea)(nil),
+		(*FlowerParams_Superformula)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_flower_v1_service_proto_rawDesc), len(file_flower_v1_service_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
