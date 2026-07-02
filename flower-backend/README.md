@@ -71,6 +71,14 @@ The `docker-compose.yml` file is intentionally empty of services; add MinIO loca
 
 ### 4. Run server
 
+Docker-only (recommended — no host Go needed), from the repo root:
+
+```bash
+docker compose up -d backend
+```
+
+Or, if you have a local Go toolchain installed:
+
 ```bash
 go run ./cmd/server
 ```
