@@ -81,6 +81,7 @@ interface FlowerStore {
   markMintedByBackendFlowerId: (backendFlowerId: string, txHash?: string, tokenUri?: string) => Promise<boolean>;
   loadFromBackend: () => Promise<void>;
   resetParams: () => void;
+  resetFlowerStore: () => void;
 }
 
 function hueToHex(hue: number, saturation = 70, lightness = 52) {
@@ -462,6 +463,7 @@ export const useFlowerStore = create<FlowerStore>()(
 
       if (error) {
         console.error('loadFromBackend error:', error);
+        set({ savedFlowers: [] });
         return;
       }
 
@@ -487,7 +489,7 @@ export const useFlowerStore = create<FlowerStore>()(
       set({ savedFlowers: mapped });
     } catch (err) {
       console.error('loadFromBackend failed:', err);
-      // Keep localStorage cache as fallback
+      set({ savedFlowers: [] });
     }
   },
 
@@ -503,6 +505,18 @@ export const useFlowerStore = create<FlowerStore>()(
       title: "Untitled Flower",
       generationWord: "",
     })),
+
+  resetFlowerStore: () => {
+    set({
+      savedFlowers: [],
+      params: defaultParams,
+      editingFlowerId: null,
+      title: "Untitled Flower",
+      generationWord: "",
+      lastError: "",
+    });
+    useFlowerStore.persist.clearStorage();
+  },
   }),
   {
     name: 'petal-pixel-flowers',
