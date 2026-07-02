@@ -33,24 +33,24 @@ The project was built to exercise the full integration path: browser UI ↔ gRPC
 ```mermaid
 flowchart TD
     subgraph browser [Browser]
-        UI["React / Vite\n(port 5173)"]
+        UI["React / Vite\n(port 8080)"]
     end
 
     subgraph backend [Go Backend]
         gRPC["gRPC-Web server\n(port 50051)"]
-        Chain["Ethereum RPC client"]
     end
 
     subgraph infra [Infrastructure]
         Supabase["Supabase\n(PostgreSQL + Auth)"]
         Anvil["Anvil\nlocal EVM node\n(port 8545)"]
+        MinIO["MinIO S3\n(port 9000)"]
     end
 
     UI -- "gRPC-Web (ConnectRPC)" --> gRPC
     UI -- "Supabase JS\n(auth + flower data)" --> Supabase
+    UI -- "ethers + MetaMask\n(mint tx)" --> Anvil
     gRPC -- "pgx / Goose" --> Supabase
-    gRPC --> Chain
-    Chain -- "JSON-RPC" --> Anvil
+    gRPC -- "S3 SDK (metadata)" --> MinIO
     Anvil -. "FlowerNFT.sol\n(ERC-721)" .-> Anvil
 ```
 
@@ -60,9 +60,10 @@ flowchart TD
 3. Frontend also writes a `user_flowers` row directly via Supabase JS (includes full `params` JSON for cross-device sync).
 
 ### Data flow: Mint
-1. Frontend calls `MintFlower` gRPC method with the flower's UUID.
-2. Go server looks up the flower, builds NFT metadata, calls `mint()` on `FlowerNFT.sol` via JSON-RPC.
-3. Transaction hash + token URI are returned to the frontend and persisted to `user_flowers`.
+1. Frontend calls `PrepareMint` gRPC method with the flower's UUID.
+2. Go server builds NFT metadata, uploads it to MinIO (S3), and returns `contract_address` + `token_uri` to the frontend.
+3. Browser (ethers + MetaMask) sends the `mint()` transaction directly to Anvil — the Go backend never talks to the chain.
+4. Frontend calls `ConfirmMint` with the resulting tx hash; the backend records it to `mints` and the data is persisted to `user_flowers`.
 
 ---
 
@@ -96,7 +97,7 @@ flowchart TD
 | Database driver | pgx v5 (simple protocol mode for PgBouncer / Supabase Pooler) |
 | Migrations | Goose v3 (auto-runs on startup) |
 | Asset storage | AWS S3 SDK v2 (optional, for NFT image upload) |
-| Blockchain client | Custom Ethereum JSON-RPC over `golang.org/x/net` |
+| Blockchain client | None — the browser (MetaMask + ethers) sends chain transactions directly |
 | Config | `godotenv` (`.env` file) |
 
 ### Web3 / Smart Contracts — `flower-backend/contracts/`
@@ -106,17 +107,15 @@ flowchart TD
 | Contract language | Solidity ^0.8.20 |
 | Standard | ERC-721 with URI storage (`OpenZeppelin v5.6.1`) |
 | Dev environment | Foundry (Forge + Anvil) |
-| Local chain | Anvil at `chain-id 1337` |
+| Local chain | Anvil at `chain-id 1337` (set explicitly via `--chain-id 1337`; Anvil's own default would be 31337) |
 | Wallet | MetaMask (browser extension) |
 
 ### Dev Tooling — root
 
 | Tool | Purpose |
 |---|---|
-| `go-task` / `Taskfile.yml` | One-command startup (`task dev`) and shutdown (`task stop`) |
-| `tools/dev/deploy.ps1` | Forge script → broadcast → extract contract address → write `.task.env` |
-| `tools/dev/run-backend.ps1` | Load `.task.env` + `.env`, set `CHAIN_ID`, run `go run` |
-| `tools/dev/stop.ps1` | Kill processes on ports 8545 / 50051 / 8080 / 5173 |
+| Docker Compose (`docker-compose.yml`) | One-command startup (`docker compose up -d --build`) and shutdown (`docker compose down`) |
+| `tools/docker/deploy.sh` | Forge script → broadcast → extract contract address → pass to backend |
 
 ---
 
@@ -124,11 +123,9 @@ flowchart TD
 
 ```
 petal-pixel/
-├── Taskfile.yml                  # one-command dev runner
-├── tools/dev/                    # PowerShell helper scripts
-│   ├── deploy.ps1                # forge deploy + address extraction
-│   ├── run-backend.ps1           # backend env loader + runner
-│   └── stop.ps1                  # kill dev processes by port
+├── docker-compose.yml            # one-command dev runner (all services)
+├── tools/docker/
+│   └── deploy.sh                 # forge deploy + contract address extraction
 │
 ├── flower-backend/               # Go gRPC server + Solidity contracts
 │   ├── cmd/server/main.go        # entry point
@@ -155,104 +152,49 @@ petal-pixel/
 
 ---
 
-## Quickstart (Windows)
+## Quickstart (Docker — any OS)
 
-### Prerequisites
+Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Compose v2+) and git.
 
-| Tool | Install |
-|---|---|
-| Go ≥ 1.22 | https://go.dev/dl |
-| Node.js ≥ 20 | https://nodejs.org |
-| Foundry | `powershell -c "irm https://foundry.paradigm.xyz \| iex"` |
-| go-task | `go install github.com/go-task/task/v3/cmd/task@latest` |
-| MetaMask | Browser extension — import Anvil account 0 with the key printed on `anvil` startup |
-
-Make sure `$(go env GOPATH)\bin` is in your `PATH` so that `task` is found.
-
-### 1. Clone
-
-```powershell
-git clone https://github.com/VoixKz/petal-pixel.git
+```bash
+git clone <repo-url>
 cd petal-pixel
+git submodule update --init --recursive   # OpenZeppelin contracts (required by the deploy step)
+cp .env.example .env                      # then paste your Supabase publishable key (see below)
+docker compose up -d --build
 ```
 
-### 2. Install Foundry dependencies (OpenZeppelin)
+That single command starts everything:
 
-```powershell
-cd flower-backend
-forge install          # reads foundry.lock — installs OZ v5.6.1 into lib/
-cd ..
-```
+| Service    | URL                          | What it is                                        |
+|------------|------------------------------|---------------------------------------------------|
+| frontend   | http://localhost:8080        | Vite dev server (hot reload via bind mount)       |
+| backend    | http://localhost:50051       | Go gRPC / gRPC-web API (`/healthz`, `/api/flowers`) |
+| anvil      | http://127.0.0.1:8545        | Local Ethereum node, chain id **1337**            |
+| deploy     | (one-shot)                   | Deploys `FlowerNFT.sol`, hands the address to the backend |
+| postgres   | (internal)                   | Backend DB (`flowers`, `mints`) — goose migrations run automatically |
+| minio      | http://localhost:9000 (console :9001) | S3-compatible storage for NFT metadata (bucket `flower`) |
 
-### 3. Install frontend dependencies
+Stop everything with `docker compose down` (add `-v` to also wipe DB/MinIO data and force a fresh chain + redeploy).
 
-```powershell
-cd petal-pixel-studio
-npm install
-cd ..
-```
+### Supabase (auth + cross-device sync)
 
-### 4. Configure environment files
+Login/signup and the "My Flowers" cloud sync use the hosted Supabase project.
+Set it up once:
 
-Copy the examples and fill in your values:
+1. Restore the Supabase project (free-tier projects pause when idle) in the [dashboard](https://supabase.com/dashboard).
+2. Copy the publishable (anon) key from **Project Settings → API Keys** into `.env` (`VITE_SUPABASE_PUBLISHABLE_KEY`).
+3. `docker compose up -d frontend` to restart the frontend with the new key.
 
-```powershell
-# Backend
-copy flower-backend\.env.example flower-backend\.env
+Without a live Supabase project the app still runs, but login is unavailable, so flowers only persist in the browser's localStorage.
 
-# Frontend
-copy petal-pixel-studio\.env.example petal-pixel-studio\.env
-```
+### Minting
 
-**`flower-backend/.env`** — key values:
-
-| Variable | Description |
-|---|---|
-| `DB_DSN` | Supabase PostgreSQL connection string (from your Supabase project settings) |
-| `S3_*` | Supabase Storage S3 endpoint, keys, bucket, and public base URL (see `flower-backend/.env.example`) |
-| `CHAIN_ID` | `1337` (matches Anvil default in `Taskfile.yml`) |
-| `NFT_CONTRACT_ADDRESS` | Auto-written by `task deploy` into `.task.env` — leave as `0x000…` initially |
-
-**`petal-pixel-studio/.env`** — key values:
-
-| Variable | Description |
-|---|---|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon / public key |
-| `VITE_FLOWER_BACKEND_URL` | `http://localhost:50051` |
-| `VITE_CHAIN_ID` | `1337` |
-| `VITE_RPC_URL` | `http://127.0.0.1:8545` |
-
-### 5. Apply Supabase migrations
-
-In your Supabase dashboard → **SQL Editor**, run the files in order:
-
-```
-petal-pixel-studio/supabase/migrations/20260321201338_*.sql
-petal-pixel-studio/supabase/migrations/20260405140000_user_flowers.sql
-petal-pixel-studio/supabase/migrations/20260405150000_user_flowers_full_data.sql
-petal-pixel-studio/supabase/migrations/20260408120000_profiles_rls_and_user_flowers_updated_at.sql
-```
-
-### 6. Run everything
-
-```powershell
-task dev
-```
-
-This single command:
-1. Starts **Anvil** (local EVM node, `chain-id 1337`) in a new PowerShell window.
-2. Deploys **FlowerNFT.sol** via `forge script --broadcast` and writes the contract address to `.task.env`.
-3. Starts the **Go gRPC backend** (reads `.env` + `.task.env`) in a new window.
-4. Starts the **Vite dev server** in a new window.
-
-Open `http://localhost:5173`.
-
-To stop all processes:
-
-```powershell
-task stop
-```
+Minting happens **in your browser**: MetaMask signs the transaction and sends it
+to Anvil directly. Add the local network to MetaMask when prompted (chain id 1337,
+RPC http://127.0.0.1:8545) and import an Anvil dev account to have funds. The Go
+backend only prepares the NFT metadata (uploaded to MinIO) and records mint
+confirmations — it never talks to the chain itself.
 
 ---
 
@@ -271,14 +213,13 @@ All flower data (including the full `params` JSON) is written to `user_flowers` 
 - `isSaving` flag: disables the Save button during an ongoing request, preventing double-submission.
 
 ### Foundry + Anvil for local Web3
-The smart contract is compiled and deployed with Foundry. `deploy.ps1` broadcasts the deployment, parses the contract address from the `broadcast/run-latest.json` artifact, and writes it to `.task.env` so the backend picks it up without manual copy-paste.
+The smart contract is compiled and deployed with Foundry. `tools/docker/deploy.sh` (run as a one-shot Docker service) broadcasts the deployment, parses the contract address from the `broadcast/run-latest.json` artifact, and passes it to the backend via environment variable — no manual copy-paste needed.
 
 ---
 
 ## Security Notes
 
 - **`.env` files are never committed.** Both `flower-backend/.env` and `petal-pixel-studio/.env` are in `.gitignore`. Only `.env.example` files are versioned.
-- **`.task.env` is never committed.** It contains the ephemeral `NFT_CONTRACT_ADDRESS` generated at runtime and is also in `.gitignore`.
 - **Anvil is a local-only testnet.** Private keys printed by Anvil are well-known test keys with no real value. Never use them on mainnet.
 - **Supabase RLS** is enabled on the `user_flowers` table — users can only read and write their own flower records.
 
