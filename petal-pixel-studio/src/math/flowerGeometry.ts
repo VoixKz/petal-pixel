@@ -110,7 +110,10 @@ function toPalette(backendPalette: BackendFlowerParams["palette"]): Palette {
 export function toV2Params(backend: BackendFlowerParams): V2Params {
   const palette = toPalette(backend.palette);
   const out: V2Params = { family: backend.family as FlowerFamily, palette };
-  const shape = backend.shape;
+  // Guard: a FlowerParams created without a shape set can surface `shape` as
+  // undefined (rather than `{ case: undefined }`) depending on the codegen; the
+  // nullish default keeps the switch from throwing on `.case`.
+  const shape = backend.shape ?? ({ case: undefined } as const);
   switch (shape.case) {
     case "classic":
       out.classicParams = { ...shape.value, palette };
@@ -142,24 +145,32 @@ export function toV2Params(backend: BackendFlowerParams): V2Params {
  * V2 wrapper); the 3 new families use the family-math builders. All v2 geometry
  * carries a vertex "color" attribute (Flower3D sets vertexColors:true for v2).
  */
+function required<T>(value: T | undefined, family: string, name: string): T {
+  if (value == null) {
+    throw new Error(`buildV2Geometry: family="${family}" but ${name} is missing`);
+  }
+  return value;
+}
+
 export function buildV2Geometry(params: V2Params): THREE.BufferGeometry {
   const palette = params.palette;
   switch (params.family) {
     case "rose":
-      return createRoseFlowerGeometry({ ...params.roseParams!, palette });
+      return createRoseFlowerGeometry({ ...required(params.roseParams, "rose", "roseParams"), palette });
     case "zinnia":
     case "camellia":
     case "lotus":
     case "dahlia":
-      return createParametricBloomGeometry(params.family, { ...params.bloomParams!, palette });
+      return createParametricBloomGeometry(params.family, { ...required(params.bloomParams, params.family, "bloomParams"), palette });
     case "sunflower":
-      return createSunflowerGeometry(params.sunflowerParams!, palette);
+      return createSunflowerGeometry(required(params.sunflowerParams, "sunflower", "sunflowerParams"), palette);
     case "rhodonea":
-      return createRhodoneaGeometry(params.rhodoneaParams!, palette);
+      return createRhodoneaGeometry(required(params.rhodoneaParams, "rhodonea", "rhodoneaParams"), palette);
     case "superformula":
-      return createSuperformulaGeometry(params.superformulaParams!, palette);
+      return createSuperformulaGeometry(required(params.superformulaParams, "superformula", "superformulaParams"), palette);
     case "classic":
     default:
+      // classic tolerates a missing param set (falls back to defaults).
       return createClassicFlowerGeometryV2(params.classicParams ?? DEFAULT_CLASSIC_PARAMS, palette);
   }
 }
