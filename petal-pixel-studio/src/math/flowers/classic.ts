@@ -7,7 +7,7 @@ export function createClassicFlowerGeometry(params: ClassicParams) {
   const positions: number[] = [];
   const indices: number[] = [];
 
-  for (let theta = 0; theta < rows; theta += 1) {
+  for (let theta = 1; theta < rows; theta += 1) {
     for (let phi = 0; phi < cols; phi += 1) {
       const angle = (phi * Math.PI * 2) / cols;
       const r = ((pLen * Math.pow(Math.abs(Math.sin((pNum / 2) * angle)), pSharp) + fD) * theta) / rows;
@@ -18,7 +18,7 @@ export function createClassicFlowerGeometry(params: ClassicParams) {
     }
   }
 
-  for (let theta = 0; theta < rows - 1; theta += 1) {
+  for (let theta = 0; theta < rows - 2; theta += 1) {
     for (let phi = 0; phi < cols; phi += 1) {
       const nextPhi = (phi + 1) % cols;
       const a = theta * cols + phi;

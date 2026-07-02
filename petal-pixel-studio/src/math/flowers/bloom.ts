@@ -40,7 +40,7 @@ export function createParametricBloomGeometry(type: FlowerType, params: BloomPar
         continue;
       }
 
-      const shrink = 1 - theta / (profile.fade * params.fade);
+      const shrink = Math.max(0.05, 1 - theta / (profile.fade * params.fade));
       const scale = params.scale * shrink;
       if (scale <= 0) {
         continue;
