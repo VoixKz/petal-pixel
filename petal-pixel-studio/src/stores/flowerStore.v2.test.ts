@@ -34,6 +34,28 @@ const SUNFLOWER = {
   rayPetals: 34, rayLength: 0.5, rayWidth: 0.8, seedPacking: 1, satShift: 0.05, briShift: -0.02,
 };
 
+const RHODONEA = {
+  radius: 260, k: 5, petalSpan: 0.9, widthProfile: 0.5, heightProfile: 40,
+  thickness: 6, curl: 0.5, lengthSeg: 40, widthSeg: 24, satShift: 0.03, briShift: -0.01,
+};
+
+const SUPERFORMULA = {
+  scale: 300, m1: 6, n1a: 0.6, n2a: 1, n3a: 1, a1: 1, b1: 1,
+  m2: 3, n1b: 0.8, n2b: 1, n3b: 1, a2: 1, b2: 1, uSeg: 160, vSeg: 100,
+  satShift: 0.04, briShift: -0.03,
+};
+
+function v2ResponseFor(family: string, shapeCase: string, value: unknown) {
+  return {
+    flowerId: `flower-${family}`,
+    params: {
+      algoVersion: "v2", schemaVersion: "v2", seed: 99n,
+      petalCount: 8, petalLength: 1.2, petalWidth: 0.5, curvature: 0.2, stemHeight: 1, hue: 40,
+      family, palette: V2_PALETTE, shape: { case: shapeCase, value },
+    },
+  };
+}
+
 function v2Response() {
   // Shape mirrors connect-es FlowerParams: scalars 1-9 + family + palette + oneof `shape`.
   return {
@@ -64,7 +86,7 @@ describe("generateFromWord v2 branch", () => {
     createFlowerViaGrpc.mockReset();
     useFlowerStore.setState({
       editingFlowerId: null,
-      params: { ...useFlowerStore.getState().params, family: undefined, palette: undefined, sunflowerParams: undefined },
+      params: { ...useFlowerStore.getState().params, family: undefined, palette: undefined, sunflowerParams: undefined, rhodoneaParams: undefined, superformulaParams: undefined },
     });
   });
 
@@ -97,5 +119,23 @@ describe("generateFromWord v2 branch", () => {
     expect(p.flowerId).toBe("flower-v1");
     // v1 scalar-derived color still set (v1 path untouched).
     expect(p.colorA).toContain("hsl");
+  });
+
+  it("stores rhodoneaParams for a rhodonea v2 response", async () => {
+    createFlowerViaGrpc.mockResolvedValue(v2ResponseFor("rhodonea", "rhodonea", RHODONEA));
+    await useFlowerStore.getState().generateFromWord("rose curve");
+    const p = useFlowerStore.getState().params;
+    expect(p.family).toBe("rhodonea");
+    expect(p.rhodoneaParams?.k).toBe(5);
+    expect(p.superformulaParams).toBeUndefined();
+  });
+
+  it("stores superformulaParams for a superformula v2 response", async () => {
+    createFlowerViaGrpc.mockResolvedValue(v2ResponseFor("superformula", "superformula", SUPERFORMULA));
+    await useFlowerStore.getState().generateFromWord("gielis");
+    const p = useFlowerStore.getState().params;
+    expect(p.family).toBe("superformula");
+    expect(p.superformulaParams?.m1).toBe(6);
+    expect(p.rhodoneaParams).toBeUndefined();
   });
 });

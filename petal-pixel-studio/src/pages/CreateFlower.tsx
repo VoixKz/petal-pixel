@@ -384,7 +384,7 @@ export default function CreateFlower() {
     if (isGenerating) return;
     const word = wordInput.trim();
     if (!word) {
-      toast.error('Enter a generation word first.');
+      toast.error('Enter a name or phrase first.');
       return;
     }
     if (shouldWarnRegenerate(isEditMode, word, generationWord, paramsDirty)) {

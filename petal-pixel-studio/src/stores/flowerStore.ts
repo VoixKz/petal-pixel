@@ -280,6 +280,11 @@ export const useFlowerStore = create<FlowerStore>()(
             rhodoneaParams: v2.rhodoneaParams,
             superformulaParams: v2.superformulaParams,
             rotation: Number(seed % BigInt(360)),
+            // Refresh the UI read-outs and clear any leftover v1 stem so a v2
+            // flower never inherits a stem from a previously-generated v1 one.
+            petalCount: Math.max(3, backendParams.petalCount || 6),
+            petalLength: backendParams.petalLength || 1.2,
+            stemEnabled: false,
           },
           generationWord: trimmed,
           title: get().editingFlowerId ? get().title : autoTitle,
