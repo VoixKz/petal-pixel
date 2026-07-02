@@ -303,6 +303,7 @@ export const useFlowerStore = create<FlowerStore>()(
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        set({ ownerUserId: user.id });
         if (regenerated && newBackendId) {
           // Flower was re-generated with a new word → new backend ID
           await supabaseUpsertFlower(
@@ -467,7 +468,9 @@ export const useFlowerStore = create<FlowerStore>()(
 
       if (error) {
         console.error('loadFromBackend error:', error);
-        set({ savedFlowers: [] });
+        // Stamp ownerUserId even on error so the cross-user guard stays armed
+        // if the very first load fails (network blip at startup).
+        set({ savedFlowers: [], ownerUserId: user.id });
         return;
       }
 
