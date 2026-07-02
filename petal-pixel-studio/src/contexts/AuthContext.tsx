@@ -31,7 +31,9 @@ interface AuthContextType {
         email: string,
         password: string,
     ) => Promise<{ error: Error | null }>;
-    signInWithOAuth: (provider: "google" | "apple") => Promise<void>;
+    signInWithOAuth: (
+        provider: "google" | "apple",
+    ) => Promise<{ error: Error | null }>;
     signOut: () => Promise<void>;
     verifyOtp: (
         email: string,
@@ -104,27 +106,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signInWithOAuth = async (provider: "google" | "apple") => {
-        await supabase.auth.signInWithOAuth({
+        const { error } = await supabase.auth.signInWithOAuth({
             provider,
             options: {
                 redirectTo: window.location.origin,
             },
         });
+        return { error: error ? new Error(error.message) : null };
     };
 
     const signOut = async () => {
-        await supabase.auth.signOut();
-        setSession(null);
-        setUser(null);
-        setProfile(null);
-        useFlowerStore.getState().resetFlowerStore();
+        try {
+            await supabase.auth.signOut();
+        } finally {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            useFlowerStore.getState().resetFlowerStore();
+        }
     };
 
     const verifyOtp = async (email: string, token: string) => {
         const { error } = await supabase.auth.verifyOtp({
             email,
             token,
-            type: "signup",
+            type: "email",
         });
         return { error: error ? new Error(error.message) : null };
     };

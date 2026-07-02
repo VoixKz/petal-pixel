@@ -13,6 +13,11 @@ export default function Login() {
     const { signIn, signInWithOAuth } = useAuth();
     const navigate = useNavigate();
 
+    const handleOAuth = async (provider: "google" | "apple") => {
+        const { error } = await signInWithOAuth(provider);
+        if (error) toast.error(error.message);
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -109,7 +114,7 @@ export default function Login() {
                     <div className="grid grid-cols-2 gap-3">
                         <button
                             type="button"
-                            onClick={() => signInWithOAuth("google")}
+                            onClick={() => void handleOAuth("google")}
                             className="flex items-center justify-center gap-2 bg-secondary text-sm text-foreground py-2.5 rounded-lg border border-border hover:bg-accent transition-colors"
                         >
                             <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -134,7 +139,7 @@ export default function Login() {
                         </button>
                         <button
                             type="button"
-                            onClick={() => signInWithOAuth("apple")}
+                            onClick={() => void handleOAuth("apple")}
                             className="flex items-center justify-center gap-2 bg-secondary text-sm text-foreground py-2.5 rounded-lg border border-border hover:bg-accent transition-colors"
                         >
                             <svg
