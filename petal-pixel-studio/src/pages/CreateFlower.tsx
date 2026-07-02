@@ -15,6 +15,11 @@ import {
   confirmMintViaGrpc,
   prepareMintViaGrpc,
 } from '@/integrations/flowerBackend/client';
+import {
+  shouldWarnRegenerate,
+  isCheckingBackend,
+  type HealthStatus,
+} from './createFlowerGuards';
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
@@ -41,8 +46,6 @@ async function ensureCorrectNetwork(provider: BrowserProvider) {
     }
   }
 }
-
-type HealthStatus = 'idle' | 'checking' | 'ok' | 'error';
 
 declare global {
   interface Window {
@@ -321,6 +324,7 @@ export default function CreateFlower() {
   }, [isEditMode, generationWord, title]);
 
   const handleCheckBackend = async () => {
+    if (isCheckingBackend(healthStatus)) return;
     setHealthStatus('checking');
     try {
       const ok = await checkFlowerBackendHealth();
@@ -367,6 +371,7 @@ export default function CreateFlower() {
   };
 
   const handleGenerate = async () => {
+    if (isGenerating) return;
     const word = wordInput.trim();
     if (!word) {
       toast.error('Enter a generation word first.');
@@ -377,7 +382,7 @@ export default function CreateFlower() {
       return;
     }
 
-    if (isEditMode && word !== generationWord) {
+    if (shouldWarnRegenerate(isEditMode, word, generationWord, paramsDirty)) {
       setShowRegenerateWarning(true);
       return;
     }
@@ -512,7 +517,9 @@ export default function CreateFlower() {
                 type="text"
                 value={wordInput}
                 onChange={(e) => handleWordInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void handleGenerate()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isGenerating) void handleGenerate();
+                }}
                 placeholder="Enter a word..."
                 className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full font-mono min-w-0"
               />
@@ -542,8 +549,9 @@ export default function CreateFlower() {
           <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
             <button
               onClick={handleCheckBackend}
+              disabled={isCheckingBackend(healthStatus)}
               title={healthStatus === 'ok' ? 'Backend online' : healthStatus === 'error' ? 'Backend offline' : 'Check backend'}
-              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span className={`w-2 h-2 rounded-full ${healthStatus === 'ok' ? 'bg-emerald-400' : healthStatus === 'error' ? 'bg-rose-400' : healthStatus === 'checking' ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground'}`} />
               <span className="hidden md:inline">{healthStatus === 'checking' ? 'Checking...' : 'Backend'}</span>
