@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import { beforeEach } from "vitest";
 
 // jsdom doesn't expose localStorage without a URL being set. Provide a stub so
 // Zustand's persist middleware (which grabs window.localStorage at import time)
@@ -14,6 +15,12 @@ Object.defineProperty(window, "localStorage", {
     key: (_index: number) => null,
   },
   writable: true,
+});
+
+// Isolate tests: clear persisted storage so one test's Zustand-persisted state
+// cannot leak into the next (avoids order-dependent flakiness as store tests grow).
+beforeEach(() => {
+  window.localStorage.clear();
 });
 
 Object.defineProperty(window, "matchMedia", {
