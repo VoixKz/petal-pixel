@@ -1,10 +1,5 @@
 import { motion } from 'framer-motion';
-import { CreditCard, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
-
-const transactions = [
-  { id: '1', type: 'mint', name: 'Celestial Bloom', amount: '0.05 ETH', date: '2024-01-15' },
-  { id: '2', type: 'mint', name: 'Nebula Orchid', amount: '0.05 ETH', date: '2024-03-10' },
-];
+import { CreditCard } from 'lucide-react';
 
 export default function Payments() {
   return (
@@ -21,21 +16,12 @@ export default function Payments() {
           <h2 className="text-sm font-semibold text-foreground">Transaction History</h2>
         </div>
 
-        <div className="space-y-3">
-          {transactions.map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <ArrowUpRight className="w-4 h-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-foreground">Mint: {tx.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{tx.date}</p>
-                </div>
-              </div>
-              <span className="text-xs font-mono text-foreground">{tx.amount}</span>
-            </div>
-          ))}
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <CreditCard className="w-12 h-12 text-muted-foreground mb-4" />
+          <p className="text-sm font-medium text-foreground mb-1">Demo — coming soon</p>
+          <p className="text-xs text-muted-foreground/70 max-w-xs">
+            Payment history isn't available in this demo. Your real mint transactions will appear here once payments go live.
+          </p>
         </div>
       </motion.div>
     </div>

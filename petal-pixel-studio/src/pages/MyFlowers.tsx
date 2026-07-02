@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Gem, Calendar, Flower2, Trash2, AlertTriangle } from 'lucide-react';
+import { Gem, Calendar, Flower2, Trash2, AlertTriangle, Pencil } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -74,6 +74,14 @@ export default function MyFlowers() {
         <p className="text-sm text-muted-foreground mt-1">Your personal garden of generated flowers</p>
       </div>
 
+      {savedFlowers.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <Flower2 className="w-12 h-12 text-muted-foreground mb-4" />
+          <p className="text-sm text-muted-foreground mb-1">No flowers yet.</p>
+          <p className="text-xs text-muted-foreground/70">Create your first bloom to start your garden.</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-4">
         {savedFlowers.map((flower, i) => (
           <motion.div
@@ -81,7 +89,7 @@ export default function MyFlowers() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/30 transition-all group cursor-pointer relative"
+            className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/30 transition-all group cursor-default relative"
             onDoubleClick={() => handleEdit(flower)}
           >
             <div
@@ -112,6 +120,16 @@ export default function MyFlowers() {
               >
                 <Trash2 className="w-3 h-3 text-rose-400" />
               </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleEdit(flower);
+                }}
+                className="absolute bottom-3 right-3 flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                title="Edit flower"
+              >
+                <Pencil className="w-3 h-3" /> Edit
+              </button>
             </div>
 
             <div className="p-4 space-y-2">
@@ -133,9 +151,6 @@ export default function MyFlowers() {
                   {flower.isMinted ? 'Minted' : 'Draft'}
                 </span>
               </div>
-              <p className="text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                Double-click to edit
-              </p>
             </div>
           </motion.div>
         ))}

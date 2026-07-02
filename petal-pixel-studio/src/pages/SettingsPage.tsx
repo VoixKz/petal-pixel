@@ -2,21 +2,8 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, Moon, Globe, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`relative w-9 h-5 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-muted'}`}
-    >
-      <span
-        className={`absolute top-0.5 w-4 h-4 rounded-full bg-primary-foreground transition-transform ${checked ? 'translate-x-[18px]' : 'translate-x-0.5'}`}
-      />
-    </button>
-  );
-}
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -43,22 +30,32 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             {isDark ? <Moon className="w-4 h-4 text-muted-foreground" /> : <Sun className="w-4 h-4 text-amber-400" />}
             <div>
-              <p className="text-sm font-medium text-foreground">Dark mode</p>
+              <Label htmlFor="dark-mode-switch" className="text-sm font-medium text-foreground">Dark mode</Label>
               <p className="text-[10px] text-muted-foreground">Toggle between dark and light theme</p>
             </div>
           </div>
-          <Toggle checked={isDark} onChange={(v) => setTheme(v ? 'dark' : 'light')} />
+          <Switch
+            id="dark-mode-switch"
+            aria-label="Dark mode"
+            checked={isDark}
+            onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')}
+          />
         </div>
 
         <div className="flex items-center justify-between py-2">
           <div className="flex items-center gap-3">
             <Bell className="w-4 h-4 text-muted-foreground" />
             <div>
-              <p className="text-sm font-medium text-foreground">Email notifications</p>
+              <Label htmlFor="email-notif-switch" className="text-sm font-medium text-foreground">Email notifications</Label>
               <p className="text-[10px] text-muted-foreground">Receive updates about your NFTs</p>
             </div>
           </div>
-          <Toggle checked={emailNotif} onChange={setEmailNotif} />
+          <Switch
+            id="email-notif-switch"
+            aria-label="Email notifications"
+            checked={emailNotif}
+            onCheckedChange={setEmailNotif}
+          />
         </div>
 
         <div className="flex items-center justify-between py-2">
