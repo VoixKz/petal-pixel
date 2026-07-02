@@ -91,3 +91,15 @@ describe("samplePaletteInto", () => {
     expect(target.b).toBeCloseTo(expected.b, 6);
   });
 });
+
+describe("samplePalette degenerate-palette guards", () => {
+  it("returns a neutral color instead of throwing on empty stops", () => {
+    expect(() => samplePalette([], 0.5)).not.toThrow();
+    expect(samplePalette([], 0.5).getHexString()).toBe("808080");
+  });
+
+  it("returns the single stop's color when only one stop is present", () => {
+    const one: PaletteStop[] = [{ pos: 0, hex: "#123456" }];
+    expect(samplePalette(one, 0.7).getHexString()).toBe("123456");
+  });
+});

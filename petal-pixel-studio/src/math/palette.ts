@@ -31,6 +31,16 @@ export function samplePaletteInto(
   t: number,
   target: THREE.Color,
 ): THREE.Color {
+  // Degenerate-palette guards: never throw on an empty/short stop list (a
+  // malformed or unpopulated palette from a persisted/legacy record). Callers
+  // that unconditionally sample (classic/rose/bloom v2 arms) degrade to a
+  // neutral or single color instead of crashing the render.
+  if (!stops || stops.length === 0) {
+    return target.set("#808080");
+  }
+  if (stops.length === 1) {
+    return target.set(stops[0].hex);
+  }
   const clamped = t < 0 ? 0 : t > 1 ? 1 : t;
   // Find the last segment [lo, hi] where lo.pos <= clamped <= hi.pos.
   // Scanning to the last match means that when t lands exactly on a duplicate
