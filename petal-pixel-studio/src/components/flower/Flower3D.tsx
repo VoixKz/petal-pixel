@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { FlowerParams } from "@/stores/flowerStore";
+import { isV2 } from "@/math/flowerVersion";
 import {
+  buildV2Geometry,
   createClassicFlowerGeometry,
   createParametricBloomGeometry,
   createRoseFlowerGeometry,
@@ -24,6 +26,9 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
   });
 
   const geometry = useMemo(() => {
+    if (isV2(params)) {
+      return buildV2Geometry(params);
+    }
     if (params.flowerType === "rose") {
       return createRoseFlowerGeometry(params.roseParams);
     }
@@ -31,7 +36,7 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
       return createParametricBloomGeometry(params.flowerType, params.bloomParams);
     }
     return createClassicFlowerGeometry(params.classicParams);
-  }, [params.flowerType, params.classicParams, params.roseParams, params.bloomParams]);
+  }, [params.flowerType, params.algoVersion, params.family, params.classicParams, params.roseParams, params.bloomParams, params.palette, params.sunflowerParams, params.rhodoneaParams, params.superformulaParams]);
 
   useEffect(() => {
     return () => {
@@ -40,7 +45,10 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
   }, [geometry]);
 
   const material = useMemo(() => {
-    if (params.flowerType === "rose" || isBloomType(params.flowerType)) {
+    const usesVertexColors = isV2(params)
+      ? true
+      : params.flowerType === "rose" || isBloomType(params.flowerType);
+    if (usesVertexColors) {
       return new THREE.MeshPhysicalMaterial({
         vertexColors: true,
         side: THREE.DoubleSide,
@@ -63,7 +71,7 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
       emissive: new THREE.Color(params.colorB),
       emissiveIntensity: params.glowIntensity * 0.16,
     });
-  }, [params.flowerType, params.material, params.colorA, params.colorB, params.glowIntensity]);
+  }, [params.flowerType, params.family, params.algoVersion, params.material, params.colorA, params.colorB, params.glowIntensity]);
 
   useEffect(() => {
     return () => {
@@ -72,11 +80,14 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
   }, [material]);
 
   const blossomRotation: [number, number, number] = useMemo(() => {
+    if (isV2(params)) {
+      return params.family === "classic" ? [-Math.PI / 2, 0, 0] : [Math.PI, 0, 0];
+    }
     if (params.flowerType === "classic") {
       return [-Math.PI / 2, 0, 0];
     }
     return [Math.PI, 0, 0];
-  }, [params.flowerType]);
+  }, [params.flowerType, params.family, params.algoVersion]);
 
   useEffect(() => {
     if (!onBoundsChange) {

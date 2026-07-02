@@ -365,7 +365,7 @@ export default function CreateFlower() {
   };
 
   const handleWordInputChange = (value: string) => {
-    const sanitized = value.replace(/\s/g, '');
+    const sanitized = value.replace(/\s+/g, ' ').slice(0, 64);
     setWordInput(sanitized);
   };
 
@@ -387,11 +387,6 @@ export default function CreateFlower() {
       toast.error('Enter a generation word first.');
       return;
     }
-    if (word.includes(' ')) {
-      toast.error('Generation word must be a single word (no spaces).');
-      return;
-    }
-
     if (shouldWarnRegenerate(isEditMode, word, generationWord, paramsDirty)) {
       setShowRegenerateWarning(true);
       return;
@@ -559,7 +554,7 @@ export default function CreateFlower() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !isGenerating) void handleGenerate();
                 }}
-                placeholder="Enter a word..."
+                placeholder="Enter a name or phrase..."
                 className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full font-mono min-w-0"
               />
               <button

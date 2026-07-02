@@ -6,12 +6,18 @@ import {
   DEFAULT_BLOOM_PARAMS,
   DEFAULT_CLASSIC_PARAMS,
   DEFAULT_ROSE_PARAMS,
+  FLOWER_TYPES,
   type BloomParams,
   type ClassicParams,
+  type FlowerFamily,
   type FlowerType,
+  type RhodoneaParams,
   type RoseParams,
+  type SuperformulaParams,
+  type SunflowerParams,
 } from "@/math/flowerTypes";
-import { toTechniqueParams } from "@/math/flowerGeometry";
+import type { Palette } from "@/math/palette";
+import { toTechniqueParams, toV2Params } from "@/math/flowerGeometry";
 import { createFlowerViaGrpc } from "@/integrations/flowerBackend/client";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -40,6 +46,14 @@ export interface FlowerParams {
   idleMotion: boolean;
   rotationSpeed: number;
   stemEnabled: boolean;
+
+  // v2 additive fields (undefined on v1 records). classicParams/roseParams/bloomParams
+  // are reused for the 6 existing families; palette threads onto them.
+  family?: FlowerFamily;
+  palette?: Palette;
+  sunflowerParams?: SunflowerParams;
+  rhodoneaParams?: RhodoneaParams;
+  superformulaParams?: SuperformulaParams;
 }
 
 export interface SavedFlower {
@@ -98,19 +112,22 @@ function seedToDisplay(seed: bigint) {
   return seed.toString();
 }
 
-function generateAutoTitle(word: string, flowerType: FlowerType): string {
+function generateAutoTitle(word: string, flowerType: FlowerType | FlowerFamily): string {
   const prefixes = ["Celestial", "Aurora", "Crystal", "Nebula", "Astral", "Phantom", "Luminous", "Ethereal"];
-  const typeNames: Record<FlowerType, string> = {
+  const typeNames: Record<FlowerFamily, string> = {
     classic: "Bloom",
     rose: "Rose",
     zinnia: "Zinnia",
     camellia: "Camellia",
     lotus: "Lotus",
     dahlia: "Dahlia",
+    sunflower: "Sunflower",
+    rhodonea: "Rhodonea",
+    superformula: "Superformula",
   };
 
   const hash = Array.from(word).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return `${prefixes[hash % prefixes.length]} ${typeNames[flowerType]}`;
+  return `${prefixes[hash % prefixes.length]} ${typeNames[flowerType as FlowerFamily] ?? "Bloom"}`;
 }
 
 const defaultParams: FlowerParams = {
@@ -238,37 +255,70 @@ export const useFlowerStore = create<FlowerStore>()(
       }
 
       const seed = backendParams.seed;
-      const technique = toTechniqueParams(seed, backendParams);
-      const hue = backendParams.hue;
-      const baseCount = Math.max(3, backendParams.petalCount || 6);
-      const autoTitle = generateAutoTitle(trimmed, technique.flowerType);
 
-      set({
-        params: {
-          ...get().params,
-          flowerId: response.flowerId,
-          algoVersion: backendParams.algoVersion,
-          schemaVersion: backendParams.schemaVersion,
-          seed: seedToDisplay(seed),
-          flowerType: technique.flowerType,
-          classicParams: technique.classicParams,
-          roseParams: technique.roseParams,
-          bloomParams: technique.bloomParams,
-          petalCount: baseCount,
-          petalLength: clamp(backendParams.petalLength || 1.2, 0.25, 3),
-          petalSharpness: clamp(backendParams.petalWidth || 0.5, 0.05, 1.4),
-          noiseIntensity: clamp(Math.abs(backendParams.curvature || 0.2), 0, 1),
-          frequency: 1 + Number(seed % BigInt(6)),
-          rotation: Number(seed % BigInt(360)),
-          symmetry: clamp(baseCount, 3, 18),
-          colorA: hueToHex(hue, 72, 52),
-          colorB: hueToHex((hue + 48) % 360, 66, 45),
-          stemEnabled: (backendParams.stemHeight || 0) > 0.95,
-        },
-        generationWord: trimmed,
-        title: get().editingFlowerId ? get().title : autoTitle,
-        editingFlowerId: get().editingFlowerId,
-      });
+      // ── v2 path: backend is source of truth (family + palette + oneof shape) ──
+      if (backendParams.algoVersion === "v2" && backendParams.family) {
+        const v2 = toV2Params(backendParams);
+        const autoTitle = generateAutoTitle(trimmed, v2.family);
+        set({
+          params: {
+            ...get().params,
+            flowerId: response.flowerId,
+            algoVersion: backendParams.algoVersion,
+            schemaVersion: backendParams.schemaVersion,
+            seed: seedToDisplay(seed),
+            family: v2.family,
+            palette: v2.palette,
+            // reuse existing slots for the 6 shared families; leave others at defaults
+            flowerType: (FLOWER_TYPES as readonly string[]).includes(v2.family)
+              ? (v2.family as FlowerType)
+              : get().params.flowerType,
+            classicParams: v2.classicParams ?? get().params.classicParams,
+            roseParams: v2.roseParams ?? get().params.roseParams,
+            bloomParams: v2.bloomParams ?? get().params.bloomParams,
+            sunflowerParams: v2.sunflowerParams,
+            rhodoneaParams: v2.rhodoneaParams,
+            superformulaParams: v2.superformulaParams,
+            rotation: Number(seed % BigInt(360)),
+          },
+          generationWord: trimmed,
+          title: get().editingFlowerId ? get().title : autoTitle,
+          editingFlowerId: get().editingFlowerId,
+        });
+      } else {
+        // ── v1 path: EXACTLY today's behavior (toTechniqueParams fallback) ──
+        const technique = toTechniqueParams(seed, backendParams);
+        const hue = backendParams.hue;
+        const baseCount = Math.max(3, backendParams.petalCount || 6);
+        const autoTitle = generateAutoTitle(trimmed, technique.flowerType);
+
+        set({
+          params: {
+            ...get().params,
+            flowerId: response.flowerId,
+            algoVersion: backendParams.algoVersion,
+            schemaVersion: backendParams.schemaVersion,
+            seed: seedToDisplay(seed),
+            flowerType: technique.flowerType,
+            classicParams: technique.classicParams,
+            roseParams: technique.roseParams,
+            bloomParams: technique.bloomParams,
+            petalCount: baseCount,
+            petalLength: clamp(backendParams.petalLength || 1.2, 0.25, 3),
+            petalSharpness: clamp(backendParams.petalWidth || 0.5, 0.05, 1.4),
+            noiseIntensity: clamp(Math.abs(backendParams.curvature || 0.2), 0, 1),
+            frequency: 1 + Number(seed % BigInt(6)),
+            rotation: Number(seed % BigInt(360)),
+            symmetry: clamp(baseCount, 3, 18),
+            colorA: hueToHex(hue, 72, 52),
+            colorB: hueToHex((hue + 48) % 360, 66, 45),
+            stemEnabled: (backendParams.stemHeight || 0) > 0.95,
+          },
+          generationWord: trimmed,
+          title: get().editingFlowerId ? get().title : autoTitle,
+          editingFlowerId: get().editingFlowerId,
+        });
+      }
     } catch (error) {
       const message = error instanceof ConnectError ? error.rawMessage : error instanceof Error ? error.message : "Failed to generate flower";
       set({ lastError: message });
