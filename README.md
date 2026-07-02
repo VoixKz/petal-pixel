@@ -41,7 +41,8 @@ flowchart TD
     end
 
     subgraph infra [Infrastructure]
-        Supabase["Supabase\n(PostgreSQL + Auth)"]
+        Supabase["Supabase\n(Auth + user_flowers sync)"]
+        Postgres["Postgres\nlocal container\n(port 5432 internal)"]
         Anvil["Anvil\nlocal EVM node\n(port 8545)"]
         MinIO["MinIO S3\n(port 9000)"]
     end
@@ -49,14 +50,14 @@ flowchart TD
     UI -- "gRPC-Web (ConnectRPC)" --> gRPC
     UI -- "Supabase JS\n(auth + flower data)" --> Supabase
     UI -- "ethers + MetaMask\n(mint tx)" --> Anvil
-    gRPC -- "pgx / Goose" --> Supabase
+    gRPC -- "pgx / Goose" --> Postgres
     gRPC -- "S3 SDK (metadata)" --> MinIO
     Anvil -. "FlowerNFT.sol\n(ERC-721)" .-> Anvil
 ```
 
 ### Data flow: Save a flower
 1. User adjusts sliders → React calls `CreateFlower` via gRPC-Web.
-2. Go server generates deterministic params, writes a row to `flowers` (Supabase PostgreSQL).
+2. Go server generates deterministic params, writes a row to `flowers` (local Postgres container).
 3. Frontend also writes a `user_flowers` row directly via Supabase JS (includes full `params` JSON for cross-device sync).
 
 ### Data flow: Mint
@@ -157,7 +158,7 @@ petal-pixel/
 Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Compose v2+) and git.
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/VoixKz/petal-pixel
 cd petal-pixel
 git submodule update --init --recursive   # OpenZeppelin contracts (required by the deploy step)
 cp .env.example .env                      # then paste your Supabase publishable key (see below)
@@ -175,7 +176,9 @@ That single command starts everything:
 | postgres   | (internal)                   | Backend DB (`flowers`, `mints`) — goose migrations run automatically |
 | minio      | http://localhost:9000 (console :9001) | S3-compatible storage for NFT metadata (bucket `flower`) |
 
-Stop everything with `docker compose down` (add `-v` to also wipe DB/MinIO data and force a fresh chain + redeploy).
+Stop everything with `docker compose down`. The Anvil chain is in-memory, so every `docker compose down`/`up` cycle resets it and re-runs the deploy automatically. Add `-v` to additionally wipe Postgres and MinIO data (removes the named volumes). Note: after a chain reset, any previously recorded mints reference token IDs that no longer exist on the fresh chain — this is a known dev-stack caveat.
+
+After changing frontend dependencies (`package.json`), run `docker compose up -d --build -V frontend` so the rebuilt image's `node_modules` replaces the stale anonymous volume.
 
 ### Supabase (auth + cross-device sync)
 

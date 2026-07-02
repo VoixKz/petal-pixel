@@ -67,6 +67,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        set -e
         until mc alias set local http://minio:9000 flower flowersecret 2>/dev/null; do
           echo "minio-init: waiting for minio..."; sleep 1;
         done
@@ -118,6 +119,8 @@ services:
       VITE_RPC_URL: http://127.0.0.1:8545
       VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-https://dozlnqogfzlufpkmkwxn.supabase.co}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-sb_publishable_placeholder_restore_supabase_project_first}
+      # File-watching on Windows Docker bind mounts needs polling; opt in with CHOKIDAR_USEPOLLING=1 in .env
+      CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-}
     volumes:
       - ./petal-pixel-studio:/app
       - /app/node_modules
