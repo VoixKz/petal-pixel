@@ -63,14 +63,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Set up auth listener FIRST
         const {
             data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        } = supabase.auth.onAuthStateChange(async (event, session) => {
             setSession(session);
             setUser(session?.user ?? null);
             if (session?.user) {
+                // Cross-user rehydration guard: if the persisted cache belongs to a
+                // different user (tab-reuse, different-account login), wipe it before
+                // any component renders the stale savedFlowers.
+                const { ownerUserId } = useFlowerStore.getState();
+                if (ownerUserId && ownerUserId !== session.user.id) {
+                    useFlowerStore.getState().resetFlowerStore();
+                }
                 // Use setTimeout to avoid Supabase deadlock
                 setTimeout(() => fetchProfile(session.user.id), 0);
             } else {
                 setProfile(null);
+                // On session expiry, cross-tab logout, or explicit sign-out:
+                // clear persisted cache so the next user starts clean.
+                if (event === 'SIGNED_OUT') {
+                    useFlowerStore.getState().resetFlowerStore();
+                }
             }
             setLoading(false);
         });

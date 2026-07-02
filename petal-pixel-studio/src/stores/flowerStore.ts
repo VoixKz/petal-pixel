@@ -62,6 +62,8 @@ interface FlowerStore {
   savedFlowers: SavedFlower[];
   isGenerating: boolean;
   lastError: string;
+  /** The user id whose flowers are currently cached. Used to detect cross-user rehydration. */
+  ownerUserId: string | null;
 
   setParam: <K extends keyof FlowerParams>(key: K, value: FlowerParams[K]) => void;
   setFlowerType: (flowerType: FlowerType) => void;
@@ -187,6 +189,7 @@ export const useFlowerStore = create<FlowerStore>()(
   isGenerating: false,
   lastError: "",
   savedFlowers: [],
+  ownerUserId: null,
 
   setParam: (key, value) =>
     set((s) => ({ params: { ...s.params, [key]: value } })),
@@ -351,6 +354,7 @@ export const useFlowerStore = create<FlowerStore>()(
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      set({ ownerUserId: user.id });
       await supabaseUpsertFlower(user.id, newId, title, generationWord || "unknown", params);
     }
   },
@@ -468,7 +472,7 @@ export const useFlowerStore = create<FlowerStore>()(
       }
 
       if (!rows?.length) {
-        set({ savedFlowers: [] });
+        set({ savedFlowers: [], ownerUserId: user.id });
         return;
       }
 
@@ -486,7 +490,7 @@ export const useFlowerStore = create<FlowerStore>()(
           tokenUri: row.token_uri ?? undefined,
         }));
 
-      set({ savedFlowers: mapped });
+      set({ savedFlowers: mapped, ownerUserId: user.id });
     } catch (err) {
       console.error('loadFromBackend failed:', err);
       set({ savedFlowers: [] });
@@ -514,15 +518,17 @@ export const useFlowerStore = create<FlowerStore>()(
       title: "Untitled Flower",
       generationWord: "",
       lastError: "",
+      ownerUserId: null,
     });
     useFlowerStore.persist.clearStorage();
   },
   }),
   {
     name: 'petal-pixel-flowers',
-    // Keep savedFlowers in localStorage as a fast-load cache.
+    // Keep savedFlowers and ownerUserId in localStorage as a fast-load cache.
     // loadFromBackend always overwrites it with the authoritative Supabase data.
-    partialize: (s) => ({ savedFlowers: s.savedFlowers }),
+    // ownerUserId is persisted so cross-user tab-reuse can be detected on next login.
+    partialize: (s) => ({ savedFlowers: s.savedFlowers, ownerUserId: s.ownerUserId }),
   }
 ));
 

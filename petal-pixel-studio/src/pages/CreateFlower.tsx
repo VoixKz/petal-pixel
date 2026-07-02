@@ -20,6 +20,7 @@ import {
   isCheckingBackend,
   type HealthStatus,
 } from './createFlowerGuards';
+import { mapPetalCount } from '@/components/flower/sliderMapping';
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
@@ -59,9 +60,15 @@ function MathPanel({ onClose }: { onClose: () => void }) {
   const params = useFlowerStore((s) => s.params);
   const roseGraphs = params.flowerType === 'rose' ? getRoseFunctionProjections(params.roseParams) : null;
 
+  // Derive effective petal count from the ACTIVE technique params (sliders rewired in Task 14).
+  const countMap = mapPetalCount(params.flowerType);
+  const effectivePetalCount = countMap
+    ? (params[countMap.param === 'classic' ? 'classicParams' : 'bloomParams'] as Record<string, number>)[countMap.key] ?? params.petalCount
+    : params.petalCount;
+
   const genericData = Array.from({ length: 120 }, (_, i) => {
     const t = (i / 120) * Math.PI * 2;
-    const r = params.petalLength * Math.cos(params.petalCount * t) + params.noiseIntensity * Math.sin(params.frequency * t);
+    const r = params.petalLength * Math.cos(effectivePetalCount * t) + params.noiseIntensity * Math.sin(params.frequency * t);
     return { t: t.toFixed(2), r, x: r * Math.cos(t), y: r * Math.sin(t) };
   });
 
@@ -134,7 +141,7 @@ function RegenerateWarningDialog({ onConfirm, onCancel }: { onConfirm: () => voi
           <h3 className="text-sm font-semibold text-foreground">Regenerate flower?</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-5">
-          Changing the generation word will create a completely new flower from scratch. The current flower parameters will be replaced.
+          This will regenerate the flower and replace your current parameters, including any unsaved manual changes.
         </p>
         <div className="flex items-center gap-2 justify-end">
           <button
@@ -434,6 +441,8 @@ export default function CreateFlower() {
   };
 
   const handleMint = async () => {
+    // Re-entry guard: matches the if (isGenerating) return pattern used for other handlers.
+    if (isMinting) return;
     if (!params.flowerId) {
       toast.error('Generate flower from backend first.');
       return;
@@ -446,6 +455,12 @@ export default function CreateFlower() {
     const savedFlowers = useFlowerStore.getState().savedFlowers;
     const isPersisted = savedFlowers.some((f) => f.backendFlowerId === params.flowerId);
     if (hasUnsavedChanges || !isPersisted) {
+      // Check for concurrent save before calling handleSave, so we can distinguish
+      // the isSaving early-return (silent) from a real save error (handleSave toasts itself).
+      if (isSaving) {
+        toast.info('Save in progress — try minting again in a moment.');
+        return;
+      }
       const saved = await handleSave();
       if (!saved) {
         // handleSave already toasted the reason (e.g. missing title). Abort mint.
@@ -458,13 +473,12 @@ export default function CreateFlower() {
       return;
     }
 
-    // Defect #5: do NOT read the walletAddress state var here — it is stale in
-    // this closure right after handleConnectWallet(). Use the returned address.
-    let address = walletAddress;
-    if (!address) {
+    // Ensure wallet is connected. The returned address from handleConnectWallet() is
+    // used only as a gate here; the live signer address is read from provider.getSigner()
+    // below to avoid stale-closure issues.
+    if (!walletAddress) {
       const connected = await handleConnectWallet();
       if (!connected) return; // rejected / no wallet — handleConnectWallet already toasted
-      address = connected;
     }
 
     setIsMinting(true);

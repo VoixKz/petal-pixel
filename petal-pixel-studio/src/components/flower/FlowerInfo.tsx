@@ -1,11 +1,36 @@
 import { motion } from 'framer-motion';
 import { useFlowerStore } from '@/stores/flowerStore';
+import { mapPetalCount } from '@/components/flower/sliderMapping';
 import { Sparkles } from 'lucide-react';
+
+/**
+ * Derive the displayed petal-count from the ACTIVE technique params so the
+ * stat tracks what the top-level sliders now write (Task 14 rewired sliders to
+ * classicParams/bloomParams instead of params.petalCount).
+ *
+ * - classic → classicParams.pNum  (integer)
+ * - bloom types → bloomParams.petalFreq  (float, shown to 2 dp)
+ * - rose → no slider mapping; show "—" as a sensible fallback
+ */
+function deriveDisplayPetalCount(params: ReturnType<typeof useFlowerStore.getState>['params']): string {
+  const mapping = mapPetalCount(params.flowerType);
+  if (!mapping) return '—'; // e.g. rose has no petal-count slider
+  if (mapping.param === 'classic') {
+    return String(Math.round((params.classicParams as Record<string, number>)[mapping.key] ?? params.petalCount));
+  }
+  if (mapping.param === 'bloom') {
+    const val = (params.bloomParams as Record<string, number>)[mapping.key] ?? params.petalCount;
+    return val.toFixed(2);
+  }
+  return String(Math.round(params.petalCount));
+}
 
 export function FlowerInfo() {
   const title = useFlowerStore((s) => s.title);
   const generationWord = useFlowerStore((s) => s.generationWord);
   const params = useFlowerStore((s) => s.params);
+
+  const petalCountDisplay = deriveDisplayPetalCount(params);
 
   return (
     <motion.div
@@ -23,7 +48,7 @@ export function FlowerInfo() {
         </p>
       )}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-        <Stat label="Petals" value={Math.round(params.petalCount)} />
+        <Stat label="Petals" value={petalCountDisplay} />
         <Stat label="Curve" value={params.petalSharpness.toFixed(2)} />
         <Stat label="Type" value={params.flowerType} />
         <Stat label="Seed" value={params.seed.length > 8 ? params.seed.slice(0, 8) + '…' : params.seed} />
