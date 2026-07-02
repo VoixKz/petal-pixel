@@ -94,16 +94,9 @@ export function createSuperformulaGeometry(
       // Color: tLat = (phi + π/2) / π  ∈ [0, 1] (south→north)
       const tLat = (phi + Math.PI / 2) / Math.PI;
       if (hasPalette) {
+        // v2: palette is authoritative (backend already baked its shifts) — do
+        // NOT re-apply the per-shape satShift/briShift here (reconciliation #8).
         samplePaletteInto(palette.stops, tLat, scratch);
-        if (satShift !== 0 || briShift !== 0) {
-          const hsl = { h: 0, s: 0, l: 0 };
-          scratch.getHSL(hsl);
-          scratch.setHSL(
-            hsl.h,
-            THREE.MathUtils.clamp(hsl.s + satShift, 0, 1),
-            THREE.MathUtils.clamp(hsl.l + briShift, 0, 1),
-          );
-        }
       } else {
         // Fallback ramp (only used when no palette is provided)
         const lobe = 0.5 * (1 + Math.cos(m1 * theta));

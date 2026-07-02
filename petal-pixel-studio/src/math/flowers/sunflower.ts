@@ -3,7 +3,7 @@ import type { SunflowerParams } from "@/math/flowerTypes";
 import type { Palette } from "@/math/palette";
 import { samplePaletteInto } from "@/math/palette";
 import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
-import { degToRad } from "@/math/supplement";
+import { degToRad, hsbToThreeColor } from "@/math/supplement";
 
 // Fixed math constant (NOT a param): 180 * (3 - sqrt(5)).
 const GOLDEN_ANGLE_DEG = 137.50776405003785;
@@ -48,6 +48,11 @@ export function createSunflowerGeometry(
   const colors: number[] = [];
   const indices: number[] = [];
   const scratch = new THREE.Color();
+  // v2: the palette is the authoritative color (its hue/sat/bri shifts are
+  // already baked in by the backend), so we sample it directly and do NOT
+  // re-apply the per-shape shifts (that would double-shift — reconciliation #8).
+  // The per-shape satShift/briShift only feed the legacy no-palette fallback.
+  const hasPalette = palette.stops.length >= 2;
 
   const pushVertex = (x: number, y: number, z: number, t: number): number => {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
@@ -55,13 +60,15 @@ export function createSunflowerGeometry(
     }
     const vi = positions.length / 3;
     positions.push(x, y, z);
-    samplePaletteInto(palette.stops, THREE.MathUtils.clamp(t, 0, 1), scratch);
-    const hsl = scratch.getHSL({ h: 0, s: 0, l: 0 });
-    scratch.setHSL(
-      hsl.h,
-      THREE.MathUtils.clamp(hsl.s + satShift, 0, 1),
-      THREE.MathUtils.clamp(hsl.l + briShift, 0, 1),
-    );
+    const tc = THREE.MathUtils.clamp(t, 0, 1);
+    if (hasPalette) {
+      samplePaletteInto(palette.stops, tc, scratch);
+    } else {
+      // Fallback golden-disc ramp when no palette is supplied.
+      const sat = THREE.MathUtils.clamp(60 + 30 * tc + satShift * 100, 0, 100);
+      const bri = THREE.MathUtils.clamp(40 + 40 * tc + briShift * 100, 0, 100);
+      scratch.copy(hsbToThreeColor(45, sat, bri));
+    }
     colors.push(scratch.r, scratch.g, scratch.b);
     return vi;
   };
