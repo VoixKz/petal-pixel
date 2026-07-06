@@ -29,22 +29,30 @@ export type RenderOpts = {
 /** A dedicated off-screen renderer. Resolves null on any failure; never throws. */
 export type Renderer = (opts?: RenderOpts) => Promise<Blob | null>;
 
-let current: Renderer | null = null;
+// Stack of live renderers rather than a single slot. A transient second canvas
+// (e.g. the MintSuccessDialog's SharePreview mounting over the still-mounted
+// create-page canvas) must NOT clobber capture: it pushes its own renderer and,
+// on unmount, removes only its own entry — leaving the main canvas's renderer in
+// place. Capture always uses the most-recently-registered renderer still present.
+const registered: Renderer[] = [];
 
 export function registerRenderer(fn: Renderer): () => void {
-  current = fn;
+  registered.push(fn);
   return () => {
-    // Only clear if we are still the active renderer; a stale unmount must not
-    // clobber a newer canvas's registration (StrictMode remounts).
-    if (current === fn) current = null;
+    // Remove THIS registration by identity. A stale/duplicate unregister is a
+    // no-op (indexOf === -1), and removing one entry never disturbs the others —
+    // so unmounting a transient canvas leaves an earlier canvas still capturable.
+    const i = registered.indexOf(fn);
+    if (i !== -1) registered.splice(i, 1);
   };
 }
 
 /**
- * Public capture wrapper. Runs the registered dedicated render pass with `opts`.
- * NEVER throws: resolves null when no renderer is registered or the pass fails.
+ * Public capture wrapper. Runs the most-recently-registered live render pass with
+ * `opts`. NEVER throws: resolves null when the stack is empty or the pass fails.
  */
 export async function renderToBlob(opts?: RenderOpts): Promise<Blob | null> {
+  const current = registered[registered.length - 1];
   if (!current) return null;
   try {
     return await current(opts);

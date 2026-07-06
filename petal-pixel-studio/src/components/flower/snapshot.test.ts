@@ -73,6 +73,45 @@ describe('renderer registry', () => {
     newer();
   });
 
+  it('unregistering a transient second canvas keeps the first capturable', async () => {
+    // Simulates the create-page main canvas (A) still mounted while the mint
+    // dialog's SharePreview canvas (B) mounts and then closes. Before the stack
+    // fix this nulled the single slot and broke every subsequent capture.
+    const blobA = new Blob(['A'], { type: 'image/png' });
+    const offA = registerRenderer(async () => blobA);
+    const offB = registerRenderer(async () => new Blob(['B'], { type: 'image/png' }));
+    offB(); // dialog closes; A is still mounted and never re-registers
+    await expect(renderToBlob()).resolves.toBe(blobA);
+    offA();
+  });
+
+  it('out-of-order unregister of the first leaves the second active', async () => {
+    const offA = registerRenderer(async () => new Blob(['A'], { type: 'image/png' }));
+    const blobB = new Blob(['B'], { type: 'image/png' });
+    const offB = registerRenderer(async () => blobB);
+    offA(); // remove the earlier entry out of order
+    await expect(renderToBlob()).resolves.toBe(blobB);
+    offB();
+  });
+
+  it('returns null once the whole stack has been unregistered', async () => {
+    const offA = registerRenderer(async () => new Blob(['A'], { type: 'image/png' }));
+    const offB = registerRenderer(async () => new Blob(['B'], { type: 'image/png' }));
+    offB();
+    offA();
+    await expect(renderToBlob()).resolves.toBeNull();
+  });
+
+  it('an already-removed unregister called twice is a harmless no-op', async () => {
+    const blobA = new Blob(['A'], { type: 'image/png' });
+    const offA = registerRenderer(async () => blobA);
+    const offB = registerRenderer(async () => new Blob(['B'], { type: 'image/png' }));
+    offB();
+    offB(); // second call must not remove A's entry
+    await expect(renderToBlob()).resolves.toBe(blobA);
+    offA();
+  });
+
   it('resolves null instead of rejecting when the renderer throws', async () => {
     const off = registerRenderer(async () => {
       throw new Error('WebGL context lost');
