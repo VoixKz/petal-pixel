@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 
 	"flower-backend/internal/assets"
 	"flower-backend/internal/db"
+	"flower-backend/internal/share"
 
 	grpcapi "flower-backend/internal/api/grpc"
 
@@ -24,9 +27,11 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 func main() {
@@ -51,6 +56,10 @@ func main() {
 	s3PublicBaseURL := os.Getenv("S3_PUBLIC_BASE_URL")
 	// Default true. Supabase Storage S3 also needs path style (virtual-hosted breaks TLS: bucket as subdomain).
 	s3ForcePathStyle := os.Getenv("S3_FORCE_PATH_STYLE") != "false"
+
+	// SPA origin the /share/<id> page forwards humans to, and the base for the
+	// branded OG fallback image (FRONTEND_URL + share.FallbackImagePath).
+	frontendURL := strings.TrimRight(env("FRONTEND_URL", "http://localhost:8080"), "/")
 
 	var database *db.DB
 	var store *grpcapi.Store
@@ -165,6 +174,25 @@ func main() {
 			return
 		}
 
+		// Per-flower share HTML for social scrapers (Open Graph / Twitter).
+		if strings.HasPrefix(r.URL.Path, "/share/") {
+			handleShare(w, r, store, upl, s3PublicBaseURL, frontendURL)
+			return
+		}
+
+		// Singular per-flower routes: public read-only JSON (GET) and preview
+		// image upload (POST .../preview). Placed AFTER the exact "/api/flowers"
+		// list check so the plural list route is never shadowed.
+		if strings.HasPrefix(r.URL.Path, "/api/flowers/") {
+			id := flowerIDFromPath(r.URL.Path, "/api/flowers/")
+			if strings.HasSuffix(r.URL.Path, "/preview") {
+				handleUploadPreview(w, r, upl, id)
+				return
+			}
+			handlePublicFlower(w, r, store, id)
+			return
+		}
+
 		if wrapped.IsAcceptableGrpcCorsRequest(r) {
 			wrapped.ServeHTTP(w, r)
 			return
@@ -247,6 +275,214 @@ func setAPICORSHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	w.Header().Set("Content-Type", "application/json")
+}
+
+// setPreviewCORSHeaders mirrors setAPICORSHeaders but advertises POST for the
+// preview upload, keeping the GET-only helpers (healthz + list + public read)
+// unchanged. Both reflect the request Origin, falling back to "*".
+func setPreviewCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		origin = "*"
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Content-Type", "application/json")
+}
+
+// flowerIDFromPath trims prefix and any trailing "/preview" segment, returning
+// the flower id ("" if empty).
+func flowerIDFromPath(path, prefix string) string {
+	id := strings.TrimPrefix(path, prefix)
+	id = strings.TrimSuffix(id, "/preview")
+	return strings.Trim(id, "/")
+}
+
+// handleShare renders the per-flower Open Graph / Twitter HTML document that
+// social scrapers fetch. Humans are forwarded to the SPA landing. An unknown id
+// (or a backend with no store) still returns a valid branded doc pointing at the
+// frontend so stale links degrade gracefully.
+func handleShare(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, s3PublicBaseURL, frontendURL string) {
+	id := flowerIDFromPath(r.URL.Path, "/share/")
+	appURL := frontendURL + "/share/" + id
+	shareURL := shareCanonicalURL(r)
+
+	writeHTML := func(status int, d share.HTMLData) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, share.RenderShareHTML(d))
+	}
+
+	fallbackImage := frontendURL + share.FallbackImagePath
+
+	if id == "" || store == nil {
+		writeHTML(http.StatusNotFound, share.HTMLData{
+			FlowerID:   id,
+			PersonName: "Petal Pixel",
+			ImageURL:   fallbackImage,
+			ShareURL:   shareURL,
+			AppURL:     frontendURL,
+		})
+		return
+	}
+
+	f, err := store.GetFlower(r.Context(), id)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			writeHTML(http.StatusNotFound, share.HTMLData{
+				FlowerID:   id,
+				PersonName: "Petal Pixel",
+				ImageURL:   fallbackImage,
+				ShareURL:   shareURL,
+				AppURL:     frontendURL,
+			})
+			return
+		}
+		slog.Error("share get flower failed", "err", err, "flower_id", id)
+		writeHTML(http.StatusInternalServerError, share.HTMLData{
+			FlowerID:   id,
+			PersonName: "Petal Pixel",
+			ImageURL:   fallbackImage,
+			ShareURL:   shareURL,
+			AppURL:     frontendURL,
+		})
+		return
+	}
+
+	imageURL := fallbackImage
+	imageExists := false
+	if upl != nil {
+		imageKey := "images/" + id + ".png"
+		if ok, exErr := upl.Exists(r.Context(), imageKey); exErr == nil && ok {
+			imageExists = true
+			imageURL = strings.TrimRight(s3PublicBaseURL, "/") + "/images/" + id + ".png"
+		} else if exErr != nil {
+			slog.Warn("share image exists check failed", "err", exErr, "flower_id", id)
+		}
+	}
+
+	writeHTML(http.StatusOK, share.HTMLData{
+		FlowerID:    id,
+		PersonName:  f.PersonName,
+		ImageURL:    imageURL,
+		ImageExists: imageExists,
+		ShareURL:    shareURL,
+		AppURL:      appURL,
+	})
+}
+
+// shareCanonicalURL reconstructs the absolute og:url for this request. TLS
+// termination is external for local dev, so scheme defaults to http unless the
+// request or a forwarding proxy indicates https.
+func shareCanonicalURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host + r.URL.Path
+}
+
+// handlePublicFlower serves the read-only, no-auth JSON the SPA landing consumes:
+// {"flower_id","person_name","params"} with params passed through as raw jsonb.
+func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, id string) {
+	setAPICORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if store == nil {
+		http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if id == "" {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	f, err := store.GetFlower(r.Context(), id)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		slog.Error("public flower read failed", "err", err, "flower_id", id)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	paramsJSON, err := json.Marshal(f.Params)
+	if err != nil {
+		slog.Error("public flower params encode failed", "err", err, "flower_id", id)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
+		return
+	}
+	body, err := share.PublicFlowerJSON(share.FlowerData{
+		FlowerID:   f.FlowerID,
+		PersonName: f.PersonName,
+		ParamsJSON: paramsJSON,
+	})
+	if err != nil {
+		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(body)
+}
+
+// handleUploadPreview accepts an image/png body (bounded to 2 MiB, mirroring the
+// mint path) and uploads it to images/<id>.png, returning {"image_url":…}.
+func handleUploadPreview(w http.ResponseWriter, r *http.Request, upl *assets.S3Uploader, id string) {
+	setPreviewCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if upl == nil {
+		http.Error(w, `{"error":"storage not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if id == "" {
+		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		return
+	}
+	const maxPreviewBytes = 2 << 20 // 2 MiB, mirroring the mint snapshot bound.
+	if r.ContentLength > maxPreviewBytes {
+		http.Error(w, `{"error":"image too large"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxPreviewBytes)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, `{"error":"image too large"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
+	if len(data) == 0 {
+		http.Error(w, `{"error":"empty body"}`, http.StatusBadRequest)
+		return
+	}
+	imageKey := "images/" + id + ".png"
+	imageURL, err := upl.PutBytes(r.Context(), imageKey, "image/png", bytes.NewReader(data))
+	if err != nil {
+		slog.Error("preview upload failed", "err", err, "flower_id", id)
+		http.Error(w, `{"error":"upload failed"}`, http.StatusInternalServerError)
+		return
+	}
+	b, err := json.Marshal(struct {
+		ImageURL string `json:"image_url"`
+	}{imageURL})
+	if err != nil {
+		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(b)
 }
 
 func writeFlowersJSON(w http.ResponseWriter, list []grpcapi.FlowerListRow) {
