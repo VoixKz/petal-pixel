@@ -119,11 +119,7 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		}
 	}
 
-	personName := strings.TrimSpace(f.PersonName)
-	if personName == "" {
-		personName = "unknown" // pre-existing rows written before person_name was loaded
-	}
-	metadataJSON, err := nft.BuildMetadata(personName, flowerID, f.Params.Seed, f.Params.AlgoVersion, imageURL, nil)
+	metadataJSON, err := buildMintMetadata(f, imageURL)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to build metadata")
 	}
@@ -147,6 +143,19 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		MintTokenUri:    tokenURI,
 		// mint_calldata left empty for now (frontend can call contract with args).
 	}, nil
+}
+
+// buildMintMetadata resolves f's PersonName (falling back to "unknown" for
+// empty/legacy rows written before person_name was loaded) and assembles the
+// NFT metadata JSON, threading imageURL into the metadata Image field when
+// non-empty. Pulled out of PrepareMint so the wiring — real name in, image
+// URL in — can be unit-tested without a live Store/Uploader.
+func buildMintMetadata(f *FlowerRow, imageURL string) ([]byte, error) {
+	personName := strings.TrimSpace(f.PersonName)
+	if personName == "" {
+		personName = "unknown" // pre-existing rows written before person_name was loaded
+	}
+	return nft.BuildMetadata(personName, f.FlowerID, f.Params.Seed, f.Params.AlgoVersion, imageURL, nil)
 }
 
 func (s *FlowerServer) ConfirmMint(ctx context.Context, req *flowerv1.ConfirmMintRequest) (*flowerv1.ConfirmMintResponse, error) {
