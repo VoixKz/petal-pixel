@@ -17,6 +17,12 @@ export default {
         sans: ["Space Grotesk", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
+      fontSize: {
+        meta: ["var(--font-size-meta)", { lineHeight: "1.4" }],
+        body: ["var(--font-size-body)", { lineHeight: "var(--leading-body)" }],
+        title: ["var(--font-size-title)", { lineHeight: "1.3" }],
+        page: ["var(--font-size-page)", { lineHeight: "1.2", letterSpacing: "var(--tracking-tight)" }],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

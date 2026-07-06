@@ -49,6 +49,23 @@
     --glow-accent: 270 60% 55%;
     --surface-glass: 0 0% 100%;
     --canvas-bg: 240 5% 95%;
+
+    /* Typography scale (bound to Tailwind fontSize keys meta/body/title/page) */
+    --font-size-meta: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-title: 1.125rem;
+    --font-size-page: 1.5rem;
+    --leading-body: 1.6;
+    --tracking-tight: -0.01em;
+
+    /* Spacing rhythm tokens */
+    --space-gutter: 1rem;
+    --space-section: 1.5rem;
+
+    /* Chip radius + stepped surfaces (light: card-flat + one raised step) */
+    --radius-chip: 9999px;
+    --surface-1: 0 0% 100%;
+    --surface-2: 0 0% 96%;
   }
 
   .dark {
@@ -93,6 +110,23 @@
     --glow-accent: 270 60% 55%;
     --surface-glass: 240 8% 10%;
     --canvas-bg: 240 10% 3%;
+
+    /* Typography scale (bound to Tailwind fontSize keys meta/body/title/page) */
+    --font-size-meta: 0.75rem;
+    --font-size-body: 0.875rem;
+    --font-size-title: 1.125rem;
+    --font-size-page: 1.5rem;
+    --leading-body: 1.6;
+    --tracking-tight: -0.01em;
+
+    /* Spacing rhythm tokens */
+    --space-gutter: 1rem;
+    --space-section: 1.5rem;
+
+    /* Chip radius + refined near-black stepped surfaces for dark */
+    --radius-chip: 9999px;
+    --surface-1: 240 8% 8%; /* matches current --card */
+    --surface-2: 240 8% 11%; /* one step up for raised panels */
   }
 }
 
@@ -102,6 +136,53 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Global focus-visible ring for native controls (specificity 0 via :where,
+     so per-component overrides still win). */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .mono-meta {
+    @apply font-mono text-xs tracking-tight tabular-nums;
+  }
+  .type-page-title {
+    @apply text-xl sm:text-2xl font-semibold tracking-tight;
+  }
+  .type-section-title {
+    @apply text-base sm:text-lg font-medium;
+  }
+  .type-body {
+    @apply text-sm leading-relaxed;
+  }
+  .type-meta {
+    @apply text-xs text-muted-foreground;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium leading-none;
+  }
+  .chip-primary {
+    @apply chip bg-primary/10 text-primary;
+  }
+  .chip-accent {
+    @apply chip bg-accent/15 text-accent;
+  }
+  .chip-muted {
+    @apply chip bg-muted text-muted-foreground;
   }
 }
 
