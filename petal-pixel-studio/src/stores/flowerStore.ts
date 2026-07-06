@@ -387,13 +387,30 @@ export const useFlowerStore = create<FlowerStore>()(
       const newBackendId = params.flowerId || oldBackendId;
       const regenerated = Boolean(newBackendId && newBackendId !== oldBackendId);
 
+      // Finding 1 (Critical), fix (b): the live top-level `params` may not
+      // carry mintTokenId/mintContractAddress even though the saved row
+      // does (e.g. markMintedByBackendFlowerId folded them into `params`
+      // via fix (a) only when this flower was the live one at mint time;
+      // older sessions or edge cases could still miss it). Preserve those
+      // two fields from the existing saved row whenever the live params
+      // don't already have them, so a plain rename/slider-nudge + Update
+      // can never silently drop a recorded mint. Only these two fields are
+      // merged — everything else in `params` is a full replace as before.
+      const mintTokenId = params.mintTokenId ?? existing.params.mintTokenId;
+      const mintContractAddress = params.mintContractAddress ?? existing.params.mintContractAddress;
+      const persistedParams: FlowerParams = {
+        ...params,
+        ...(mintTokenId != null ? { mintTokenId } : {}),
+        ...(mintContractAddress ? { mintContractAddress } : {}),
+      };
+
       const updated = savedFlowers.map((f) =>
         f.id === editingFlowerId
           ? {
               ...f,
               title,
               generationWord: generationWord || f.generationWord,
-              params: { ...params },
+              params: persistedParams,
               backendFlowerId: newBackendId || f.backendFlowerId,
             }
           : f,
@@ -411,7 +428,7 @@ export const useFlowerStore = create<FlowerStore>()(
             newBackendId,
             title,
             generationWord || existing.generationWord || "unknown",
-            params,
+            persistedParams,
           );
           if (oldBackendId) {
             await supabase.from('user_flowers')
@@ -423,7 +440,7 @@ export const useFlowerStore = create<FlowerStore>()(
           await supabaseUpdateFlower(user.id, newBackendId, {
             saved_name: title,
             generation_word: generationWord || existing.generationWord,
-            params,
+            params: persistedParams,
           });
         }
       }
@@ -559,25 +576,41 @@ export const useFlowerStore = create<FlowerStore>()(
   markMintedByBackendFlowerId: async (backendFlowerId, txHash, tokenUri, mint) => {
     // Optimistic local update. Mint results are stamped into params so they
     // persist through the params jsonb round-trip (no DB migration).
-    set((s) => ({
-      savedFlowers: s.savedFlowers.map((f) =>
-        f.backendFlowerId === backendFlowerId
+    set((s) => {
+      // Finding 1 (Critical): if the minted flower is also the one currently
+      // loaded into the live top-level `params` (edit mode, or freshly
+      // generated/saved), fold the mint fields into `params` too. Otherwise
+      // `params` never learns about the mint, and a subsequent edit+Update
+      // (saveFlower's edit path does `params: { ...params }`, a full
+      // replace) would overwrite savedFlowers[i].params — and Supabase —
+      // with a copy that lacks mintTokenId/mintContractAddress, silently
+      // erasing them.
+      const isLiveParams =
+        s.editingFlowerId === backendFlowerId || s.params.flowerId === backendFlowerId;
+      const mintFieldsPatch =
+        mint
           ? {
-              ...f,
-              isMinted: true,
-              txHash: txHash ?? f.txHash,
-              tokenUri: tokenUri ?? f.tokenUri,
-              params: mint
-                ? {
-                    ...f.params,
-                    ...(mint.tokenId != null ? { mintTokenId: mint.tokenId } : {}),
-                    ...(mint.contractAddress ? { mintContractAddress: mint.contractAddress } : {}),
-                  }
-                : f.params,
+              ...(mint.tokenId != null ? { mintTokenId: mint.tokenId } : {}),
+              ...(mint.contractAddress ? { mintContractAddress: mint.contractAddress } : {}),
             }
-          : f,
-      ),
-    }));
+          : {};
+
+      return {
+        savedFlowers: s.savedFlowers.map((f) =>
+          f.backendFlowerId === backendFlowerId
+            ? {
+                ...f,
+                isMinted: true,
+                txHash: txHash ?? f.txHash,
+                tokenUri: tokenUri ?? f.tokenUri,
+                params: mint ? { ...f.params, ...mintFieldsPatch } : f.params,
+              }
+            : f,
+        ),
+        params:
+          isLiveParams && mint ? { ...s.params, ...mintFieldsPatch } : s.params,
+      };
+    });
     bumpSavedFlowersMutationCounter();
 
     // Persist to Supabase; report failure to the caller instead of swallowing it.

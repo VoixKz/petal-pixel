@@ -5,6 +5,10 @@ const upsertResult: { error: { message: string } | null } = { error: null };
 const upsertMock = vi.fn(async () => upsertResult);
 const deleteEqMock = vi.fn(async () => ({ error: null }));
 const updateEqMock = vi.fn(async () => ({ error: null }));
+// Wraps .update(payload) itself so tests can inspect what was persisted,
+// independent of the from()-per-call closure below. The terminal resolver
+// tests already assert on (updateEqMock) is unchanged.
+const updateMock = vi.fn(() => ({ eq: vi.fn(() => ({ eq: updateEqMock })) }));
 
 let authUserId: string | null = "user-123";
 
@@ -22,9 +26,7 @@ vi.mock("@/integrations/supabase/client", () => ({
     },
     from: vi.fn(() => ({
       upsert: upsertMock,
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({ eq: updateEqMock })),
-      })),
+      update: updateMock,
       delete: vi.fn(() => ({
         eq: vi.fn(() => ({ eq: deleteEqMock })),
       })),
@@ -321,5 +323,80 @@ describe("Cluster E2: transient loadFromBackend failure — conditional cache cl
 
     // @ts-expect-error - restore
     supabase.from = originalFrom;
+  });
+});
+
+describe("Finding 1 (Critical): post-mint edit must not wipe mintTokenId/mintContractAddress", () => {
+  beforeEach(() => {
+    upsertResult.error = null;
+    upsertMock.mockClear();
+    deleteEqMock.mockClear();
+    updateEqMock.mockClear();
+    updateMock.mockClear();
+    authUserId = "user-123";
+    pendingOrderPromise = null;
+  });
+
+  it("keeps mintTokenId/mintContractAddress after mint -> in-place edit -> saveFlower (edit path)", async () => {
+    // 1) A flower exists, freshly "generated" and saved (not yet minted).
+    const flower = sampleFlower("flower-mint-1", { title: "Original Title", isMinted: false });
+    useFlowerStore.setState({
+      editingFlowerId: "flower-mint-1",
+      savedFlowers: [flower],
+      title: "Original Title",
+      generationWord: "alice",
+      params: { ...baseParams(), flowerId: "flower-mint-1" },
+    });
+
+    // 2) Mint it via the store action, exactly as CreateFlower.handleMint does.
+    const synced = await useFlowerStore.getState().markMintedByBackendFlowerId(
+      "flower-mint-1",
+      "0xTXHASH",
+      "ipfs://token-uri",
+      { tokenId: 42, contractAddress: "0xCONTRACT" },
+    );
+    expect(synced).toBe(true);
+
+    // Sanity: the saved row now carries the mint fields.
+    const afterMint = useFlowerStore.getState().savedFlowers.find(f => f.id === "flower-mint-1");
+    expect(afterMint?.params.mintTokenId).toBe(42);
+    expect(afterMint?.params.mintContractAddress).toBe("0xCONTRACT");
+    // And fix (a): the live top-level params picked them up too, since this
+    // flower is still the one being edited.
+    expect(useFlowerStore.getState().params.mintTokenId).toBe(42);
+    expect(useFlowerStore.getState().params.mintContractAddress).toBe("0xCONTRACT");
+
+    // 3) Simulate an in-place edit: user stays in edit mode (editingFlowerId
+    // unchanged, as saveFlower's edit path does), renames the title, and
+    // nudges a param — exactly the "rename/slider-nudge + Update" scenario
+    // from the finding.
+    useFlowerStore.setState({
+      title: "Renamed After Mint",
+    });
+    useFlowerStore.getState().setParam("petalCount", 9);
+
+    // 4) Update — this runs saveFlower's EDIT path, which used to do
+    // `params: { ...params }` (a full replace) and drop the mint fields
+    // because live top-level `params` never had them (Finding 1 root cause).
+    const result = await useFlowerStore.getState().saveFlower();
+    expect(result).toBe("updated");
+
+    // 5) THE REGRESSION GUARD: mint fields must still be present after the
+    // edit-path save, both in the local savedFlowers row (RED without the
+    // fix: these would be undefined) ...
+    const afterEdit = useFlowerStore.getState().savedFlowers.find(f => f.id === "flower-mint-1");
+    expect(afterEdit?.params.mintTokenId).toBe(42);
+    expect(afterEdit?.params.mintContractAddress).toBe("0xCONTRACT");
+    expect(afterEdit?.title).toBe("Renamed After Mint");
+    expect(afterEdit?.params.petalCount).toBe(9);
+
+    // ... and in the payload persisted to Supabase (the .update({...}) call
+    // itself), so the mint fields survive the round-trip through the DB too.
+    expect(updateMock).toHaveBeenCalled();
+    const persistedPayload = updateMock.mock.calls.at(-1)?.[0] as {
+      params?: { mintTokenId?: number; mintContractAddress?: string };
+    };
+    expect(persistedPayload?.params?.mintTokenId).toBe(42);
+    expect(persistedPayload?.params?.mintContractAddress).toBe("0xCONTRACT");
   });
 });
