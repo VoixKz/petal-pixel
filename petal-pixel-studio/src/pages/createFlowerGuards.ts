@@ -18,3 +18,34 @@ export function shouldWarnRegenerate(
 export function isCheckingBackend(status: HealthStatus): boolean {
   return status === 'checking';
 }
+
+/**
+ * Cluster B1: create-mode unsaved-work detector.
+ *
+ * In edit mode, "dirty" already means "differs from the saved snapshot"
+ * (word/title/params changed) — that's the existing hasUnsavedChanges logic
+ * in CreateFlower.tsx. In CREATE mode there is no snapshot to diff against:
+ * the moment a flower has been generated (params.flowerId is set) and it
+ * has not yet been saved (its id isn't in savedFlowers), it is unsaved work
+ * that navigation/reload/clearEditMode must not silently destroy.
+ *
+ * `wordChanged`/`paramsDirty` are accepted for symmetry with the edit-mode
+ * predicate but are intentionally NOT part of the create-mode condition:
+ * generating a flower already sets params.flowerId, and any slider tweak
+ * after that keeps the same (unsaved) flowerId, so the id-not-in-savedFlowers
+ * check alone captures "work exists that would be lost."
+ */
+export function hasUnsavedWork(
+  isEditMode: boolean,
+  paramsDirty: boolean,
+  wordChanged: boolean,
+  flowerId: string,
+  savedIds: ReadonlySet<string> | readonly string[],
+): boolean {
+  if (isEditMode) {
+    return paramsDirty || wordChanged;
+  }
+  if (!flowerId) return false;
+  const ids = savedIds instanceof Set ? savedIds : new Set(savedIds);
+  return !ids.has(flowerId);
+}

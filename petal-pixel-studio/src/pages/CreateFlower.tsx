@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useBlocker, useLocation } from 'react-router-dom';
+import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { FlowerCanvas } from '@/components/flower/FlowerCanvas';
 import { FlowerControls } from '@/components/flower/FlowerControls';
 import { FlowerInfo } from '@/components/flower/FlowerInfo';
@@ -18,6 +18,7 @@ import {
 import {
   shouldWarnRegenerate,
   isCheckingBackend,
+  hasUnsavedWork,
   type HealthStatus,
 } from './createFlowerGuards';
 import { mapPetalCount } from '@/components/flower/sliderMapping';
@@ -216,14 +217,26 @@ function UnsavedChangesDialog({
 }
 
 // Runs the Supabase-backed save and reports the outcome via toast.
-// Returns true only on success; on failure surfaces the error and returns false.
+// saveFlower now reports which case occurred (Clusters A & D):
+//  - 'created': a genuinely new flower was added -> use createdMessage.
+//  - 'updated': either the edit path succeeded, or the create path collided
+//    with an already-saved flower's deterministic id and was folded into an
+//    update of that flower -> use updatedMessage.
+//  - 'aborted': the flower being edited no longer exists (deleted) -> this is
+//    NOT a success; toast an error instead and return false.
+// Returns true only on success (created/updated); on failure or abort surfaces
+// an error toast and returns false.
 export async function runSaveFlow(
-  saveFlower: () => Promise<void>,
-  successMessage: string,
+  saveFlower: () => Promise<'created' | 'updated' | 'aborted'>,
+  messages: { createdMessage: string; updatedMessage: string },
 ): Promise<boolean> {
   try {
-    await saveFlower();
-    toast.success(successMessage);
+    const result = await saveFlower();
+    if (result === 'aborted') {
+      toast.error('This flower was deleted — nothing to update.');
+      return false;
+    }
+    toast.success(result === 'created' ? messages.createdMessage : messages.updatedMessage);
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to save flower';
@@ -234,11 +247,13 @@ export async function runSaveFlow(
 
 export default function CreateFlower() {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const params = useFlowerStore((s) => s.params);
   const generationWord = useFlowerStore((s) => s.generationWord);
   const title = useFlowerStore((s) => s.title);
   const editingFlowerId = useFlowerStore((s) => s.editingFlowerId);
+  const savedFlowers = useFlowerStore((s) => s.savedFlowers);
   const isGenerating = useFlowerStore((s) => s.isGenerating);
   const generateFromWord = useFlowerStore((s) => s.generateFromWord);
   const saveFlower = useFlowerStore((s) => s.saveFlower);
@@ -272,13 +287,68 @@ export default function CreateFlower() {
   const originalTitleRef = useRef(title);
   const originalParamsRef = useRef('');
 
-  // Clear edit mode when navigating fresh to /create (sidebar click).
-  // location.key is unique per navigation event, so this fires even for same-route navigation.
-  // Navigation from MyFlowers passes { state: { isEditing: true } } to preserve edit mode.
+  // Single reconciliation effect for every /create mount / same-route
+  // navigation event (location.key is unique per navigation, so this fires
+  // even for same-route re-entry, e.g. re-clicking the sidebar "Create
+  // Flower" link). Combines Clusters B2/B3 (don't destroy fresh create-mode
+  // work-in-progress) and C (durable route state vs. non-persisted store
+  // edit context can disagree after F5 or Back/Forward).
+  //
+  // location.state.isEditing survives F5/back-forward (it lives in
+  // history.state), but editingFlowerId/params/title/generationWord do not
+  // (persist partialize only keeps savedFlowers/ownerUserId). That split
+  // creates three cases to reconcile on entry, checked in order:
+  //
+  //  1. Route says isEditing, but the store has NO editingFlowerId (reload
+  //     mid-edit wiped it) → pseudo-edit with blank state. Replace the route
+  //     state so it stops claiming an edit session, tell the user once, and
+  //     continue in clean create mode. Do NOT clearEditMode's params reset
+  //     here — the store is already at defaults.
+  //  2. The store DOES have an editingFlowerId, but that flower is no longer
+  //     in savedFlowers (deleted — e.g. via another tab, or a stale Back into
+  //     an old history entry after deletion) → clear edit mode and inputs so
+  //     the page doesn't pretend to edit a flower that no longer exists.
+  //  3. Route does NOT say isEditing, but the store still holds a (valid)
+  //     leftover editingFlowerId from a previous /create visit that the user
+  //     left without discarding → clear edit mode and inputs. This is the
+  //     ONLY case that calls clearEditMode for a plain fresh-create entry;
+  //     previously clearEditMode ran unconditionally here, which also wiped
+  //     params/title/generationWord for a genuine create-mode WIP flower
+  //     (Cluster B2) — it is now gated on an edit session actually existing.
+  //
+  // In every other case (fresh create with no edit residue, or a valid
+  // ongoing edit session) this is a deliberate no-op: create-mode WIP and
+  // edit-mode state are left completely untouched.
   useEffect(() => {
-    if (!location.state?.isEditing) {
-      clearEditMode();
+    const store = useFlowerStore.getState();
+
+    if (location.state?.isEditing && !store.editingFlowerId) {
+      navigate('.', { replace: true, state: null });
+      toast.info('Your edit session was reset by the reload — starting a fresh flower.');
+      return;
     }
+
+    if (store.editingFlowerId && !savedFlowers.some(f => f.id === store.editingFlowerId)) {
+      clearEditMode();
+      setWordInput('');
+      setTitleInput('');
+      return;
+    }
+
+    if (!location.state?.isEditing && store.editingFlowerId) {
+      clearEditMode();
+      // Cluster B3: the local word/title inputs are only ever synced FROM the
+      // store while isEditMode is true (see the sync effect below), so they
+      // must be cleared explicitly here — otherwise the stale word/title of
+      // the just-exited edit session prefill the "fresh" create page and can
+      // steer a subsequent Generate+Save into re-colliding with that same
+      // flower's deterministic backend id.
+      setWordInput('');
+      setTitleInput('');
+    }
+  // Deliberately keyed on location.key only (not savedFlowers), so this
+  // reconciliation runs once per navigation event rather than fighting with
+  // in-progress edits every time savedFlowers changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
 
@@ -302,10 +372,21 @@ export default function CreateFlower() {
     }
   }, [params, isEditMode]);
 
-  const hasUnsavedChanges = isEditMode && (
-    wordInput !== originalWordRef.current ||
+  // Cluster B1: in edit mode, dirty means "differs from the saved snapshot"
+  // (existing behavior). In CREATE mode, a generated-but-unsaved flower
+  // (params.flowerId set, id not yet present in savedFlowers) is now also
+  // considered unsaved work, so the blocker/beforeunload guards below protect
+  // it — previously they were permanently inert outside edit mode.
+  const editModeDirty = wordInput !== originalWordRef.current ||
     titleInput !== originalTitleRef.current ||
-    paramsDirty
+    paramsDirty;
+  const savedFlowerIds = useMemo(() => new Set(savedFlowers.map(f => f.id)), [savedFlowers]);
+  const hasUnsavedChanges = hasUnsavedWork(
+    isEditMode,
+    editModeDirty,
+    /* wordChanged unused in create branch */ false,
+    params.flowerId,
+    savedFlowerIds,
   );
 
   const blocker = useBlocker(hasUnsavedChanges);
@@ -418,15 +499,24 @@ export default function CreateFlower() {
     setIsSaving(true);
     try {
       setTitle(titleInput.trim());
-      const ok = await runSaveFlow(
-        saveFlower,
-        isEditMode ? 'Flower updated!' : 'Flower saved to your collection!',
-      );
+      const ok = await runSaveFlow(saveFlower, {
+        // Cluster A: a create-path save that collides with an already-saved
+        // flower's deterministic id is folded into an update of that flower,
+        // so its message must say "updated", not "saved" — otherwise the
+        // user is told a new flower was created when their existing one was
+        // actually just modified in place.
+        createdMessage: 'Flower saved to your collection!',
+        updatedMessage: 'Flower updated!',
+      });
       if (ok) {
-        // Reset dirty tracking after a successful save
-        originalParamsRef.current = JSON.stringify(useFlowerStore.getState().params);
+        // Reset dirty tracking after a successful save. Also re-sync the
+        // title input in case the collision path (Cluster A) preserved the
+        // existing saved title instead of the freshly-typed one.
+        const freshState = useFlowerStore.getState();
+        originalParamsRef.current = JSON.stringify(freshState.params);
         originalWordRef.current = wordInput;
-        originalTitleRef.current = titleInput.trim();
+        originalTitleRef.current = freshState.title;
+        setTitleInput(freshState.title);
         setParamsDirty(false);
       }
       return ok;
