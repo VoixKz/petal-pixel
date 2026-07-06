@@ -4,6 +4,9 @@ import type { FlowerParamsJson } from '@/integrations/flowerBackend/client';
 import { mapBackendJsonToFlowerParams } from './shareParams';
 import { isV2 } from '@/math/flowerVersion';
 import { DEFAULT_CLASSIC_PARAMS } from '@/math/flowerTypes';
+import { createSunflowerGeometry } from '@/math/flowers/sunflower';
+import { createRhodoneaGeometry } from '@/math/flowers/rhodonea';
+import type { Palette } from '@/math/palette';
 
 // ── buildShareUrl (pure, backend /share/ route) ───────────────────────────────
 describe('buildShareUrl', () => {
@@ -263,5 +266,166 @@ describe('mapBackendJsonToFlowerParams — v2', () => {
   it('does not route to v2 when family is missing even if algo_version==="v2"', () => {
     const p = mapBackendJsonToFlowerParams('x', { ...v1Json(), algo_version: 'v2' });
     expect(isV2(p)).toBe(false);
+  });
+});
+
+// ── BUG 1: uint64 seed precision ──────────────────────────────────────────────
+// Real backend seeds are full uint64 and, once quoted-through JSON.parse in the
+// client, arrive as a decimal STRING. The mapper must preserve that string
+// exactly (not truncate it to a double) and derive rotation/frequency from the
+// BigInt using the same formulas as flowerStore.generateFromWord.
+describe('mapBackendJsonToFlowerParams — uint64 seed precision', () => {
+  // A seed ≥ 2^53 that would lose its last digits if passed through a JS number.
+  const BIG_SEED = '14198260184116936936';
+
+  it('preserves a >2^53 seed EXACTLY as a decimal string (no double truncation)', () => {
+    const p = mapBackendJsonToFlowerParams('big', v1Json({ seed: BIG_SEED }));
+    expect(p.seed).toBe(BIG_SEED);
+  });
+
+  it('derives rotation/frequency from BigInt(seed) matching the store formulas', () => {
+    const seed = BigInt(BIG_SEED);
+    const p = mapBackendJsonToFlowerParams('big', v1Json({ seed: BIG_SEED }));
+    // store: rotation = Number(seed % 360n); frequency = 1 + Number(seed % 6n)
+    expect(p.rotation).toBe(Number(seed % 360n));
+    expect(p.frequency).toBe(1 + Number(seed % 6n));
+    // Sanity: a naive double would give the wrong remainder here.
+    expect(p.rotation).toBe(Number(seed % 360n));
+    expect(p.rotation).not.toBe(Number(14198260184116937000 % 360));
+  });
+
+  it('still accepts a numeric seed (legacy/in-range) and stringifies it', () => {
+    const p = mapBackendJsonToFlowerParams('small', v1Json({ seed: 42 }));
+    expect(p.seed).toBe('42');
+    expect(p.rotation).toBe(42 % 360);
+    expect(p.frequency).toBe(1 + (42 % 6));
+  });
+
+  it('falls back to seed 0 (no throw) on a non-numeric seed string', () => {
+    const p = mapBackendJsonToFlowerParams('bad', v1Json({ seed: 'not-a-number' as unknown as number }));
+    expect(p.seed).toBe('0');
+    expect(p.rotation).toBe(0);
+    expect(p.frequency).toBe(1);
+  });
+});
+
+// ── BUG 2: v2 colorA/colorB must match the store defaults ─────────────────────
+// flowerStore.generateFromWord's v2 path never sets colorA/colorB, so they keep
+// the defaultParams values. The share mapper must agree so the emissive tint and
+// point-light colors match between studio and share page.
+describe('mapBackendJsonToFlowerParams — v2 colors', () => {
+  const palette = {
+    id: 'pal-1',
+    stops: [
+      { position: 0, hex: '#ff0000' },
+      { position: 1, hex: '#0000ff' },
+    ],
+  };
+
+  it('keeps the store default colorA/colorB on a v2 record (not hue-derived)', () => {
+    const p = mapBackendJsonToFlowerParams('v2c', {
+      ...v1Json(),
+      algo_version: 'v2',
+      family: 'rhodonea',
+      palette,
+    });
+    expect(p.colorA).toBe('#10b981');
+    expect(p.colorB).toBe('#2563eb');
+    expect(isV2(p)).toBe(true);
+  });
+
+  it('leaves v1 colors hue-derived (hsl)', () => {
+    const p = mapBackendJsonToFlowerParams('v1c', v1Json());
+    expect(p.colorA).toMatch(/^hsl\(/);
+    expect(p.colorB).toMatch(/^hsl\(/);
+  });
+});
+
+// ── BUG 3: palette-less v2 sunflower/rhodonea must not crash the render path ───
+// A v2 record with NO palette makes the mapper return `palette: undefined`. The
+// geometry builders must tolerate that (fall back to their non-palette ramp)
+// exactly like superformula.ts does — dereferencing palette.stops would throw
+// and blank the share page.
+describe('palette-less v2 sunflower/rhodonea geometry (BUG 3)', () => {
+  // The mapper returns `undefined` for palette when json.palette is absent; the
+  // geometry signature types `palette: Palette`, so we cast to reproduce the
+  // real runtime value the share render path passes through.
+  const noPalette = undefined as unknown as Palette;
+
+  it('maps a palette-less v2 sunflower and builds geometry without throwing', () => {
+    const p = mapBackendJsonToFlowerParams('sf-nopal', {
+      ...v1Json(),
+      algo_version: 'v2',
+      family: 'sunflower',
+      // no palette
+      sunflower: {
+        scale: 300,
+        floret_rings: 90,
+        floret_spokes: 220,
+        dome_height: 45,
+        disc_ratio: 0.58,
+        ray_petals: 34,
+        ray_length: 0.5,
+        ray_width: 0.8,
+        seed_packing: 1,
+        sat_shift: 0,
+        bri_shift: 0,
+      },
+    });
+    expect(p.palette).toBeUndefined();
+    expect(p.sunflowerParams).toBeDefined();
+    expect(() => createSunflowerGeometry(p.sunflowerParams!, p.palette as unknown as Palette)).not.toThrow();
+    const g = createSunflowerGeometry(p.sunflowerParams!, p.palette as unknown as Palette);
+    expect(g.getAttribute('position').count).toBeGreaterThan(0);
+  });
+
+  it('maps a palette-less v2 rhodonea and builds geometry without throwing', () => {
+    const p = mapBackendJsonToFlowerParams('rh-nopal', {
+      ...v1Json(),
+      algo_version: 'v2',
+      family: 'rhodonea',
+      // no palette
+      rhodonea: {
+        radius: 260,
+        k: 5,
+        petal_span: 0.85,
+        width_profile: 0.45,
+        height_profile: 60,
+        thickness: 9,
+        curl: 0.4,
+        length_seg: 30,
+        width_seg: 20,
+        sat_shift: 0,
+        bri_shift: 0,
+      },
+    });
+    expect(p.palette).toBeUndefined();
+    expect(p.rhodoneaParams).toBeDefined();
+    expect(() => createRhodoneaGeometry(p.rhodoneaParams!, p.palette as unknown as Palette)).not.toThrow();
+    const g = createRhodoneaGeometry(p.rhodoneaParams!, p.palette as unknown as Palette);
+    expect(g.getAttribute('position').count).toBeGreaterThan(0);
+  });
+
+  // Direct guard checks (independent of the mapper) with an explicit undefined.
+  it('createSunflowerGeometry tolerates undefined palette directly', () => {
+    expect(() => createSunflowerGeometry(
+      {
+        scale: 300, floretRings: 90, floretSpokes: 220, domeHeight: 45,
+        discRatio: 0.58, rayPetals: 34, rayLength: 0.5, rayWidth: 0.8,
+        seedPacking: 1, satShift: 0, briShift: 0,
+      },
+      noPalette,
+    )).not.toThrow();
+  });
+
+  it('createRhodoneaGeometry tolerates undefined palette directly', () => {
+    expect(() => createRhodoneaGeometry(
+      {
+        radius: 260, k: 5, petalSpan: 0.85, widthProfile: 0.45,
+        heightProfile: 60, thickness: 9, curl: 0.4, lengthSeg: 30,
+        widthSeg: 20, satShift: 0, briShift: 0,
+      },
+      noPalette,
+    )).not.toThrow();
   });
 });

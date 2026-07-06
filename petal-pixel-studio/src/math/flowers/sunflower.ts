@@ -52,7 +52,11 @@ export function createSunflowerGeometry(
   // already baked in by the backend), so we sample it directly and do NOT
   // re-apply the per-shape shifts (that would double-shift — reconciliation #8).
   // The per-shape satShift/briShift only feed the legacy no-palette fallback.
-  const hasPalette = palette.stops.length >= 2;
+  // Guard a palette-less record (e.g. the share mapper passes `undefined` when
+  // json.palette is absent) — mirrors superformula.ts. Falls back to the
+  // no-palette golden-disc ramp below instead of throwing (never-throws render
+  // contract). Requires >=2 stops so samplePaletteInto has an interval.
+  const hasPalette = palette != null && palette.stops != null && palette.stops.length >= 2;
 
   const pushVertex = (x: number, y: number, z: number, t: number): number => {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {

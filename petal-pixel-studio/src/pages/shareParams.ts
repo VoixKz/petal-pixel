@@ -72,6 +72,43 @@ function num(obj: Record<string, number> | undefined, key: string, fallback: num
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
+/**
+ * Coerce a `seed` that may arrive as a number (legacy/in-range) or a decimal
+ * string (uint64-preserved by fetchFlowerById's quote-then-parse) into a
+ * canonical BigInt without precision loss. A non-numeric / malformed value
+ * falls back to 0n so the mapper never throws (its "never throws" contract).
+ */
+function seedToBigInt(raw: number | string | undefined): bigint {
+  if (typeof raw === 'bigint') return raw;
+  if (typeof raw === 'number') {
+    // A number seed is only lossless below 2^53; anything above already lost
+    // its low digits upstream, but truncate defensively to an integer.
+    return Number.isFinite(raw) ? BigInt(Math.trunc(raw)) : 0n;
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    // BigInt('') is 0n; only accept a pure optional-sign decimal string.
+    if (/^-?\d+$/.test(s)) {
+      try {
+        return BigInt(s);
+      } catch {
+        return 0n;
+      }
+    }
+  }
+  return 0n;
+}
+
+/** Store-parity: rotation = Number(seed % 360n), always in [0,360). */
+function seedRotation(seed: bigint): number {
+  return Number(((seed % 360n) + 360n) % 360n);
+}
+
+/** Store-parity: frequency = 1 + Number(seed % 6n), always in [1,6]. */
+function seedFrequency(seed: bigint): number {
+  return 1 + Number(((seed % 6n) + 6n) % 6n);
+}
+
 /** ColorStop.position → PaletteStop.pos; drop the optional r/g/b bytes. */
 function toPalette(
   json: FlowerParamsJson['palette'] | undefined,
@@ -198,7 +235,12 @@ export function mapBackendJsonToFlowerParams(
   flowerId: string,
   json: FlowerParamsJson,
 ): FlowerParams {
-  const seedNum = num(json as unknown as Record<string, number>, 'seed', 0);
+  // Seed is uint64: it arrives as a lossless decimal STRING (see
+  // fetchFlowerById) or a legacy number. Keep the canonical decimal string for
+  // display and derive rotation/frequency from BigInt — EXACTLY as
+  // flowerStore.generateFromWord does (rotation = Number(seed % 360n),
+  // frequency = 1 + Number(seed % 6n)) so the share page matches the studio.
+  const seedBig = seedToBigInt(json.seed);
   const hue = num(json as unknown as Record<string, number>, 'hue', 200);
   const baseCount = Math.max(3, num(json as unknown as Record<string, number>, 'petal_count', 6));
 
@@ -207,7 +249,7 @@ export function mapBackendJsonToFlowerParams(
     flowerId,
     algoVersion: json.algo_version ?? 'v1',
     schemaVersion: json.schema_version ?? 'v1',
-    seed: String(seedNum),
+    seed: seedBig.toString(),
 
     flowerType: 'classic',
     classicParams: { ...DEFAULT_CLASSIC_PARAMS },
@@ -218,8 +260,8 @@ export function mapBackendJsonToFlowerParams(
     petalLength: clamp(num(json as unknown as Record<string, number>, 'petal_length', 1.2), 0.25, 3),
     petalSharpness: clamp(num(json as unknown as Record<string, number>, 'petal_width', 0.5), 0.05, 1.4),
     noiseIntensity: clamp(Math.abs(num(json as unknown as Record<string, number>, 'curvature', 0.2)), 0, 1),
-    frequency: 1 + (((seedNum % 6) + 6) % 6),
-    rotation: ((seedNum % 360) + 360) % 360,
+    frequency: seedFrequency(seedBig),
+    rotation: seedRotation(seedBig),
     symmetry: clamp(baseCount, 3, 18),
     colorA: hueToHex(hue, 72, 52),
     colorB: hueToHex((hue + 48) % 360, 66, 45),
@@ -249,6 +291,12 @@ export function mapBackendJsonToFlowerParams(
     flowerType: (FLOWER_TYPES as readonly string[]).includes(fam)
       ? (fam as FlowerType)
       : common.flowerType,
+    // v2 parity: flowerStore.generateFromWord's v2 path never overrides colorA/
+    // colorB, so they keep the store's defaultParams values. Match them here (do
+    // NOT use the hue-derived hsl the v1 path sets) so the share page's emissive
+    // tint + point-light colors agree with the studio. (v1 path keeps its hsl.)
+    colorA: '#10b981',
+    colorB: '#2563eb',
     stemEnabled: false, // v2 flowers never inherit a v1 stem
   };
 

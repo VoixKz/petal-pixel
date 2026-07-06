@@ -45,7 +45,10 @@ export function createRhodoneaGeometry(
   const satShiftHsb = rp.satShift * 100;
   const briShiftHsb = rp.briShift * 100;
 
-  const hasPalette = palette.stops.length > 0;
+  // Guard a palette-less record (e.g. the share mapper passes `undefined` when
+  // json.palette is absent) — mirrors superformula.ts. Falls back to the HSB
+  // ramp below instead of throwing (never-throws render contract).
+  const hasPalette = palette != null && palette.stops != null && palette.stops.length > 0;
   const scratch = new THREE.Color();
 
   const positions: number[] = [];

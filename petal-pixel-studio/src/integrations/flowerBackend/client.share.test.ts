@@ -71,6 +71,20 @@ describe('fetchFlowerById', () => {
     );
     await expect(fetchFlowerById('x')).rejects.toThrow(/500/);
   });
+
+  it('preserves a full uint64 seed as an exact decimal string (no double truncation)', async () => {
+    // Backend serializes `seed` as an UNQUOTED JSON number. A raw JSON.parse
+    // would truncate this to 14198260184116937000 (a double); fetchFlowerById
+    // must quote it first so it lands as the exact string.
+    const BIG_SEED = '14198260184116936936';
+    const raw = `{"flower_id":"flw_big","person_name":"Ada","params":{"algo_version":"v1","schema_version":"v1","seed":${BIG_SEED},"petal_count":7,"petal_length":1.5,"petal_width":0.6,"curvature":0.2,"stem_height":1,"hue":120},"mint_status":"","tx_hash":"","token_uri":""}`;
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(raw, { status: 200 })));
+
+    const item = await fetchFlowerById('flw_big');
+    expect(item.params.seed).toBe(BIG_SEED);
+    // Guard: a naive JSON.parse of the same body loses the low digits.
+    expect((JSON.parse(raw) as typeof item).params.seed).not.toBe(BIG_SEED);
+  });
 });
 
 describe('postFlowerPreview', () => {

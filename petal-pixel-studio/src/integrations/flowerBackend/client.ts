@@ -56,7 +56,11 @@ export async function confirmMintViaGrpc(flowerId: string, txHash: string) {
 export interface FlowerParamsJson {
   algo_version: string;
   schema_version: string;
-  seed: number;
+  // Backend seeds are full uint64 and serialize as UNQUOTED JSON numbers. Any
+  // seed ≥ 2^53 (~99.95% of flowers) would be truncated to a double by
+  // JSON.parse. fetchFlowerById quotes the raw `"seed":<n>` into `"seed":"<n>"`
+  // BEFORE parsing so it survives as a lossless decimal string; hence the union.
+  seed: number | string;
   petal_count: number;
   petal_length: number;
   petal_width: number;
@@ -107,7 +111,14 @@ export async function fetchFlowerById(flowerId: string): Promise<FlowerListItem>
   const res = await fetch(`${flowerBackendBaseUrl}/api/flowers/${encodeURIComponent(flowerId)}`);
   if (res.status === 404) throw new Error('not_found');
   if (!res.ok) throw new Error(`fetchFlowerById failed: ${res.status}`);
-  const data = await res.json() as FlowerListItem | { flower: FlowerListItem };
+  // uint64-precision fix: backend `seed` is an UNQUOTED JSON number that would
+  // lose its low digits under JSON.parse (doubles top out at 2^53). Read the raw
+  // text and quote every `"seed": <digits>` into `"seed": "<digits>"` so the
+  // seed survives as a lossless decimal STRING; shareParams re-derives
+  // rotation/frequency from BigInt(seed) exactly as the studio store does.
+  const text = await res.text();
+  const safe = text.replace(/"seed"\s*:\s*(\d+)/g, '"seed":"$1"');
+  const data = JSON.parse(safe) as FlowerListItem | { flower: FlowerListItem };
   return 'flower' in data && data.flower ? data.flower : (data as FlowerListItem);
 }
 
