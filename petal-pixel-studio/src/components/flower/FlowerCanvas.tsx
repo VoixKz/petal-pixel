@@ -5,12 +5,7 @@ import { MOUSE, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Flower3D } from './Flower3D';
 import { useFlowerStore } from '@/stores/flowerStore';
-
-interface FlowerBounds {
-  center: Vector3;
-  size: Vector3;
-  radius: number;
-}
+import type { FlowerBounds } from '@/math/flowerBounds';
 
 function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null; controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree();
@@ -74,12 +69,19 @@ export function FlowerCanvas() {
         <Flower3D params={params} onBoundsChange={setBounds} />
         <AutoFrameCamera bounds={bounds} controlsRef={controlsRef} />
 
+        {/*
+          The shadow plane must sit AT OR BELOW the flower's lowest point: the
+          ContactShadows depth camera looks up from the plane, so any geometry
+          below it is invisible and the flower gets sliced into a weird
+          cross-section blob. groundY/topY/maxXZRadius come from
+          computeFlowerBounds and are conservative for any idle-rotation yaw.
+        */}
         <ContactShadows
-          position={[0, -0.8, 0]}
+          position={[0, bounds?.groundY ?? -0.8, 0]}
           opacity={0.4}
-          scale={5}
+          scale={bounds ? Math.min(14, Math.max(5, bounds.maxXZRadius * 2 * 1.4)) : 5}
           blur={2}
-          far={4}
+          far={bounds ? Math.max(4, bounds.topY - bounds.groundY + 0.6) : 4}
         />
 
         <OrbitControls

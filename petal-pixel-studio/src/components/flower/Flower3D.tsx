@@ -10,10 +10,17 @@ import {
   createRoseFlowerGeometry,
   isBloomType,
 } from "@/math/flowerGeometry";
+import {
+  computeFlowerBounds,
+  GROUP_POSITION_Y,
+  GROUP_SCALE,
+  GROUP_TILT_X,
+  type FlowerBounds,
+} from "@/math/flowerBounds";
 
 interface Flower3DProps {
   params: FlowerParams;
-  onBoundsChange?: (bounds: { center: THREE.Vector3; size: THREE.Vector3; radius: number }) => void;
+  onBoundsChange?: (bounds: FlowerBounds) => void;
 }
 
 export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
@@ -94,32 +101,18 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
       return;
     }
 
-    geometry.computeBoundingBox();
-    const source = geometry.boundingBox;
-    if (!source) {
-      return;
+    const bounds = computeFlowerBounds(geometry, blossomRotation);
+    if (bounds) {
+      onBoundsChange(bounds);
     }
-
-    const transformed = source.clone();
-    const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(...blossomRotation));
-    transformed.applyMatrix4(rotationMatrix);
-
-    transformed.min.multiplyScalar(0.0045).add(new THREE.Vector3(0, -0.75, 0));
-    transformed.max.multiplyScalar(0.0045).add(new THREE.Vector3(0, -0.75, 0));
-
-    const size = transformed.getSize(new THREE.Vector3());
-    const center = transformed.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.length() * 0.5, 0.35);
-
-    onBoundsChange({ center, size, radius });
   }, [geometry, blossomRotation, onBoundsChange]);
 
   return (
     <group
       ref={groupRef}
-      rotation={[0.3, (params.rotation * Math.PI) / 180, 0]}
-      scale={[0.0045, 0.0045, 0.0045]}
-      position={[0, -0.75, 0]}
+      rotation={[GROUP_TILT_X, (params.rotation * Math.PI) / 180, 0]}
+      scale={[GROUP_SCALE, GROUP_SCALE, GROUP_SCALE]}
+      position={[0, GROUP_POSITION_Y, 0]}
     >
       <mesh geometry={geometry} material={material} rotation={blossomRotation} />
     </group>
