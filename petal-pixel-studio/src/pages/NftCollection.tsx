@@ -25,19 +25,19 @@ function DetailRow({
   copyLabel?: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className={`text-[10px] font-semibold shrink-0 ${tagClass}`}>{tag}</span>
-      <span className="text-[10px] text-muted-foreground font-mono truncate">{display}</span>
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className={`text-xs font-semibold shrink-0 ${tagClass}`}>{tag}</span>
+      <span className="text-xs text-muted-foreground font-mono truncate">{display}</span>
       {copyValue !== undefined && copyLabel && (
         <button
           onClick={() => {
             void navigator.clipboard.writeText(copyValue);
             toast.success(`${copyLabel} copied`);
           }}
-          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1.5 -m-1.5 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
           title={`Copy ${copyLabel.toLowerCase()}`}
         >
-          <Copy className="w-3 h-3" />
+          <Copy className="w-4 h-4" />
         </button>
       )}
     </div>
@@ -52,7 +52,7 @@ function MetaMaskHelp() {
       onOpenChange={setOpen}
       className="bg-card rounded-xl border border-border max-w-xl"
     >
-      <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-sm font-semibold text-foreground">
+      <CollapsibleTrigger className="flex w-full items-center justify-between p-4 text-sm font-semibold text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none rounded-xl">
         <span className="flex items-center gap-2">
           <Wallet className="w-4 h-4 text-primary" /> How to see it in MetaMask
         </span>
@@ -75,7 +75,7 @@ function MetaMaskHelp() {
             (use the copy buttons).
           </li>
         </ol>
-        <p className="mt-2 text-[10px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           Token ids start at <span className="font-mono text-foreground">0</span> and increment
           in mint order. Full local-chain walkthrough (Anvil network, dev account, gotchas):{' '}
           <span className="font-mono text-foreground">docs/MINTING.md</span>.
@@ -102,10 +102,10 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
         }}
       >
         <div className="absolute inset-0 grid-bg opacity-20" />
-        <div className="absolute top-3 left-3 flex items-center gap-1 bg-primary/20 text-primary text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+        <div className="absolute top-3 left-3 flex items-center gap-1 bg-primary/20 text-primary text-xs px-2 py-1 rounded-full backdrop-blur-sm">
           <Gem className="w-3 h-3" /> Verified NFT
         </div>
-        <div className="absolute top-3 right-3 bg-secondary/60 text-secondary-foreground text-[10px] px-2 py-1 rounded-full backdrop-blur-sm capitalize">
+        <div className="absolute top-3 right-3 bg-secondary/60 text-secondary-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm capitalize">
           {familyLabel(params)}
         </div>
       </div>
@@ -119,7 +119,7 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
 
       <div className="p-4 space-y-2">
         <h3 className="text-sm font-semibold text-foreground">{flower.title}</h3>
-        <p className="text-[10px] text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Word:{' '}
           <span className="font-medium text-foreground font-mono">{flower.generationWord}</span>
         </p>
@@ -157,12 +157,12 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
             href={flower.tokenUri}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[10px] text-primary hover:underline mt-1"
+            className="flex items-center gap-1.5 text-xs text-primary hover:underline mt-1"
           >
             Metadata <ExternalLink className="w-3 h-3" />
           </a>
         ) : (
-          <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
             <ExternalLink className="w-3 h-3" /> No metadata URI
           </span>
         )}
@@ -188,7 +188,7 @@ export default function NftCollection() {
           <p className="text-sm text-muted-foreground">No minted NFTs yet. Create and mint your first flower!</p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {mintedFlowers.map((flower, i) => (
             <NftCard key={flower.id} flower={flower} index={i} />
           ))}

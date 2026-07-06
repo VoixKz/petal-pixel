@@ -156,14 +156,14 @@ export default function MyFlowers() {
 
       {savedFlowers.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by title or word…"
               aria-label="Search flowers"
-              className="w-56 bg-secondary text-xs text-foreground rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/40"
+              className="w-full sm:w-56 bg-secondary text-xs text-foreground rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/40"
             />
           </div>
 
@@ -231,7 +231,7 @@ export default function MyFlowers() {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {visible.map((flower, i) => (
           <motion.div
             key={flower.id}
@@ -255,11 +255,11 @@ export default function MyFlowers() {
                 />
               </div>
               {flower.isMinted && (
-                <div className="absolute top-3 right-3 flex items-center gap-1 bg-accent/20 text-accent-foreground text-[10px] px-2 py-1 rounded-full backdrop-blur-sm">
+                <div className="absolute top-3 right-3 flex items-center gap-1 bg-accent/20 text-accent-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm">
                   <Gem className="w-3 h-3" /> NFT
                 </div>
               )}
-              <div className="absolute bottom-3 left-3 text-[10px] px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm capitalize">
+              <div className="absolute bottom-3 left-3 text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm capitalize">
                 {familyLabel(flower.params)}
               </div>
               <button
@@ -267,20 +267,20 @@ export default function MyFlowers() {
                   e.stopPropagation();
                   setDeleteTarget({ id: flower.id, title: flower.title });
                 }}
-                className="absolute top-3 left-3 w-7 h-7 rounded-full bg-rose-500/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-500/30"
+                className="absolute top-3 left-3 w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-rose-500/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                 title="Delete flower"
               >
-                <Trash2 className="w-3 h-3 text-rose-400" />
+                <Trash2 className="w-4 h-4 text-rose-400" />
               </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleEdit(flower);
                 }}
-                className="absolute bottom-3 right-3 flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                className="absolute bottom-3 right-3 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                 title="Edit flower"
               >
-                <Pencil className="w-3 h-3" /> Edit
+                <Pencil className="w-3.5 h-3.5" /> Edit
               </button>
             </div>
 
@@ -302,23 +302,23 @@ export default function MyFlowers() {
                         e.stopPropagation();
                         setRenamingId(flower.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0 p-1.5 -m-1.5 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                       title="Rename flower"
                     >
-                      <Pencil className="w-3 h-3" />
+                      <Pencil className="w-4 h-4" />
                     </button>
                   </>
                 )}
               </div>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Word: <span className="text-primary font-mono">{flower.generationWord}</span>
               </p>
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="w-3 h-3" /> {flower.createdAt}
                 </span>
                 <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  className={`text-xs px-2 py-0.5 rounded-full ${
                     flower.isMinted
                       ? 'bg-primary/10 text-primary'
                       : 'bg-secondary text-secondary-foreground'
