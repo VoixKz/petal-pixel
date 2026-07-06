@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,7 +10,7 @@ import Index from "./pages/Index";
 import CreateFlower from "./pages/CreateFlower";
 import MyFlowers from "./pages/MyFlowers";
 import NftCollection from "./pages/NftCollection";
-import Payments from "./pages/Payments";
+import Activity from "./pages/Activity";
 import Profile from "./pages/Profile";
 import SettingsPage from "./pages/SettingsPage";
 import Login from "./pages/Login";
@@ -54,7 +54,8 @@ const router = createBrowserRouter([
           { path: "/create", element: <PageErrorBoundary><CreateFlower /></PageErrorBoundary> },
           { path: "/my-flowers", element: <PageErrorBoundary><MyFlowers /></PageErrorBoundary> },
           { path: "/nfts", element: <PageErrorBoundary><NftCollection /></PageErrorBoundary> },
-          { path: "/payments", element: <PageErrorBoundary><Payments /></PageErrorBoundary> },
+          { path: "/activity", element: <PageErrorBoundary><Activity /></PageErrorBoundary> },
+          { path: "/payments", element: <Navigate to="/activity" replace /> },
           { path: "/profile", element: <PageErrorBoundary><Profile /></PageErrorBoundary> },
           { path: "/settings", element: <PageErrorBoundary><SettingsPage /></PageErrorBoundary> },
         ],

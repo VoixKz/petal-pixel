@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  LayoutDashboard, Flower2, PlusCircle, Gem, CreditCard, User, Settings, LogOut, Sparkles,
+  LayoutDashboard, Flower2, PlusCircle, Gem, Activity, User, Settings, LogOut, Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -10,7 +10,7 @@ const navItems = [
   { label: 'My Flowers', icon: Flower2, path: '/my-flowers' },
   { label: 'Create Flower', icon: PlusCircle, path: '/create' },
   { label: 'NFT Collection', icon: Gem, path: '/nfts' },
-  { label: 'Payments', icon: CreditCard, path: '/payments' },
+  { label: 'Activity', icon: Activity, path: '/activity' },
   { label: 'Profile', icon: User, path: '/profile' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
