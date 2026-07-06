@@ -1,7 +1,8 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, User, Sparkles } from 'lucide-react';
+import { LogOut, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { generativeAvatarDataUri } from '@/lib/generativeAvatar';
 import { NAV_ITEMS } from './navItems';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -61,11 +62,14 @@ export function SidebarBody({
       <div className="p-3 border-t border-sidebar-border space-y-1">
         <div className="flex items-center gap-3 px-3 py-2">
           <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center overflow-hidden">
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <User className="w-4 h-4 text-muted-foreground" />
-            )}
+            <img
+              src={
+                profile?.avatar_url?.trim() ||
+                generativeAvatarDataUri(profile?.display_name || user?.email || 'petal', 64)
+              }
+              alt="Your avatar"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-sidebar-accent-foreground truncate">
