@@ -1373,6 +1373,10 @@ type PrepareMintRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	FlowerId      string                 `protobuf:"bytes,1,opt,name=flower_id,json=flowerId,proto3" json:"flower_id,omitempty"`
 	WalletAddress string                 `protobuf:"bytes,2,opt,name=wallet_address,json=walletAddress,proto3" json:"wallet_address,omitempty"`
+	// Optional PNG snapshot of the rendered flower (<= 2 MiB). When non-empty the
+	// backend stores it at images/<flower_id>.png and references it as the
+	// metadata image. Empty means "no image" (back-compat).
+	ImagePng      []byte `protobuf:"bytes,3,opt,name=image_png,json=imagePng,proto3" json:"image_png,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1419,6 +1423,13 @@ func (x *PrepareMintRequest) GetWalletAddress() string {
 		return x.WalletAddress
 	}
 	return ""
+}
+
+func (x *PrepareMintRequest) GetImagePng() []byte {
+	if x != nil {
+		return x.ImagePng
+	}
+	return nil
 }
 
 type PrepareMintResponse struct {
@@ -1755,10 +1766,11 @@ const file_flower_v1_service_proto_rawDesc = "" +
 	"\tflower_id\x18\x01 \x01(\tR\bflowerId\"a\n" +
 	"\x11GetFlowerResponse\x12\x1b\n" +
 	"\tflower_id\x18\x01 \x01(\tR\bflowerId\x12/\n" +
-	"\x06params\x18\x02 \x01(\v2\x17.flower.v1.FlowerParamsR\x06params\"X\n" +
+	"\x06params\x18\x02 \x01(\v2\x17.flower.v1.FlowerParamsR\x06params\"u\n" +
 	"\x12PrepareMintRequest\x12\x1b\n" +
 	"\tflower_id\x18\x01 \x01(\tR\bflowerId\x12%\n" +
-	"\x0ewallet_address\x18\x02 \x01(\tR\rwalletAddress\"\xf9\x01\n" +
+	"\x0ewallet_address\x18\x02 \x01(\tR\rwalletAddress\x12\x1b\n" +
+	"\timage_png\x18\x03 \x01(\fR\bimagePng\"\xf9\x01\n" +
 	"\x13PrepareMintResponse\x12\x1b\n" +
 	"\tflower_id\x18\x01 \x01(\tR\bflowerId\x12\x19\n" +
 	"\bchain_id\x18\x02 \x01(\x04R\achainId\x12)\n" +

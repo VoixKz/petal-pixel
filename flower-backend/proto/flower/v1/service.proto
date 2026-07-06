@@ -188,6 +188,10 @@ message GetFlowerResponse {
 message PrepareMintRequest {
   string flower_id = 1;
   string wallet_address = 2;
+  // Optional PNG snapshot of the rendered flower (<= 2 MiB). When non-empty the
+  // backend stores it at images/<flower_id>.png and references it as the
+  // metadata image. Empty means "no image" (back-compat).
+  bytes image_png = 3;
 }
 
 message PrepareMintResponse {

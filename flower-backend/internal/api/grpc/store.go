@@ -55,8 +55,9 @@ type Store struct {
 }
 
 type FlowerRow struct {
-	FlowerID string
-	Params   flower.Params
+	FlowerID   string
+	PersonName string
+	Params     flower.Params
 }
 
 func NewStore(db *sql.DB) *Store {
@@ -92,7 +93,7 @@ func (s *Store) GetFlower(ctx context.Context, flowerID string) (*FlowerRow, err
 	var paramsJSON []byte
 	var row FlowerRow
 	row.FlowerID = flowerID
-	err := s.db.QueryRowContext(ctx, `select params from flowers where flower_id = $1`, flowerID).Scan(&paramsJSON)
+	err := s.db.QueryRowContext(ctx, `select person_name, params from flowers where flower_id = $1`, flowerID).Scan(&row.PersonName, &paramsJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, status.Error(codes.NotFound, "flower not found")

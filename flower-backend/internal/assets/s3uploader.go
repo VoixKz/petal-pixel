@@ -78,17 +78,7 @@ func (u *S3Uploader) EnsureBucket(ctx context.Context) error {
 }
 
 func (u *S3Uploader) PutJSON(ctx context.Context, key string, data []byte) (string, error) {
-	key = strings.TrimLeft(key, "/")
-	_, err := u.uploader.Upload(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(u.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(data),
-		ContentType: aws.String("application/json"),
-	})
-	if err != nil {
-		return "", err
-	}
-	return u.publicURL(key)
+	return u.PutBytes(ctx, key, "application/json", bytes.NewReader(data))
 }
 
 func (u *S3Uploader) PutBytes(ctx context.Context, key, contentType string, r io.Reader) (string, error) {

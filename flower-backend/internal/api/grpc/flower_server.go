@@ -1,6 +1,7 @@
 package grpcapi
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -13,6 +14,16 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// maxImagePngBytes bounds the optional mint snapshot (2 MiB).
+const maxImagePngBytes = 2 << 20
+
+func validateImagePng(png []byte) error {
+	if len(png) > maxImagePngBytes {
+		return status.Errorf(codes.InvalidArgument, "image_png exceeds %d bytes", maxImagePngBytes)
+	}
+	return nil
+}
 
 type FlowerServer struct {
 	flowerv1.UnimplementedFlowerServiceServer
@@ -91,13 +102,28 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 	if wallet == "" {
 		return nil, status.Error(codes.InvalidArgument, "wallet_address is required")
 	}
+	if err := validateImagePng(req.GetImagePng()); err != nil {
+		return nil, err
+	}
 
 	f, err := s.store.GetFlower(ctx, flowerID)
 	if err != nil {
 		return nil, err
 	}
 
-	metadataJSON, err := nft.BuildMetadata("unknown", flowerID, f.Params.Seed, f.Params.AlgoVersion, nil)
+	imageURL := ""
+	if png := req.GetImagePng(); len(png) > 0 {
+		imageURL, err = s.upl.PutBytes(ctx, "images/"+flowerID+".png", "image/png", bytes.NewReader(png))
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to upload image")
+		}
+	}
+
+	personName := strings.TrimSpace(f.PersonName)
+	if personName == "" {
+		personName = "unknown" // pre-existing rows written before person_name was loaded
+	}
+	metadataJSON, err := nft.BuildMetadata(personName, flowerID, f.Params.Seed, f.Params.AlgoVersion, imageURL, nil)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to build metadata")
 	}

@@ -17,10 +17,11 @@ type Metadata struct {
 	Attributes  []Attribute `json:"attributes,omitempty"`
 }
 
-func BuildMetadata(personName, flowerID string, seed uint64, algoVersion string, attrs []Attribute) ([]byte, error) {
+func BuildMetadata(personName, flowerID string, seed uint64, algoVersion, imageURL string, attrs []Attribute) ([]byte, error) {
 	m := Metadata{
 		Name:        fmt.Sprintf("Flower for %s", personName),
 		Description: "A personalized procedural 3D flower.",
+		Image:       imageURL,
 		Attributes: append([]Attribute{
 			{TraitType: "flower_id", Value: flowerID},
 			{TraitType: "seed", Value: seed},
