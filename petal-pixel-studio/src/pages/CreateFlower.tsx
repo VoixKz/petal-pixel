@@ -695,11 +695,18 @@ export default function CreateFlower() {
       const contract = new Contract(prepared.contractAddress, mintAbi, signer);
 
       const tx = await contract.mint(prepared.mintTo || signerAddress, prepared.mintTokenUri || prepared.tokenUri);
-      setMintTxHash(tx.hash as string);
       toast.info(`Mint tx sent: ${tx.hash}`);
 
+      // Finding 3: don't set mintTxHash (which drives the emerald "success"
+      // banner) until tx.wait() actually resolves. A submitted tx can still
+      // revert on-chain (e.g. the documented onlyOwner revert for a wrong
+      // wallet) — tx.wait() throws in that case and is caught below, but if
+      // we'd already stamped the hash into state, the success-styled banner
+      // would still show a failed/reverted tx. Only a confirmed tx may
+      // populate mintTxHash.
       const receipt = await tx.wait();
       const confirmedHash = (receipt?.hash as string | undefined) || (tx.hash as string);
+      setMintTxHash(confirmedHash);
       await confirmMintViaGrpc(params.flowerId, confirmedHash);
 
       // ERC-721 Transfer(from=0x0, to, tokenId): tokenId is the third indexed topic.
