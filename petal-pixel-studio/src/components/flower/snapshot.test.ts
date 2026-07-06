@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { registerSnapshotter, captureFlowerPng, fitWithin } from './snapshot';
+import {
+  registerRenderer,
+  captureFlowerPng,
+  renderToBlob,
+  fitWithin,
+  frameCameraForBounds,
+} from './snapshot';
 
 describe('fitWithin', () => {
   it('leaves dimensions already within max untouched', () => {
@@ -23,38 +29,80 @@ describe('fitWithin', () => {
   });
 });
 
-describe('snapshot registry', () => {
-  it('resolves null when no snapshotter is registered', async () => {
-    await expect(captureFlowerPng()).resolves.toBeNull();
+describe('renderer registry', () => {
+  it('resolves null when no renderer is registered', async () => {
+    await expect(renderToBlob()).resolves.toBeNull();
   });
 
-  it('delegates to the registered snapshotter', async () => {
-    const blob = new Blob(['png-bytes'], { type: 'image/png' });
-    const unregister = registerSnapshotter(async () => blob);
-    await expect(captureFlowerPng()).resolves.toBe(blob);
-    unregister();
+  it('passes opts through to the registered renderer', async () => {
+    const seen: unknown[] = [];
+    const blob = new Blob(['x'], { type: 'image/png' });
+    const off = registerRenderer(async (opts) => {
+      seen.push(opts);
+      return blob;
+    });
+    await expect(renderToBlob({ size: 1024, background: 'studio' })).resolves.toBe(blob);
+    expect(seen[0]).toEqual({ size: 1024, background: 'studio' });
+    off();
+  });
+
+  it('captureFlowerPng requests the studio 1024 preset', async () => {
+    const seen: unknown[] = [];
+    const off = registerRenderer(async (opts) => {
+      seen.push(opts);
+      return new Blob();
+    });
+    await captureFlowerPng();
+    expect(seen[0]).toEqual({ size: 1024, background: 'studio' });
+    off();
   });
 
   it('resolves null again after unregister', async () => {
-    const unregister = registerSnapshotter(async () => new Blob());
-    unregister();
-    await expect(captureFlowerPng()).resolves.toBeNull();
+    const off = registerRenderer(async () => new Blob());
+    off();
+    await expect(renderToBlob()).resolves.toBeNull();
   });
 
   it('a stale unregister does not clobber a newer registration', async () => {
-    const staleUnregister = registerSnapshotter(async () => null);
+    const stale = registerRenderer(async () => null);
     const blob = new Blob(['newer'], { type: 'image/png' });
-    const newerUnregister = registerSnapshotter(async () => blob);
-    staleUnregister(); // must be a no-op: it is not the current snapshotter
-    await expect(captureFlowerPng()).resolves.toBe(blob);
-    newerUnregister();
+    const newer = registerRenderer(async () => blob);
+    stale(); // must be a no-op: it is not the current renderer
+    await expect(renderToBlob()).resolves.toBe(blob);
+    newer();
   });
 
-  it('resolves null instead of rejecting when the snapshotter throws', async () => {
-    const unregister = registerSnapshotter(async () => {
+  it('resolves null instead of rejecting when the renderer throws', async () => {
+    const off = registerRenderer(async () => {
       throw new Error('WebGL context lost');
     });
+    await expect(renderToBlob()).resolves.toBeNull();
     await expect(captureFlowerPng()).resolves.toBeNull();
-    unregister();
+    off();
+  });
+});
+
+describe('frameCameraForBounds', () => {
+  const b = { center: { x: 0, y: -0.4, z: 0 }, radius: 1 } as const;
+
+  it('places the camera so the bounding sphere fits the vertical FOV with margin', () => {
+    const r = frameCameraForBounds(b.center, b.radius, 45, 1 /* aspect */, 1.35);
+    // distance = radius / sin(fov/2) * margin for a sphere at aspect 1.
+    const expected = (1 / Math.sin((45 * Math.PI) / 180 / 2)) * 1.35;
+    expect(r.distance).toBeCloseTo(expected, 5);
+    expect(r.position.x).toBeCloseTo(b.center.x + expected * 0.5, 5);
+    expect(r.target).toEqual(b.center);
+  });
+
+  it('widens distance when aspect < 1 so nothing is cropped horizontally', () => {
+    const wide = frameCameraForBounds(b.center, b.radius, 45, 1, 1.35).distance;
+    const narrow = frameCameraForBounds(b.center, b.radius, 45, 0.5, 1.35).distance;
+    expect(narrow).toBeGreaterThan(wide);
+  });
+
+  it('never returns a non-finite or zero distance for a degenerate radius', () => {
+    const r = frameCameraForBounds(b.center, 0, 45, 1, 1.35);
+    expect(Number.isFinite(r.distance)).toBe(true);
+    expect(r.distance).toBeGreaterThan(0);
   });
 });
