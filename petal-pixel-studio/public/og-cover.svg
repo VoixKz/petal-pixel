@@ -1,0 +1,70 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="petal" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="0.55" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a78bfa"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c7d2fe"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.72" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#1b1436" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#0a0a12" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="630" fill="#0a0a12"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <!-- faint grid -->
+  <g stroke="#ffffff" stroke-opacity="0.035" stroke-width="1">
+    <path d="M0 78 H1200 M0 156 H1200 M0 234 H1200 M0 312 H1200 M0 390 H1200 M0 468 H1200 M0 546 H1200"/>
+    <path d="M78 0 V630 M156 0 V630 M234 0 V630 M312 0 V630 M390 0 V630 M468 0 V630 M546 0 V630 M624 0 V630 M702 0 V630 M780 0 V630 M858 0 V630 M936 0 V630 M1014 0 V630 M1092 0 V630 M1170 0 V630"/>
+  </g>
+
+  <!-- generative rose (rhodonea-like) motif, right side -->
+  <g transform="translate(1010 300) scale(0.92)">
+    <g filter="url(#soft)" opacity="0.35">
+      <g fill="url(#petal)">
+        <!-- 12 rotated petals -->
+        <ellipse cx="0" cy="-118" rx="34" ry="120"/>
+        <g transform="rotate(30)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(60)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(90)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(120)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(150)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(180)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(210)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(240)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(270)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(300)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+        <g transform="rotate(330)"><ellipse cx="0" cy="-118" rx="34" ry="120"/></g>
+      </g>
+    </g>
+    <g fill="url(#petal)" fill-opacity="0.92">
+      <ellipse cx="0" cy="-96" rx="26" ry="96"/>
+      <g transform="rotate(45)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(90)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(135)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(180)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(225)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(270)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+      <g transform="rotate(315)"><ellipse cx="0" cy="-96" rx="26" ry="96"/></g>
+    </g>
+    <circle cx="0" cy="0" r="30" fill="#0a0a12"/>
+    <circle cx="0" cy="0" r="30" fill="url(#petal)" fill-opacity="0.25"/>
+  </g>
+
+  <!-- wordmark + tagline, left -->
+  <g transform="translate(96 250)" font-family="'DejaVu Sans','Helvetica Neue',Arial,sans-serif">
+    <text x="0" y="0" font-size="30" letter-spacing="8" fill="#34d399" font-weight="700">PETAL PIXEL</text>
+    <text x="-2" y="86" font-size="92" fill="url(#wordmark)" font-weight="700">A name becomes</text>
+    <text x="-2" y="176" font-size="92" fill="url(#wordmark)" font-weight="700">a flower.</text>
+    <text x="0" y="238" font-size="30" fill="#9aa0b4" font-weight="400">Deterministic generative botany, minted on-chain.</text>
+  </g>
+</svg>
