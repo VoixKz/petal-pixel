@@ -1,73 +1,288 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Bell, Moon, Globe, Sun } from 'lucide-react';
+import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import {
+  Bell,
+  Moon,
+  Sun,
+  KeyRound,
+  LogOut,
+  Mail,
+  Trash2,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  getPrefs,
+  setPref,
+  type UserPrefKey,
+  type UserPrefs,
+} from '@/lib/userPrefs';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 export default function SettingsPage() {
+  const reduceMotion = useReducedMotion();
   const { theme, setTheme } = useTheme();
   const isDark = theme === 'dark';
 
-  const [emailNotif, setEmailNotif] = useState(() => {
-    try { return localStorage.getItem('petal-email-notif') === 'true'; } catch { return true; }
-  });
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const isVerified = user?.email_confirmed_at != null;
 
-  useEffect(() => {
-    try { localStorage.setItem('petal-email-notif', String(emailNotif)); } catch { /* noop */ }
-  }, [emailNotif]);
+  // Notification prefs are device-local. Seed React state from storage once,
+  // then keep UI and storage in lockstep: each toggle writes and reads back the
+  // merged snapshot returned by setPref.
+  const [prefs, setPrefs] = useState<UserPrefs>(getPrefs);
+  const toggle = (key: UserPrefKey, value: boolean) => {
+    setPrefs(setPref(key, value));
+  };
+
+  const handleChangePassword = async () => {
+    const email = user?.email;
+    if (!email) {
+      toast.error('No email on file for this account.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success('Password reset link sent — check your email.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const handleDeleteAccount = () => {
+    const confirmed = window.confirm(
+      'Delete your account permanently? This cannot be undone.',
+    );
+    if (!confirmed) return;
+    // Supabase does not expose user self-deletion on the anon client, so we do
+    // not fake an irreversible action. Be honest that this needs a backend.
+    toast.error('Account deletion needs the backend. This is not available yet.');
+  };
+
+  const intro = reduceMotion
+    ? {}
+    : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-foreground">Settings</h1>
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-card rounded-xl border border-border p-5 max-w-lg space-y-4"
-      >
-        <div className="flex items-center justify-between py-2">
-          <div className="flex items-center gap-3">
-            {isDark ? <Moon className="w-4 h-4 text-muted-foreground" /> : <Sun className="w-4 h-4 text-amber-400" />}
-            <div>
-              <Label htmlFor="dark-mode-switch" className="text-sm font-medium text-foreground">Dark mode</Label>
-              <p className="text-[10px] text-muted-foreground">Toggle between dark and light theme</p>
-            </div>
+      <motion.div {...intro} className="max-w-2xl space-y-6">
+        {/* Appearance ------------------------------------------------------ */}
+        <section
+          aria-labelledby="settings-appearance-heading"
+          className="bg-card rounded-xl border border-border p-5 space-y-4"
+        >
+          <div>
+            <h2
+              id="settings-appearance-heading"
+              className="text-sm font-semibold text-foreground"
+            >
+              Appearance
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              How Petal Pixel looks on this device.
+            </p>
           </div>
-          <Switch
-            id="dark-mode-switch"
-            aria-label="Dark mode"
-            checked={isDark}
-            onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')}
-          />
-        </div>
 
-        <div className="flex items-center justify-between py-2">
-          <div className="flex items-center gap-3">
-            <Bell className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <Label htmlFor="email-notif-switch" className="text-sm font-medium text-foreground">Email notifications</Label>
-              <p className="text-[10px] text-muted-foreground">Receive updates about your NFTs</p>
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              {isDark ? (
+                <Moon className="w-4 h-4 text-muted-foreground" />
+              ) : (
+                <Sun className="w-4 h-4 text-amber-400" />
+              )}
+              <div>
+                <Label
+                  htmlFor="dark-mode-switch"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Dark mode
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Toggle between dark and light theme. Remembered across visits.
+                </p>
+              </div>
             </div>
+            <Switch
+              id="dark-mode-switch"
+              aria-label="Dark mode"
+              checked={isDark}
+              onCheckedChange={(v) => setTheme(v ? 'dark' : 'light')}
+            />
           </div>
-          <Switch
-            id="email-notif-switch"
-            aria-label="Email notifications"
-            checked={emailNotif}
-            onCheckedChange={setEmailNotif}
-          />
-        </div>
+        </section>
 
-        <div className="flex items-center justify-between py-2">
-          <div className="flex items-center gap-3">
-            <Globe className="w-4 h-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-medium text-foreground">Language</p>
-              <p className="text-[10px] text-muted-foreground">English (US)</p>
-            </div>
+        {/* Notifications --------------------------------------------------- */}
+        <section
+          aria-labelledby="settings-notifications-heading"
+          className="bg-card rounded-xl border border-border p-5 space-y-4"
+        >
+          <div>
+            <h2
+              id="settings-notifications-heading"
+              className="text-sm font-semibold text-foreground"
+            >
+              Notifications
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Preferences saved on this device. No delivery backend is wired up
+              yet.
+            </p>
           </div>
-          <span className="text-xs text-muted-foreground">English</span>
-        </div>
+
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <Mail className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <Label
+                  htmlFor="email-notif-switch"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Email notifications
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Remembers your preference on this device. Email delivery is not
+                  wired up yet.
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="email-notif-switch"
+              aria-label="Email notifications"
+              checked={prefs.emailNotifications}
+              onCheckedChange={(v) => toggle('emailNotifications', v)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-3">
+              <Bell className="w-4 h-4 text-muted-foreground" />
+              <div>
+                <Label
+                  htmlFor="mint-alerts-switch"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Mint activity alerts
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Saved locally. In-app only until the backend sends events.
+                </p>
+              </div>
+            </div>
+            <Switch
+              id="mint-alerts-switch"
+              aria-label="Mint activity alerts"
+              checked={prefs.mintActivityAlerts}
+              onCheckedChange={(v) => toggle('mintActivityAlerts', v)}
+            />
+          </div>
+        </section>
+
+        {/* Account --------------------------------------------------------- */}
+        <section
+          aria-labelledby="settings-account-heading"
+          className="bg-card rounded-xl border border-border p-5 space-y-4"
+        >
+          <div>
+            <h2
+              id="settings-account-heading"
+              className="text-sm font-semibold text-foreground"
+            >
+              Account
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Your sign-in identity and session.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 py-2">
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Email</p>
+              <p className="font-mono text-sm text-foreground truncate">
+                {user?.email ?? '—'}
+              </p>
+            </div>
+            {isVerified ? (
+              <span
+                aria-label="Email verified"
+                className="text-xs font-medium text-emerald-400"
+              >
+                Verified
+              </span>
+            ) : (
+              <span
+                aria-label="Email not verified"
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Unverified
+              </span>
+            )}
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              variant="outline"
+              className="h-10 sm:flex-1"
+              onClick={() => void handleChangePassword()}
+            >
+              <KeyRound className="w-4 h-4" />
+              Change password
+            </Button>
+            <Button
+              variant="outline"
+              className="h-10 sm:flex-1"
+              onClick={() => void handleSignOut()}
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </Button>
+          </div>
+        </section>
+
+        {/* Danger zone ----------------------------------------------------- */}
+        <section
+          aria-labelledby="settings-danger-heading"
+          className="bg-card rounded-xl border border-destructive/40 p-5 space-y-4"
+        >
+          <div>
+            <h2
+              id="settings-danger-heading"
+              className="text-sm font-semibold text-destructive"
+            >
+              Danger zone
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Permanently removes your account and all associated data. This
+              cannot be undone.
+            </p>
+          </div>
+
+          <Button
+            variant="destructive"
+            className="h-10 w-full sm:w-auto"
+            onClick={handleDeleteAccount}
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete account
+          </Button>
+        </section>
       </motion.div>
     </div>
   );

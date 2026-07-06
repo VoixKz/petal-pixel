@@ -1,13 +1,35 @@
 import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import SettingsPage from "./SettingsPage";
+import { getPref } from "@/lib/userPrefs";
+
+// The rebuilt page reads useAuth() and calls supabase.auth.resetPasswordForEmail.
+// The real supabase client throws at import time without env vars, and AuthProvider
+// needs a full auth stack — so mock both to render the page in isolation.
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: { email: "a@b.co", email_confirmed_at: null },
+    signOut: vi.fn(),
+  }),
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    auth: {
+      resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
+    },
+  },
+}));
 
 function renderPage() {
   return render(
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-      <SettingsPage />
-    </ThemeProvider>,
+    <MemoryRouter>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        <SettingsPage />
+      </ThemeProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -41,5 +63,14 @@ describe("SettingsPage a11y", () => {
     // resulting click directly to assert the toggle wiring.
     fireEvent.click(emailSwitch);
     expect(emailSwitch.getAttribute("aria-checked")).not.toBe(before);
+  });
+
+  it("toggling Email notifications persists to userPrefs storage", () => {
+    renderPage();
+    // Starts off (honest default: no backend delivery wired up).
+    expect(getPref("emailNotifications")).toBe(false);
+    const emailSwitch = screen.getByRole("switch", { name: /email notifications/i });
+    fireEvent.click(emailSwitch);
+    expect(getPref("emailNotifications")).toBe(true);
   });
 });
