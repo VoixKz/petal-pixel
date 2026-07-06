@@ -304,6 +304,17 @@ func flowerIDFromPath(path, prefix string) string {
 // lowercase hex chars (the server derives ids as "flw_"+hex(sha256(...)[0:8])).
 var flowerIDPattern = regexp.MustCompile(`^flw_[0-9a-f]{16}$`)
 
+// pngMagic is the 8-byte signature every PNG file begins with (see the PNG spec,
+// §5.2): a high bit, "PNG", a CRLF, a DOS EOF, and a trailing LF.
+var pngMagic = []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}
+
+// isPNG reports whether b begins with the PNG magic signature. The preview
+// upload key is served with a forced image/png content-type, so bytes that are
+// not actually a PNG are rejected before the write.
+func isPNG(b []byte) bool {
+	return bytes.HasPrefix(b, pngMagic)
+}
+
 // isValidFlowerID reports whether id has the exact canonical flower-id format.
 // This is the interim mitigation against path-traversal / arbitrary-S3-key
 // injection: Go percent-decodes r.URL.Path, so an unvalidated id can smuggle
@@ -512,6 +523,13 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.
 	}
 	if len(data) == 0 {
 		http.Error(w, `{"error":"empty body"}`, http.StatusBadRequest)
+		return
+	}
+	// Reject non-PNG bytes: the key is written with a forced image/png
+	// content-type, so anything that is not actually a PNG would be served under a
+	// lie. Verify the 8-byte PNG magic signature before the write.
+	if !isPNG(data) {
+		http.Error(w, `{"error":"not a png"}`, http.StatusBadRequest)
 		return
 	}
 	imageKey := "images/" + id + ".png"
