@@ -22,16 +22,14 @@ export function paletteGradient(stops: PaletteStop[]): string {
   return `linear-gradient(90deg, ${parts.join(", ")})`;
 }
 
-function titleCase(value: string): string {
-  if (!value) return value;
-  return value[0].toUpperCase() + value.slice(1);
-}
-
 /**
- * Family display label: v2 records carry `family`; v1 records (pre-family
- * rollout) carry only `flowerType`. Falls back to "Classic" when neither is
- * present. Title-Cased for display (e.g. "sunflower" -> "Sunflower").
+ * Family label: v2 records carry `family`; v1 records (pre-family rollout)
+ * carry only `flowerType`. Falls back to "classic" when neither is present.
+ *
+ * Returns the RAW lowercase value (the canonical family/flowerType key) so it
+ * can be used directly in string-equality filters and grouping (My Flowers).
+ * Apply display casing at the render site with the CSS `capitalize` class.
  */
 export function familyLabel(p: { family?: string; flowerType?: string }): string {
-  return titleCase(p.family ?? p.flowerType ?? "classic");
+  return p.family ?? p.flowerType ?? "classic";
 }

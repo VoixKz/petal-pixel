@@ -63,27 +63,25 @@ describe("paletteGradient", () => {
 });
 
 describe("familyLabel", () => {
-  it("Title-Cases a v2 family", () => {
-    expect(familyLabel({ family: "sunflower" })).toBe("Sunflower");
-  });
-
-  it("Title-Cases a multi-word-ish family (hyphen/underscore treated as a single word boundary-free token)", () => {
-    expect(familyLabel({ family: "rhodonea" })).toBe("Rhodonea");
+  // familyLabel returns the RAW canonical key (lowercase) for use in
+  // string-equality filters/grouping; display sites apply CSS `capitalize`.
+  it("returns the raw v2 family key", () => {
+    expect(familyLabel({ family: "sunflower" })).toBe("sunflower");
   });
 
   it("falls back to flowerType when family is absent (v1 records)", () => {
-    expect(familyLabel({ flowerType: "rose" })).toBe("Rose");
+    expect(familyLabel({ flowerType: "rose" })).toBe("rose");
   });
 
   it("prefers family over flowerType when both are present", () => {
-    expect(familyLabel({ family: "superformula", flowerType: "classic" })).toBe("Superformula");
+    expect(familyLabel({ family: "superformula", flowerType: "classic" })).toBe("superformula");
   });
 
-  it("falls back to 'Classic' when neither family nor flowerType is present", () => {
-    expect(familyLabel({})).toBe("Classic");
+  it("falls back to 'classic' when neither family nor flowerType is present", () => {
+    expect(familyLabel({})).toBe("classic");
   });
 
-  it("Title-Cases every known v2 family", () => {
+  it("returns every known v2 family verbatim (no case transform)", () => {
     const families = [
       "classic",
       "rose",
@@ -96,7 +94,7 @@ describe("familyLabel", () => {
       "superformula",
     ] as const;
     for (const family of families) {
-      expect(familyLabel({ family })).toBe(family[0].toUpperCase() + family.slice(1));
+      expect(familyLabel({ family })).toBe(family);
     }
   });
 });

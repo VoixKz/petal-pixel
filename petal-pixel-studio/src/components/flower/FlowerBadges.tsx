@@ -14,7 +14,7 @@ export function FlowerBadges() {
 
   return (
     <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 pointer-events-none">
-      <span className="glass-panel rounded-full px-2.5 py-1 text-[10px] font-mono text-foreground">
+      <span className="glass-panel rounded-full px-2.5 py-1 text-[10px] font-mono text-foreground capitalize">
         {familyLabel(params)}
       </span>
       {palette && palette.stops.length > 0 && (

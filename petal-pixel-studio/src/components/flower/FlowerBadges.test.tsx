@@ -26,7 +26,7 @@ describe('FlowerBadges', () => {
       params: { ...s.params, family: undefined, palette: undefined, flowerType: 'rose' },
     }));
     render(<FlowerBadges />);
-    expect(screen.getByText('Rose')).toBeInTheDocument();
+    expect(screen.getByText('rose')).toBeInTheDocument();
     expect(screen.queryByText(basePalette.id)).not.toBeInTheDocument();
   });
 
@@ -35,7 +35,7 @@ describe('FlowerBadges', () => {
       params: { ...s.params, family: 'sunflower', palette: basePalette, flowerType: 'classic' },
     }));
     render(<FlowerBadges />);
-    expect(screen.getByText('Sunflower')).toBeInTheDocument();
+    expect(screen.getByText('sunflower')).toBeInTheDocument();
     expect(screen.getByText(basePalette.id)).toBeInTheDocument();
   });
 
@@ -57,7 +57,7 @@ describe('FlowerBadges', () => {
       params: { ...s.params, family: 'sunflower', palette: { id: 'empty', stops: [] }, flowerType: 'classic' },
     }));
     render(<FlowerBadges />);
-    expect(screen.getByText('Sunflower')).toBeInTheDocument();
+    expect(screen.getByText('sunflower')).toBeInTheDocument();
     expect(screen.queryByText('empty')).not.toBeInTheDocument();
   });
 });
