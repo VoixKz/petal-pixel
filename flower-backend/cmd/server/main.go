@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -186,7 +187,7 @@ func main() {
 		if strings.HasPrefix(r.URL.Path, "/api/flowers/") {
 			id := flowerIDFromPath(r.URL.Path, "/api/flowers/")
 			if strings.HasSuffix(r.URL.Path, "/preview") {
-				handleUploadPreview(w, r, upl, id)
+				handleUploadPreview(w, r, store, upl, id)
 				return
 			}
 			handlePublicFlower(w, r, store, id)
@@ -299,12 +300,31 @@ func flowerIDFromPath(path, prefix string) string {
 	return strings.Trim(id, "/")
 }
 
+// flowerIDPattern matches a canonical flower id: "flw_" followed by exactly 16
+// lowercase hex chars (the server derives ids as "flw_"+hex(sha256(...)[0:8])).
+var flowerIDPattern = regexp.MustCompile(`^flw_[0-9a-f]{16}$`)
+
+// isValidFlowerID reports whether id has the exact canonical flower-id format.
+// This is the interim mitigation against path-traversal / arbitrary-S3-key
+// injection: Go percent-decodes r.URL.Path, so an unvalidated id can smuggle
+// "/" and "." into the "images/<id>.png" key. Rejecting anything that is not
+// ^flw_[0-9a-f]{16}$ removes that surface before any key is constructed.
+func isValidFlowerID(id string) bool {
+	return flowerIDPattern.MatchString(id)
+}
+
 // handleShare renders the per-flower Open Graph / Twitter HTML document that
 // social scrapers fetch. Humans are forwarded to the SPA landing. An unknown id
 // (or a backend with no store) still returns a valid branded doc pointing at the
 // frontend so stale links degrade gracefully.
 func handleShare(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, s3PublicBaseURL, frontendURL string) {
 	id := flowerIDFromPath(r.URL.Path, "/share/")
+	// Reject malformed ids (path traversal / arbitrary-key input) before touching
+	// the store or building any S3 key.
+	if !isValidFlowerID(id) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 	appURL := frontendURL + "/share/" + id
 	shareURL := shareCanonicalURL(r)
 
@@ -399,8 +419,10 @@ func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.S
 		http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
 		return
 	}
-	if id == "" {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	// Reject malformed ids (path traversal / arbitrary-key input) before the store
+	// is queried.
+	if !isValidFlowerID(id) {
+		http.Error(w, `{"error":"invalid flower id"}`, http.StatusBadRequest)
 		return
 	}
 	f, err := store.GetFlower(r.Context(), id)
@@ -434,7 +456,15 @@ func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.S
 
 // handleUploadPreview accepts an image/png body (bounded to 2 MiB, mirroring the
 // mint path) and uploads it to images/<id>.png, returning {"image_url":…}.
-func handleUploadPreview(w http.ResponseWriter, r *http.Request, upl *assets.S3Uploader, id string) {
+//
+// SECURITY (remaining gap): this endpoint is still unauthenticated by the
+// backend's existing design, so any caller who knows a valid flower id can
+// overwrite that flower's public OG image. Validating the id format and
+// requiring the flower to exist is the interim mitigation (it blocks
+// path-traversal / arbitrary-key writes and bounds the blast radius to real
+// ids); a proper ownership gate — or a server-issued signed upload token — must
+// be added when auth is introduced.
+func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, id string) {
 	setPreviewCORSHeaders(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -448,8 +478,25 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, upl *assets.S3U
 		http.Error(w, `{"error":"storage not configured"}`, http.StatusServiceUnavailable)
 		return
 	}
-	if id == "" {
-		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+	// Reject malformed ids (path traversal / arbitrary-key input) before any S3
+	// key is constructed.
+	if !isValidFlowerID(id) {
+		http.Error(w, `{"error":"invalid flower id"}`, http.StatusBadRequest)
+		return
+	}
+	// Require the flower to exist so previews can only be written for real
+	// flowers, limiting the overwrite blast radius.
+	if store == nil {
+		http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if _, err := store.GetFlower(r.Context(), id); err != nil {
+		if status.Code(err) == codes.NotFound {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		slog.Error("preview flower lookup failed", "err", err, "flower_id", id)
+		http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
 		return
 	}
 	const maxPreviewBytes = 2 << 20 // 2 MiB, mirroring the mint snapshot bound.
