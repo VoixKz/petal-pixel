@@ -13,12 +13,12 @@ export function FlowerBadges() {
   const palette = params.palette;
 
   return (
-    <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 pointer-events-none">
-      <span className="glass-panel rounded-full px-2.5 py-1 text-[10px] font-mono text-foreground capitalize">
+    <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-1.5 pointer-events-none max-w-[calc(100%-1.5rem)]">
+      <span className="glass-panel rounded-full px-2.5 py-1 text-xs font-mono text-foreground capitalize">
         {familyLabel(params)}
       </span>
       {palette && palette.stops.length > 0 && (
-        <span className="glass-panel rounded-full pl-2.5 pr-1.5 py-1 text-[10px] font-mono text-muted-foreground flex items-center gap-1.5">
+        <span className="glass-panel rounded-full pl-2.5 pr-1.5 py-1 text-xs font-mono text-muted-foreground flex items-center gap-1.5">
           {palette.id}
           <span
             aria-hidden

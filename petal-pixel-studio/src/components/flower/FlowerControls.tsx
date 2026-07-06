@@ -3,6 +3,7 @@ import { useFlowerStore } from '@/stores/flowerStore';
 import { Layers, Wand2, Palette, Play } from 'lucide-react';
 import { BLOOM_TYPES, FLOWER_TYPES } from '@/math/flowerTypes';
 import { mapPetalCount, mapPetalDepth, mapPetalSize, type SliderMapping } from './sliderMapping';
+import { cn } from '@/lib/utils';
 
 function SliderControl({
   label,
@@ -86,7 +87,7 @@ function Section({
   );
 }
 
-export function FlowerControls() {
+export function FlowerControls({ className }: { className?: string } = {}) {
   const { params, setParam, setFlowerType, setClassicParam, setRoseParam, setBloomParam } = useFlowerStore();
 
   const isRose = params.flowerType === 'rose';
@@ -108,10 +109,10 @@ export function FlowerControls() {
   const depthMap = mapPetalDepth(params.flowerType);
 
   return (
-    <aside className="w-72 h-full bg-card border-l border-border flex flex-col shrink-0">
+    <aside className={cn('w-72 h-full bg-card border-l border-border flex flex-col shrink-0', className)}>
       <div className="p-4 border-b border-border">
         <h2 className="text-sm font-semibold text-foreground">Flower Controls</h2>
-        <p className="text-[10px] text-muted-foreground mt-0.5">Adjust parameters in real-time</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Adjust parameters in real-time</p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -123,7 +124,7 @@ export function FlowerControls() {
                 <button
                   key={type}
                   onClick={() => setFlowerType(type)}
-                  className={`text-[10px] py-1.5 rounded-md capitalize transition-colors ${
+                  className={`text-xs py-1.5 rounded-md capitalize transition-colors ${
                     params.flowerType === type
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-secondary text-secondary-foreground hover:bg-muted'
@@ -221,7 +222,7 @@ export function FlowerControls() {
                 <button
                   key={m}
                   onClick={() => setParam('material', m)}
-                  className={`flex-1 text-[10px] py-1.5 rounded-md capitalize transition-colors ${
+                  className={`flex-1 text-xs py-1.5 rounded-md capitalize transition-colors ${
                     params.material === m
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-secondary text-secondary-foreground hover:bg-muted'

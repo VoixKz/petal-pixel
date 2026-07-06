@@ -7,7 +7,7 @@ import { FlowerInfo } from '@/components/flower/FlowerInfo';
 import { FlowerBadges } from '@/components/flower/FlowerBadges';
 import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices } from 'lucide-react';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
@@ -33,6 +33,13 @@ import {
   type HealthStatus,
 } from './createFlowerGuards';
 import { mapPetalCount } from '@/components/flower/sliderMapping';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
@@ -96,7 +103,7 @@ function MathPanel({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="absolute bottom-0 left-0 right-0 h-56 glass-panel rounded-t-lg z-20 p-4"
+      className="absolute bottom-0 left-0 right-0 h-[70vh] sm:h-56 glass-panel rounded-t-lg z-20 p-4 overflow-hidden"
     >
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
@@ -106,29 +113,29 @@ function MathPanel({ onClose }: { onClose: () => void }) {
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-4 h-[calc(100%-2rem)]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:h-[calc(100%-2rem)] overflow-y-auto">
         <div>
-          <p className="text-[10px] text-muted-foreground mb-1 font-mono">
+          <p className="text-xs text-muted-foreground mb-1 font-mono">
             {roseGraphs ? 'Rose: phi(theta)=180/opening·exp(-theta/(vDensity·180))' : 'Polar: r = L·cos(n·theta) + N·sin(f·theta)'}
           </p>
           <ResponsiveContainer width="100%" height="85%">
             <LineChart data={graphA}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <div>
-          <p className="text-[10px] text-muted-foreground mb-1 font-mono">
+          <p className="text-xs text-muted-foreground mb-1 font-mono">
             {roseGraphs ? 'Rose: petalCut(theta)' : 'Parametric projection: x(t)'}
           </p>
           <ResponsiveContainer width="100%" height="85%">
             <LineChart data={graphB}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -230,7 +237,7 @@ function UnsavedChangesDialog({
 function CopyRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="text-[10px] text-muted-foreground font-semibold w-20 shrink-0 uppercase">{label}</span>
+      <span className="text-xs text-muted-foreground font-semibold w-20 shrink-0 uppercase">{label}</span>
       <span className="text-xs text-foreground font-mono truncate flex-1">{value}</span>
       <button
         onClick={() => { void navigator.clipboard.writeText(value); toast.success(`${label} copied`); }}
@@ -277,7 +284,7 @@ function MintSuccessDialog({ result, onClose }: { result: MintResult; onClose: (
             </a>
           )}
         </div>
-        <div className="rounded-lg bg-secondary/60 border border-border p-3 text-[11px] text-muted-foreground leading-relaxed">
+        <div className="rounded-lg bg-secondary/60 border border-border p-3 text-xs text-muted-foreground leading-relaxed">
           <p>1. In MetaMask, open the NFTs tab and choose "Import NFT".</p>
           <p>2. Paste the contract address and Token ID shown above.</p>
           <p>3. Confirm — your flower appears in your wallet.</p>
@@ -352,6 +359,8 @@ export default function CreateFlower() {
   const [mintResult, setMintResult] = useState<MintResult | null>(null);
   const [showRegenerateWarning, setShowRegenerateWarning] = useState(false);
   const [paramsDirty, setParamsDirty] = useState(false);
+  // UI-only: mobile/tablet controls drawer visibility. Does NOT touch generation/mint state.
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   const isEditMode = editingFlowerId !== null;
 
@@ -744,7 +753,7 @@ export default function CreateFlower() {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full min-h-0">
       {showRegenerateWarning && (
         <RegenerateWarningDialog
           onConfirm={() => void handleConfirmRegenerate()}
@@ -765,7 +774,7 @@ export default function CreateFlower() {
         <MintSuccessDialog result={mintResult} onClose={() => setMintResult(null)} />
       )}
 
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative min-h-0">
         {/* Top bar */}
         <div className="border-b border-border flex flex-col bg-card/50">
           {/* Row 1: inputs */}
@@ -814,6 +823,15 @@ export default function CreateFlower() {
 
           {/* Row 2: actions */}
           <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
+            <button
+              onClick={() => setControlsOpen(true)}
+              title="Open controls"
+              className="lg:hidden flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              <span>Controls</span>
+            </button>
+
             <button
               onClick={handleCheckBackend}
               disabled={isCheckingBackend(healthStatus)}
@@ -866,7 +884,7 @@ export default function CreateFlower() {
           {isEditMode && (
             <div className="px-3 py-1 border-t border-border bg-amber-950/20 flex items-center gap-2">
               <Pencil className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="text-[10px] text-amber-300 truncate">
+              <span className="text-xs text-amber-300 truncate">
                 Editing: <span className="font-semibold">{title}</span>
                 <span className="text-amber-400/60 ml-2">word: {generationWord}</span>
               </span>
@@ -878,8 +896,8 @@ export default function CreateFlower() {
           <div className="px-3 py-1.5 border-b border-border bg-emerald-950/30 flex flex-wrap items-center gap-x-4 gap-y-1">
             {mintTxHash && (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[10px] text-emerald-400 font-semibold shrink-0">TX</span>
-                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">{mintTxHash}</span>
+                <span className="text-xs text-emerald-400 font-semibold shrink-0">TX</span>
+                <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{mintTxHash}</span>
                 <button
                   onClick={() => { void navigator.clipboard.writeText(mintTxHash); toast.success('Tx hash copied'); }}
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -891,12 +909,12 @@ export default function CreateFlower() {
             )}
             {mintTokenUri && (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[10px] text-emerald-400 font-semibold shrink-0">NFT</span>
+                <span className="text-xs text-emerald-400 font-semibold shrink-0">NFT</span>
                 <a
                   href={mintTokenUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] text-primary hover:underline font-mono truncate max-w-[200px] flex items-center gap-1"
+                  className="text-xs text-primary hover:underline font-mono truncate max-w-[200px] flex items-center gap-1"
                 >
                   metadata.json <ExternalLink className="w-2.5 h-2.5 shrink-0" />
                 </a>
@@ -924,7 +942,26 @@ export default function CreateFlower() {
         </div>
       </div>
 
-      <FlowerControls />
+      {/* Desktop: persistent side panel */}
+      <div className="hidden lg:block">
+        <FlowerControls />
+      </div>
+
+      {/* Mobile/tablet: bottom-sheet drawer */}
+      <Sheet open={controlsOpen} onOpenChange={setControlsOpen}>
+        <SheetContent
+          side="bottom"
+          className="lg:hidden h-[80vh] p-0 flex flex-col bg-card"
+        >
+          <SheetHeader className="px-4 pt-4 pb-2 text-left">
+            <SheetTitle className="text-sm">Flower Controls</SheetTitle>
+            <SheetDescription className="text-xs">Adjust parameters in real-time</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FlowerControls className="w-full h-full border-l-0" />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
