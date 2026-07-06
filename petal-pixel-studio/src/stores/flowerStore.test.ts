@@ -57,10 +57,13 @@ describe("saveFlower Supabase error propagation (create path)", () => {
     expect(useFlowerStore.getState().savedFlowers[0].id).toBe("flower-abc");
   });
 
-  it("resolves when the Supabase upsert succeeds", async () => {
+  it("resolves 'created' when the Supabase upsert succeeds for a new flower", async () => {
+    // Changed by Cluster A: saveFlower now returns 'created' | 'updated' | 'aborted'
+    // so CreateFlower can pick the right toast message instead of always
+    // assuming a create-path save added a brand-new flower.
     upsertResult.error = null;
 
-    await expect(useFlowerStore.getState().saveFlower()).resolves.toBeUndefined();
+    await expect(useFlowerStore.getState().saveFlower()).resolves.toBe("created");
 
     expect(upsertMock).toHaveBeenCalledTimes(1);
     expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);

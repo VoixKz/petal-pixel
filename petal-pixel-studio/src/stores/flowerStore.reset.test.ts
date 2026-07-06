@@ -161,7 +161,29 @@ describe("flowerStore reset + cache hygiene", () => {
     expect(useFlowerStore.getState().ownerUserId).toBeNull();
   });
 
-  it("loadFromBackend clears stale savedFlowers when Supabase returns an error", async () => {
+  // Cluster E2: transient loadFromBackend failures used to unconditionally
+  // wipe savedFlowers (set({ savedFlowers: [] })), even for the SAME user —
+  // destroying the fast-load cache's availability on a mere network blip.
+  // The fix keeps the cache when it still belongs to the current user, and
+  // only clears it when it belongs to a DIFFERENT user (cross-user leak
+  // protection, which is the actual risk being guarded against).
+  it("loadFromBackend KEEPS cached savedFlowers on error when the cache belongs to the SAME user", async () => {
+    useFlowerStore.setState({ ownerUserId: "u1" });
+    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({
+          order: () => Promise.resolve({ data: null, error: { message: "db down" } }),
+        }),
+      }),
+    });
+    await useFlowerStore.getState().loadFromBackend();
+    expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);
+    expect(useFlowerStore.getState().ownerUserId).toBe("u1");
+  });
+
+  it("loadFromBackend CLEARS cached savedFlowers on error when the cache belongs to a DIFFERENT user", async () => {
+    useFlowerStore.setState({ ownerUserId: "someone-else" });
     authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     fromMock.mockReturnValue({
       select: () => ({
@@ -172,9 +194,21 @@ describe("flowerStore reset + cache hygiene", () => {
     });
     await useFlowerStore.getState().loadFromBackend();
     expect(useFlowerStore.getState().savedFlowers).toEqual([]);
+    expect(useFlowerStore.getState().ownerUserId).toBe("u1");
   });
 
-  it("loadFromBackend clears stale savedFlowers when the query throws", async () => {
+  it("loadFromBackend KEEPS cached savedFlowers when the query throws for the SAME user", async () => {
+    useFlowerStore.setState({ ownerUserId: "u1" });
+    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
+    fromMock.mockImplementation(() => {
+      throw new Error("network");
+    });
+    await useFlowerStore.getState().loadFromBackend();
+    expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);
+  });
+
+  it("loadFromBackend CLEARS cached savedFlowers when the query throws for a DIFFERENT user", async () => {
+    useFlowerStore.setState({ ownerUserId: "someone-else" });
     authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     fromMock.mockImplementation(() => {
       throw new Error("network");

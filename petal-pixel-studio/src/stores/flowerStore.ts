@@ -88,7 +88,17 @@ interface FlowerStore {
   setGenerationWord: (word: string) => void;
   setTitle: (title: string) => void;
   generateFromWord: (word: string) => Promise<void>;
-  saveFlower: () => Promise<void>;
+  /**
+   * Returns which case occurred so the caller (CreateFlower) can choose the
+   * right toast message:
+   *  - 'created': a genuinely new flower was added.
+   *  - 'updated': either the edit path succeeded, or the create path collided
+   *    with an already-saved flower's deterministic id and was treated as an
+   *    update of that flower (Cluster A).
+   *  - 'aborted': the edit path targeted a flower that no longer exists in
+   *    savedFlowers (deleted) — nothing was written (Cluster D).
+   */
+  saveFlower: () => Promise<'created' | 'updated' | 'aborted'>;
   updateFlowerTitle: (id: string, newTitle: string) => Promise<void>;
   deleteFlower: (id: string) => Promise<void>;
   loadFlowerForEdit: (flower: SavedFlower) => void;
@@ -106,6 +116,20 @@ function hueToHex(hue: number, saturation = 70, lightness = 52) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+// ─── Cluster E1: mutation-vs-fetch race guard ─────────────────────────────────
+// Monotonically increasing counter bumped by every local mutation that writes
+// savedFlowers (saveFlower create/edit, updateFlowerTitle, deleteFlower,
+// markMintedByBackendFlowerId, resetFlowerStore). loadFromBackend captures the
+// counter before its fetch starts and discards the fetched result if the
+// counter changed while the fetch was in flight — otherwise a slow fetch that
+// started before an optimistic local mutation could land after it and clobber
+// it with pre-mutation data (last-write-wins bug).
+let savedFlowersMutationCounter = 0;
+function bumpSavedFlowersMutationCounter() {
+  savedFlowersMutationCounter += 1;
+  return savedFlowersMutationCounter;
 }
 
 function seedToDisplay(seed: bigint) {
@@ -339,7 +363,17 @@ export const useFlowerStore = create<FlowerStore>()(
     if (editingFlowerId) {
       // ── Edit path ────────────────────────────────────────────────────────────
       const existing = savedFlowers.find(f => f.id === editingFlowerId);
-      const oldBackendId = existing?.backendFlowerId;
+
+      // Cluster D: the flower being edited was deleted out from under this
+      // session (e.g. deleted in another tab, or a stale Back-navigation into
+      // an old edit entry after deletion). Upserting here would resurrect a
+      // row the user explicitly deleted. Abort instead of writing anything.
+      if (!existing) {
+        set({ editingFlowerId: null });
+        return 'aborted';
+      }
+
+      const oldBackendId = existing.backendFlowerId;
       const newBackendId = params.flowerId || oldBackendId;
       const regenerated = Boolean(newBackendId && newBackendId !== oldBackendId);
 
@@ -355,6 +389,7 @@ export const useFlowerStore = create<FlowerStore>()(
           : f,
       );
       set({ savedFlowers: updated });
+      bumpSavedFlowersMutationCounter();
 
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -365,7 +400,7 @@ export const useFlowerStore = create<FlowerStore>()(
             user.id,
             newBackendId,
             title,
-            generationWord || existing?.generationWord || "unknown",
+            generationWord || existing.generationWord || "unknown",
             params,
           );
           if (oldBackendId) {
@@ -377,18 +412,57 @@ export const useFlowerStore = create<FlowerStore>()(
         } else if (newBackendId) {
           await supabaseUpdateFlower(user.id, newBackendId, {
             saved_name: title,
-            generation_word: generationWord || existing?.generationWord,
+            generation_word: generationWord || existing.generationWord,
             params,
           });
         }
       }
-      return;
+      return 'updated';
     }
 
     // ── Create path ───────────────────────────────────────────────────────────
     // Use the backend flower ID as the local id so all saves are idempotent.
     const newId = params.flowerId;
-    if (!newId) return; // guard — should have been caught by handleSave already
+    if (!newId) return 'aborted'; // guard — should have been caught by handleSave already
+
+    // Cluster A: backend flowerIds are deterministic per generation word, so
+    // re-generating a word that was already saved collides with the existing
+    // saved flower's id. Treat that as an UPDATE of the existing flower
+    // instead of silently overwriting its DB row while leaving the local
+    // list stale.
+    const existing = savedFlowers.find(f => f.id === newId);
+    if (existing) {
+      // Preserve the existing saved title UNLESS the user's current title
+      // differs from what generateFromWord would have auto-titled it — that
+      // divergence means the user intentionally typed a new title.
+      const autoTitle = generateAutoTitle(
+        generationWord || existing.generationWord,
+        params.family ?? params.flowerType,
+      );
+      const userTypedTitle = title !== autoTitle;
+      const resolvedTitle = userTypedTitle ? title : existing.title;
+
+      const updated = savedFlowers.map((f) =>
+        f.id === newId
+          ? {
+              ...f,
+              title: resolvedTitle,
+              generationWord: generationWord || f.generationWord,
+              params: { ...params },
+              backendFlowerId: newId,
+            }
+          : f,
+      );
+      set({ savedFlowers: updated, editingFlowerId: newId, title: resolvedTitle });
+      bumpSavedFlowersMutationCounter();
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        set({ ownerUserId: user.id });
+        await supabaseUpsertFlower(user.id, newId, resolvedTitle, generationWord || existing.generationWord || "unknown", params);
+      }
+      return 'updated';
+    }
 
     const newFlower: SavedFlower = {
       id: newId,
@@ -400,19 +474,15 @@ export const useFlowerStore = create<FlowerStore>()(
       isMinted: false,
     };
 
-    // Avoid duplicate if the flower was already added (e.g. rapid double-click)
-    const alreadyExists = savedFlowers.some(f => f.id === newId);
-    if (!alreadyExists) {
-      set({ savedFlowers: [...savedFlowers, newFlower], editingFlowerId: newId });
-    } else {
-      set({ editingFlowerId: newId });
-    }
+    set({ savedFlowers: [...savedFlowers, newFlower], editingFlowerId: newId });
+    bumpSavedFlowersMutationCounter();
 
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       set({ ownerUserId: user.id });
       await supabaseUpsertFlower(user.id, newId, title, generationWord || "unknown", params);
     }
+    return 'created';
   },
 
   updateFlowerTitle: async (id, newTitle) => {
@@ -421,6 +491,7 @@ export const useFlowerStore = create<FlowerStore>()(
       f.id === id ? { ...f, title: newTitle } : f,
     );
     set({ savedFlowers: updated });
+    bumpSavedFlowersMutationCounter();
 
     const flower = savedFlowers.find(f => f.id === id);
     const flowerId = flower?.backendFlowerId;
@@ -436,6 +507,7 @@ export const useFlowerStore = create<FlowerStore>()(
     const { savedFlowers } = get();
     const flower = savedFlowers.find(f => f.id === id);
     set({ savedFlowers: savedFlowers.filter(f => f.id !== id) });
+    bumpSavedFlowersMutationCounter();
 
     const flowerId = flower?.backendFlowerId;
     if (flowerId) {
@@ -483,6 +555,7 @@ export const useFlowerStore = create<FlowerStore>()(
           : f,
       ),
     }));
+    bumpSavedFlowersMutationCounter();
 
     // Persist to Supabase; report failure to the caller instead of swallowing it.
     try {
@@ -511,6 +584,14 @@ export const useFlowerStore = create<FlowerStore>()(
   // ── Load from Supabase (single source of truth) ───────────────────────────
   // Does NOT require the Go backend to be running — all data is in Supabase.
   loadFromBackend: async () => {
+    // Cluster E1: capture the mutation counter before the fetch starts. If a
+    // local mutation (save/update/delete/mint/reset) happens while this fetch
+    // is in flight, the counter will have moved by the time we get a result —
+    // meaning the fetched data is stale relative to a newer local write, and
+    // must be discarded rather than clobbering it (last-write-wins bug).
+    const tokenAtStart = savedFlowersMutationCounter;
+    const isStale = () => savedFlowersMutationCounter !== tokenAtStart;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -521,11 +602,24 @@ export const useFlowerStore = create<FlowerStore>()(
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
+      if (isStale()) {
+        console.debug('loadFromBackend: discarding stale result (local mutation happened while in flight)');
+        return;
+      }
+
       if (error) {
         console.error('loadFromBackend error:', error);
-        // Stamp ownerUserId even on error so the cross-user guard stays armed
-        // if the very first load fails (network blip at startup).
-        set({ savedFlowers: [], ownerUserId: user.id });
+        // Cluster E2: only clear the cache when it belongs to a DIFFERENT
+        // user (cross-user leak protection). For the SAME user, a transient
+        // fetch failure should not destroy an otherwise-good local cache —
+        // keep it for availability. Either way, stamp ownerUserId so the
+        // cross-user guard stays armed if the very first load fails.
+        const { ownerUserId: cachedOwnerId } = get();
+        if (cachedOwnerId && cachedOwnerId !== user.id) {
+          set({ savedFlowers: [], ownerUserId: user.id });
+        } else {
+          set({ ownerUserId: user.id });
+        }
         return;
       }
 
@@ -551,7 +645,27 @@ export const useFlowerStore = create<FlowerStore>()(
       set({ savedFlowers: mapped, ownerUserId: user.id });
     } catch (err) {
       console.error('loadFromBackend failed:', err);
-      set({ savedFlowers: [] });
+      if (isStale()) {
+        console.debug('loadFromBackend: discarding stale error path (local mutation happened while in flight)');
+        return;
+      }
+      // Cluster E2: same conditional-clearing rule as the error branch above.
+      // We may not have resolved `user` here (auth.getUser() itself could be
+      // what threw), so fall back to clearing only when we can't confirm the
+      // cache still belongs to the current session.
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { ownerUserId: cachedOwnerId } = get();
+        if (user && cachedOwnerId && cachedOwnerId !== user.id) {
+          set({ savedFlowers: [], ownerUserId: user.id });
+        } else if (user) {
+          set({ ownerUserId: user.id });
+        }
+        // If we can't even confirm the user here, leave the cache untouched —
+        // it's still the best guess we have and no cross-user risk is provable.
+      } catch {
+        // Truly can't tell who the user is; keep the cache as-is (availability).
+      }
     }
   },
 
@@ -578,6 +692,7 @@ export const useFlowerStore = create<FlowerStore>()(
       lastError: "",
       ownerUserId: null,
     });
+    bumpSavedFlowersMutationCounter();
     useFlowerStore.persist.clearStorage();
   },
   }),
