@@ -15,7 +15,7 @@ import {
 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Flower3D } from './Flower3D';
-import { useFlowerStore } from '@/stores/flowerStore';
+import { useFlowerStore, type FlowerParams } from '@/stores/flowerStore';
 import { type FlowerBounds } from '@/math/flowerBounds';
 import { registerRenderer, frameCameraForBounds, type RenderOpts } from './snapshot';
 
@@ -192,8 +192,11 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
   return null;
 }
 
-export function FlowerCanvas() {
-  const params = useFlowerStore((s) => s.params);
+export function FlowerCanvas({ params: paramsProp }: { params?: FlowerParams } = {}) {
+  // Call the hook unconditionally, then prefer the explicit prop. This lets the
+  // logged-out share landing render a fetched flower without mutating the store.
+  const storeParams = useFlowerStore((s) => s.params);
+  const params = paramsProp ?? storeParams;
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
   const [bounds, setBounds] = useState<FlowerBounds | null>(null);
 

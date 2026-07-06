@@ -8,8 +8,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Gem, ExternalLink, Copy, ChevronDown, Wallet } from 'lucide-react';
+import { Gem, ExternalLink, Copy, ChevronDown, Wallet, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { shareFlowerLink } from './shareParams';
 
 function DetailRow({
   tag,
@@ -108,6 +109,21 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
         <div className="absolute top-3 right-3 bg-secondary/60 text-secondary-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm capitalize">
           {familyLabel(params)}
         </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            void shareFlowerLink(
+              flower.backendFlowerId ?? flower.id,
+              flower.title,
+              (m) => toast.success(m),
+              (m) => toast.error(m),
+            );
+          }}
+          className="absolute bottom-3 right-3 flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          title="Share flower"
+        >
+          <Share2 className="w-3.5 h-3.5" /> Share
+        </button>
       </div>
 
       {/* preview band: v2 uses real palette stops; v1 falls back to colorA/colorB gradient */}

@@ -17,6 +17,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import VerifyOtp from "./pages/VerifyOtp";
 import NotFound from "./pages/NotFound";
+import ShareFlower from "./pages/ShareFlower";
 import { PageErrorBoundary } from "./components/PageErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -43,6 +44,9 @@ const router = createBrowserRouter([
       { path: "/login", element: <Login /> },
       { path: "/signup", element: <Signup /> },
       { path: "/verify", element: <VerifyOtp /> },
+      // Public, logged-out flower landing — sibling of ProtectedRoute so it is
+      // reachable WITHOUT a session (crawlers + shared links).
+      { path: "/share/:flowerId", element: <PageErrorBoundary><ShareFlower /></PageErrorBoundary> },
       {
         element: (
           <ProtectedRoute>

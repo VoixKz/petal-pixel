@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
-import { Gem, Calendar, Flower2, Trash2, AlertTriangle, Pencil, Search, SearchX } from 'lucide-react';
+import { Gem, Calendar, Flower2, Trash2, AlertTriangle, Pencil, Search, SearchX, Share2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { shareFlowerLink } from './shareParams';
 import {
   collectFamilies,
   filterFlowers,
@@ -123,6 +124,14 @@ export default function MyFlowers() {
     loadFlowerForEdit(flower);
     navigate('/create', { state: { isEditing: true } });
   };
+
+  const handleShare = (flower: SavedFlower) =>
+    void shareFlowerLink(
+      flower.backendFlowerId ?? flower.id,
+      flower.title,
+      (m) => toast.success(m),
+      (m) => toast.error(m),
+    );
 
   const handleDelete = async (id: string) => {
     await deleteFlower(id);
@@ -271,6 +280,16 @@ export default function MyFlowers() {
                 title="Delete flower"
               >
                 <Trash2 className="w-4 h-4 text-rose-400" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleShare(flower);
+                }}
+                className="absolute top-3 left-14 w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                title="Share flower"
+              >
+                <Share2 className="w-4 h-4 text-primary" />
               </button>
               <button
                 onClick={(e) => {

@@ -7,8 +7,8 @@ import { FlowerInfo } from '@/components/flower/FlowerInfo';
 import { FlowerBadges } from '@/components/flower/FlowerBadges';
 import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown, Share2 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
 import { BrowserProvider, Contract } from 'ethers';
@@ -16,8 +16,12 @@ import {
   checkFlowerBackendHealth,
   confirmMintViaGrpc,
   prepareMintViaGrpc,
+  postFlowerPreview,
+  buildShareUrl,
+  flowerBackendBaseUrl,
 } from '@/integrations/flowerBackend/client';
 import { captureFlowerPng, captureFlowerGif } from '@/components/flower/snapshot';
+import { SharePreview } from '@/components/flower/SharePreview';
 import { extractMintedTokenId } from './mintReceipt';
 import {
   DropdownMenu,
@@ -134,7 +138,7 @@ function MathPanel({ onClose }: { onClose: () => void }) {
             <LineChart data={graphA}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
+              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -147,7 +151,7 @@ function MathPanel({ onClose }: { onClose: () => void }) {
             <LineChart data={graphB}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
+              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -269,10 +273,21 @@ export interface MintResult {
   tokenUri: string;
 }
 
-function MintSuccessDialog({ result, onClose }: { result: MintResult; onClose: () => void }) {
+function MintSuccessDialog({
+  result,
+  personName,
+  onClose,
+  onShare,
+}: {
+  result: MintResult;
+  personName: string;
+  onClose: () => void;
+  onShare: () => void;
+}) {
+  const params = useFlowerStore((s) => s.params);
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <Gem className="w-4 h-4 text-primary" /> NFT minted
@@ -281,6 +296,17 @@ function MintSuccessDialog({ result, onClose }: { result: MintResult; onClose: (
             Your flower is on-chain. Use the details below to import it into MetaMask.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Reused share block: canvas is height-capped (compact) so it fits max-w-md. */}
+        <SharePreview params={params} personName={personName} compact />
+        <button
+          type="button"
+          onClick={onShare}
+          className="flex items-center justify-center gap-2 h-10 rounded-lg bg-secondary text-secondary-foreground text-xs hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Share2 className="w-3.5 h-3.5" /> Copy share link
+        </button>
+
         <div className="flex flex-col gap-2.5">
           <CopyRow label="Token ID" value={result.tokenId != null ? String(result.tokenId) : 'not detected'} />
           <CopyRow label="Contract" value={result.contractAddress} />
@@ -561,6 +587,31 @@ export default function CreateFlower() {
     }
   };
 
+  const handleShare = async () => {
+    if (!params.flowerId) {
+      toast.error('Save or generate a flower first.');
+      return;
+    }
+    // The share link points at the backend /share/:id OG route so crawlers get
+    // the preview HTML and humans are redirected on to the SPA.
+    const url = buildShareUrl(flowerBackendBaseUrl, params.flowerId);
+    const shareTitle = titleInput.trim() || generationWord || 'My Petal Pixel flower';
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, url });
+      } catch {
+        /* user dismissed the share sheet — not an error */
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Share link copied');
+    } catch {
+      toast.error('Could not copy the share link.');
+    }
+  };
+
   const handleConnectWallet = async (): Promise<string | null> => {
     if (!window.ethereum) {
       toast.error('MetaMask not found. Install MetaMask and connect to Ganache RPC.');
@@ -662,6 +713,24 @@ export default function CreateFlower() {
         originalTitleRef.current = freshState.title;
         setTitleInput(freshState.title);
         setParamsDirty(false);
+
+        // Capture-at-SAVE: best-effort OG/preview image for the share landing.
+        // Fire-and-forget against the freshly-saved backend id. Wrapped so it
+        // can NEVER reject or block the save (no WebGL → captureFlowerPng
+        // returns null → guard skips the POST; a failing endpoint is swallowed
+        // by postFlowerPreview). Never toasts on failure — the OG image is
+        // strictly best-effort.
+        const savedId = useFlowerStore.getState().params.flowerId;
+        if (savedId) {
+          void (async () => {
+            try {
+              const png = await captureFlowerPng();
+              if (png) void postFlowerPreview(savedId, png);
+            } catch {
+              /* best-effort: never surface a preview-capture failure */
+            }
+          })();
+        }
       }
       return ok;
     } finally {
@@ -810,7 +879,12 @@ export default function CreateFlower() {
       )}
 
       {mintResult && (
-        <MintSuccessDialog result={mintResult} onClose={() => setMintResult(null)} />
+        <MintSuccessDialog
+          result={mintResult}
+          personName={titleInput.trim() || generationWord || title}
+          onClose={() => setMintResult(null)}
+          onShare={() => void handleShare()}
+        />
       )}
 
       <div className="flex-1 flex flex-col relative min-h-0">
@@ -937,6 +1011,15 @@ export default function CreateFlower() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </TooltipProvider>
+
+            <button
+              onClick={() => void handleShare()}
+              title="Share this flower"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Share2 className="w-3 h-3" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
 
             <button
               onClick={() => void handleMint()}
