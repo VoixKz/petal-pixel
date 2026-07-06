@@ -1,7 +1,9 @@
 package grpcapi
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -144,5 +146,64 @@ func TestBuildMintMetadataPersonNameNotHardcoded(t *testing.T) {
 	}
 	if mA.Name == mB.Name {
 		t.Errorf("expected different PersonNames to produce different metadata Name fields, both got %q", mA.Name)
+	}
+}
+
+// fakeImageExister is a test double for imageExister, letting resolveImageURL's
+// decision logic (Finding 2) be exercised without a live/mock S3 endpoint —
+// mirrors the "no S3 seam for this" fallback: unit-test the extracted helper.
+type fakeImageExister struct {
+	exists    bool
+	existsErr error
+	url       string
+	urlErr    error
+}
+
+func (f *fakeImageExister) Exists(ctx context.Context, key string) (bool, error) {
+	return f.exists, f.existsErr
+}
+
+func (f *fakeImageExister) PublicURL(key string) (string, error) {
+	return f.url, f.urlErr
+}
+
+// TestResolveImageURLReusesExistingImage is the crux of Finding 2: a
+// re-prepare with no fresh image_png (req.ImagePng empty, so PrepareMint
+// takes the "no upload" branch) must not leave the metadata imageless if a
+// prior PrepareMint call already uploaded an image for this flower. Without
+// this fix, re-preparing to retry a failed mint (e.g. captureFlowerPng
+// returned null) would silently strip the picture from the already-minted
+// token's metadata.
+func TestResolveImageURLReusesExistingImage(t *testing.T) {
+	f := &fakeImageExister{exists: true, url: "https://cdn.example.com/images/flower-123.png"}
+
+	got, err := resolveImageURL(context.Background(), f, "images/flower-123.png")
+	if err != nil {
+		t.Fatalf("resolveImageURL returned error: %v", err)
+	}
+	if got != "https://cdn.example.com/images/flower-123.png" {
+		t.Errorf("resolveImageURL = %q, want the existing image's public URL", got)
+	}
+}
+
+func TestResolveImageURLReturnsEmptyWhenNoImageEverUploaded(t *testing.T) {
+	f := &fakeImageExister{exists: false}
+
+	got, err := resolveImageURL(context.Background(), f, "images/never-uploaded.png")
+	if err != nil {
+		t.Fatalf("resolveImageURL returned error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("resolveImageURL = %q, want empty when no image was ever uploaded for this flower", got)
+	}
+}
+
+func TestResolveImageURLPropagatesExistsError(t *testing.T) {
+	wantErr := errors.New("s3 unavailable")
+	f := &fakeImageExister{existsErr: wantErr}
+
+	_, err := resolveImageURL(context.Background(), f, "images/flower-123.png")
+	if !errors.Is(err, wantErr) {
+		t.Errorf("resolveImageURL error = %v, want it to propagate the Exists error instead of masking it as \"no image\"", err)
 	}
 }

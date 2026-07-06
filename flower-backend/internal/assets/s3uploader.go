@@ -3,6 +3,7 @@ package assets
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	smithyhttp "github.com/aws/smithy-go/transport/http"
 )
 
 type S3Uploader struct {
@@ -95,6 +98,13 @@ func (u *S3Uploader) PutBytes(ctx context.Context, key, contentType string, r io
 	return u.publicURL(key)
 }
 
+// PublicURL computes the public URL for key without touching S3 — used to
+// reference an object (e.g. a previously-uploaded image) that Exists already
+// confirmed is present, without re-uploading it.
+func (u *S3Uploader) PublicURL(key string) (string, error) {
+	return u.publicURL(strings.TrimLeft(key, "/"))
+}
+
 func (u *S3Uploader) publicURL(key string) (string, error) {
 	if u.publicBaseURL == "" {
 		return "", fmt.Errorf("public base url not set")
@@ -105,5 +115,43 @@ func (u *S3Uploader) publicURL(key string) (string, error) {
 	}
 	base.Path = path.Join(base.Path, key)
 	return base.String(), nil
+}
+
+// Exists reports whether key is already present in the bucket via a
+// HeadObject request. Finding 2: PrepareMint needs this to decide whether to
+// reuse a previously-uploaded image when re-preparing without a fresh
+// image_png, instead of silently dropping the image reference from the
+// metadata. A 404/NotFound response is treated as "does not exist" (nil
+// error, false); any other error is propagated so callers don't mistake a
+// transient failure for a genuinely missing object.
+func (u *S3Uploader) Exists(ctx context.Context, key string) (bool, error) {
+	key = strings.TrimLeft(key, "/")
+	_, err := u.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(u.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// isNotFound reports whether err represents a "does not exist" response from
+// S3. HeadObject responses carry no body, so the SDK cannot unmarshal a typed
+// s3.NotFound error the way GetObject does — it surfaces as a smithy-go HTTP
+// response error instead, so we match on the raw HTTP status code.
+func isNotFound(err error) bool {
+	var notFound *s3types.NotFound
+	if errors.As(err, &notFound) {
+		return true
+	}
+	var respErr *smithyhttp.ResponseError
+	if errors.As(err, &respErr) {
+		return respErr.HTTPStatusCode() == 404
+	}
+	return false
 }
 

@@ -111,11 +111,22 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		return nil, err
 	}
 
+	imageKey := "images/" + flowerID + ".png"
 	imageURL := ""
 	if png := req.GetImagePng(); len(png) > 0 {
-		imageURL, err = s.upl.PutBytes(ctx, "images/"+flowerID+".png", "image/png", bytes.NewReader(png))
+		imageURL, err = s.upl.PutBytes(ctx, imageKey, "image/png", bytes.NewReader(png))
 		if err != nil {
 			return nil, status.Error(codes.Internal, "failed to upload image")
+		}
+	} else {
+		// Finding 2: a re-prepare with no image (the normal retry path when
+		// captureFlowerPng returns null client-side) must not silently strip
+		// the picture from an already-minted token's metadata. If an image
+		// was uploaded on a previous PrepareMint call, reuse its public URL
+		// instead of leaving imageURL empty.
+		imageURL, err = resolveImageURL(ctx, s.upl, imageKey)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to check for existing image")
 		}
 	}
 
@@ -143,6 +154,35 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		MintTokenUri:    tokenURI,
 		// mint_calldata left empty for now (frontend can call contract with args).
 	}, nil
+}
+
+// imageExister is the narrow seam PrepareMint needs from *assets.S3Uploader
+// to decide whether to reuse a previously-uploaded image. Extracted as an
+// interface so resolveImageURL's decision logic (Finding 2) can be
+// unit-tested with a fake, without needing a live/mock S3 endpoint.
+type imageExister interface {
+	Exists(ctx context.Context, key string) (bool, error)
+	PublicURL(key string) (string, error)
+}
+
+// resolveImageURL decides what image URL (if any) a re-prepared mint's
+// metadata should reference when the caller did not supply a fresh
+// image_png. Finding 2: PrepareMint writes metadata to a stable key
+// (metadata/<flowerID>.json), so a re-prepare with no image — the normal
+// retry path when the frontend's captureFlowerPng() returns null — used to
+// silently overwrite the good metadata with the image field omitted,
+// stripping the picture from an already-minted token's tokenURI. If the
+// image from a previous PrepareMint call still exists at imageKey, its
+// public URL is reused instead of leaving the metadata imageless.
+func resolveImageURL(ctx context.Context, upl imageExister, imageKey string) (string, error) {
+	exists, err := upl.Exists(ctx, imageKey)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", nil
+	}
+	return upl.PublicURL(imageKey)
 }
 
 // buildMintMetadata resolves f's PersonName (falling back to "unknown" for
