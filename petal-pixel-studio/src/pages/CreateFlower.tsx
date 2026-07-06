@@ -5,7 +5,7 @@ import { FlowerCanvas } from '@/components/flower/FlowerCanvas';
 import { FlowerControls } from '@/components/flower/FlowerControls';
 import { FlowerInfo } from '@/components/flower/FlowerInfo';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet } from 'lucide-react';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
@@ -15,6 +15,7 @@ import {
   confirmMintViaGrpc,
   prepareMintViaGrpc,
 } from '@/integrations/flowerBackend/client';
+import { captureFlowerPng } from '@/components/flower/snapshot';
 import {
   shouldWarnRegenerate,
   isCheckingBackend,
@@ -424,6 +425,23 @@ export default function CreateFlower() {
     }
   };
 
+  const handleDownloadPng = async () => {
+    const blob = await captureFlowerPng();
+    if (!blob) {
+      toast.error('Could not capture the flower image. Is the 3D view visible?');
+      return;
+    }
+    const safeTitle = (titleInput.trim() || generationWord || 'flower').replace(/[\\/:*?"<>|]/g, '_');
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safeTitle}.png`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleConnectWallet = async (): Promise<string | null> => {
     if (!window.ethereum) {
       toast.error('MetaMask not found. Install MetaMask and connect to Ganache RPC.');
@@ -699,6 +717,15 @@ export default function CreateFlower() {
             >
               <Save className="w-3 h-3" />
               <span>{isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}</span>
+            </button>
+
+            <button
+              onClick={() => void handleDownloadPng()}
+              title="Download PNG snapshot"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
+            >
+              <Download className="w-3 h-3" />
+              <span className="hidden sm:inline">PNG</span>
             </button>
 
             <button

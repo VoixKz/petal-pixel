@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Flower3D } from './Flower3D';
 import { useFlowerStore } from '@/stores/flowerStore';
 import type { FlowerBounds } from '@/math/flowerBounds';
+import { registerSnapshotter, downscaleToPng } from './snapshot';
 
 function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null; controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree();
@@ -39,6 +40,23 @@ function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null;
   return null;
 }
 
+function SnapshotBridge() {
+  const { gl, scene, camera } = useThree();
+
+  useEffect(
+    () =>
+      registerSnapshotter(() => {
+        // Re-render on demand so the framebuffer is fresh, then read it in
+        // the same task. This avoids enabling preserveDrawingBuffer.
+        gl.render(scene, camera);
+        return downscaleToPng(gl.domElement);
+      }),
+    [gl, scene, camera],
+  );
+
+  return null;
+}
+
 export function FlowerCanvas() {
   const params = useFlowerStore((s) => s.params);
   const controlsRef = useRef<OrbitControlsImpl | null>(null);
@@ -68,6 +86,7 @@ export function FlowerCanvas() {
 
         <Flower3D params={params} onBoundsChange={setBounds} />
         <AutoFrameCamera bounds={bounds} controlsRef={controlsRef} />
+        <SnapshotBridge />
 
         {/*
           The shadow plane must sit AT OR BELOW the flower's lowest point: the
