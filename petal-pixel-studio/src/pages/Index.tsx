@@ -59,15 +59,15 @@ export default function Index() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">Welcome back! Here's your garden overview.</p>
         </div>
         <Link
           to="/create"
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          className="flex items-center justify-center gap-2 bg-primary text-primary-foreground px-4 h-10 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <PlusCircle className="w-4 h-4" /> Create Flower
         </Link>
@@ -80,7 +80,7 @@ export default function Index() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-card rounded-xl p-5 border border-border hover:border-primary/20 transition-colors"
+            className="bg-card rounded-xl p-4 sm:p-5 border border-border hover:border-primary/20 transition-colors"
           >
             <div className="flex items-center justify-between mb-3">
               <stat.icon className={`w-5 h-5 ${stat.color}`} />
@@ -100,16 +100,16 @@ export default function Index() {
       >
         <button
           onClick={() => navigate('/create')}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <PlusCircle className="w-4 h-4" /> Create new
         </button>
         <button
           onClick={() => navigate('/my-flowers')}
-          className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-muted transition-colors"
+          className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <FileEdit className="w-4 h-4" /> Continue drafts
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono">
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono">
             {draftCount}
           </span>
         </button>
@@ -137,7 +137,7 @@ export default function Index() {
               <button
                 key={flower.id}
                 onClick={() => handleEdit(flower)}
-                className="bg-card rounded-xl border border-border overflow-hidden text-left hover:border-primary/30 transition-colors group"
+                className="bg-card rounded-xl border border-border overflow-hidden text-left hover:border-primary/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 title={`Edit ${flower.title}`}
               >
                 <div
@@ -146,14 +146,14 @@ export default function Index() {
                 >
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                   {flower.isMinted && (
-                    <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/40 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+                    <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
                       <Gem className="w-3 h-3" /> Minted
                     </span>
                   )}
                 </div>
                 <div className="p-3">
                   <p className="text-sm font-semibold text-foreground truncate">{flower.title}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5 capitalize">
+                  <p className="text-xs text-muted-foreground mt-0.5 capitalize">
                     {familyLabel(flower.params)} · {flower.createdAt}
                   </p>
                 </div>
@@ -168,7 +168,7 @@ export default function Index() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.55 }}
-        className="bg-card rounded-xl p-6 border border-border"
+        className="bg-card rounded-xl p-4 sm:p-6 border border-border"
       >
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
           <BarChart3 className="w-4 h-4 text-muted-foreground" /> Family distribution
@@ -179,7 +179,7 @@ export default function Index() {
           <div className="space-y-3">
             {distribution.map(({ family, count }) => (
               <div key={family} className="flex items-center gap-3">
-                <span className="w-24 shrink-0 text-xs text-muted-foreground capitalize truncate">{family}</span>
+                <span className="w-20 sm:w-24 shrink-0 text-xs text-muted-foreground capitalize truncate">{family}</span>
                 <div className="flex-1 h-3 rounded-full bg-secondary overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"

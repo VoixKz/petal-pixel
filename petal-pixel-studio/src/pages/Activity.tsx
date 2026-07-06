@@ -19,9 +19,9 @@ export default function Activity() {
   const days = useMemo(() => buildActivityTimeline(savedFlowers), [savedFlowers]);
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Activity</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Activity</h1>
         <p className="text-sm text-muted-foreground mt-1">A timeline of your flower creations and mints</p>
       </div>
 
@@ -60,7 +60,7 @@ export default function Activity() {
                       </p>
 
                       {event.kind === 'created' && (
-                        <span className="inline-flex items-center gap-1.5 bg-secondary text-secondary-foreground text-[10px] px-2 py-0.5 rounded-full capitalize">
+                        <span className="inline-flex items-center gap-1.5 bg-secondary text-secondary-foreground text-xs px-2 py-0.5 rounded-full capitalize">
                           {event.palette && event.palette.stops.length >= 2 && (
                             <span
                               className="w-2 h-2 rounded-full shrink-0"
@@ -73,8 +73,8 @@ export default function Activity() {
 
                       {event.kind === 'minted' && event.txHash && (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-emerald-400 font-semibold shrink-0">TX</span>
-                          <span className="text-[10px] text-muted-foreground font-mono truncate">
+                          <span className="text-xs text-emerald-400 font-semibold shrink-0">TX</span>
+                          <span className="text-xs text-muted-foreground font-mono truncate">
                             {truncateMiddle(event.txHash, 6)}
                           </span>
                           <button
@@ -82,7 +82,7 @@ export default function Activity() {
                               void navigator.clipboard.writeText(event.txHash!);
                               toast.success('Tx hash copied');
                             }}
-                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded"
                             title="Copy tx hash"
                           >
                             <Copy className="w-3 h-3" />
