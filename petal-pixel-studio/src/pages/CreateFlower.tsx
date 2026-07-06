@@ -4,8 +4,10 @@ import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { FlowerCanvas } from '@/components/flower/FlowerCanvas';
 import { FlowerControls } from '@/components/flower/FlowerControls';
 import { FlowerInfo } from '@/components/flower/FlowerInfo';
+import { FlowerBadges } from '@/components/flower/FlowerBadges';
+import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download } from 'lucide-react';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
@@ -548,9 +550,9 @@ export default function CreateFlower() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (overrideWord?: string) => {
     if (isGenerating) return;
-    const word = wordInput.trim();
+    const word = (overrideWord ?? wordInput).trim();
     if (!word) {
       toast.error('Enter a name or phrase first.');
       return;
@@ -566,6 +568,13 @@ export default function CreateFlower() {
   const handleConfirmRegenerate = async () => {
     setShowRegenerateWarning(false);
     await doGenerate(wordInput.trim());
+  };
+
+  const handleSurpriseMe = () => {
+    if (isGenerating) return;
+    const name = pickSurpriseName();
+    setWordInput(name); // entries are pre-sanitized to the input's contract
+    void handleGenerate(name); // same guarded path: isGenerating + regen dialog
   };
 
   const handleTitleChange = (value: string) => {
@@ -766,6 +775,15 @@ export default function CreateFlower() {
                 className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full font-mono min-w-0"
               />
               <button
+                onClick={handleSurpriseMe}
+                disabled={isGenerating}
+                title="Surprise me"
+                aria-label="Surprise me"
+                className="shrink-0 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Dices className="w-3.5 h-3.5" />
+              </button>
+              <button
                 onClick={() => void handleGenerate()}
                 disabled={isGenerating}
                 className="bg-primary text-primary-foreground text-xs px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity flex items-center gap-1 shrink-0"
@@ -883,6 +901,7 @@ export default function CreateFlower() {
         {/* Canvas */}
         <div className="flex-1 relative">
           <FlowerCanvas />
+          <FlowerBadges />
           <FlowerInfo />
 
           <motion.button
