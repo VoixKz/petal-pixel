@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
 import { truncateMiddle } from '@/lib/truncate';
-import { paletteGradient, familyLabel } from '@/components/flower/paletteUi';
+import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
 import {
   Collapsible,
   CollapsibleContent,
@@ -87,7 +87,6 @@ function MetaMaskHelp() {
 
 function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
   const { params } = flower;
-  const stops = params.palette?.stops ?? [];
 
   return (
     <motion.div
@@ -111,10 +110,10 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
         </div>
       </div>
 
-      {/* palette gradient preview band: v2 uses real stops; v1 falls back to #808080 */}
+      {/* preview band: v2 uses real palette stops; v1 falls back to colorA/colorB gradient */}
       <div
         className="h-2"
-        style={{ background: paletteGradient(stops) }}
+        style={{ background: previewGradient(params) }}
         title={params.palette?.id}
       />
 

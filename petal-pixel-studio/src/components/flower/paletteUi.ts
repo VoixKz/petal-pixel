@@ -23,6 +23,25 @@ export function paletteGradient(stops: PaletteStop[]): string {
 }
 
 /**
+ * Per-flower CARD PREVIEW BAND helper: prefers the real v2 palette gradient,
+ * falls back to a two-color gradient built from v1's always-present
+ * colorA/colorB fields, and only degrades to flat gray when neither is
+ * available. This is what keeps v1 flowers (no palette) from showing a flat
+ * #808080 band across the studio (My Flowers / NFT Collection / recent
+ * flowers thumb) — do not use this for the v2-only palette-id swatch chip
+ * (FlowerBadges.tsx), which should keep calling paletteGradient directly.
+ */
+export function previewGradient(p: {
+  palette?: { stops: PaletteStop[] };
+  colorA?: string;
+  colorB?: string;
+}): string {
+  if (p.palette && p.palette.stops.length > 0) return paletteGradient(p.palette.stops);
+  if (p.colorA) return `linear-gradient(90deg, ${p.colorA}, ${p.colorB ?? p.colorA})`;
+  return "#808080";
+}
+
+/**
  * Family label: v2 records carry `family`; v1 records (pre-family rollout)
  * carry only `flowerType`. Falls back to "classic" when neither is present.
  *

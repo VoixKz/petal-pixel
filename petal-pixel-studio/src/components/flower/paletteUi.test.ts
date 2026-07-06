@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { paletteGradient, familyLabel } from "@/components/flower/paletteUi";
+import { paletteGradient, familyLabel, previewGradient } from "@/components/flower/paletteUi";
 import type { PaletteStop } from "@/math/palette";
 
 const FOUR_STOPS: PaletteStop[] = [
@@ -59,6 +59,40 @@ describe("paletteGradient", () => {
 
   it("treats a null/undefined-like empty array the same as zero stops", () => {
     expect(paletteGradient([] as PaletteStop[])).toBe("#808080");
+  });
+});
+
+describe("previewGradient", () => {
+  it("prefers the v2 palette gradient when a palette with stops is present", () => {
+    const stops: PaletteStop[] = [
+      { pos: 0, hex: "#000000" },
+      { pos: 1, hex: "#ffffff" },
+    ];
+    expect(previewGradient({ palette: { stops }, colorA: "#10b981", colorB: "#2563eb" })).toBe(
+      "linear-gradient(90deg, #000000 0%, #ffffff 100%)",
+    );
+  });
+
+  it("falls back to a colorA/colorB gradient for v1 flowers with no palette", () => {
+    expect(previewGradient({ colorA: "#10b981", colorB: "#2563eb" })).toBe(
+      "linear-gradient(90deg, #10b981, #2563eb)",
+    );
+  });
+
+  it("falls back to a colorA/colorB gradient when the palette has zero stops", () => {
+    expect(previewGradient({ palette: { stops: [] }, colorA: "#10b981", colorB: "#2563eb" })).toBe(
+      "linear-gradient(90deg, #10b981, #2563eb)",
+    );
+  });
+
+  it("mirrors colorA when colorB is absent", () => {
+    expect(previewGradient({ colorA: "#10b981" })).toBe(
+      "linear-gradient(90deg, #10b981, #10b981)",
+    );
+  });
+
+  it("degrades to flat neutral gray when neither palette nor colorA is present", () => {
+    expect(previewGradient({})).toBe("#808080");
   });
 });
 

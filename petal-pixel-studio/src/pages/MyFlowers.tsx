@@ -4,7 +4,7 @@ import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
 import { Gem, Calendar, Flower2, Trash2, AlertTriangle, Pencil, Search, SearchX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { paletteGradient, familyLabel } from '@/components/flower/paletteUi';
+import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
 import {
   collectFamilies,
   filterFlowers,
@@ -284,7 +284,7 @@ export default function MyFlowers() {
               </button>
             </div>
 
-            <div className="h-1.5 w-full" style={{ background: paletteGradient(flower.params.palette?.stops ?? []) }} />
+            <div className="h-1.5 w-full" style={{ background: previewGradient(flower.params) }} />
 
             <div className="p-4 space-y-2">
               <div className="flex items-center gap-1.5 min-w-0">

@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Flower2, Gem, FileEdit, Activity, PlusCircle, ArrowRight, BarChart3, Clock } from 'lucide-react';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
 import { checkFlowerBackendHealth } from '@/integrations/flowerBackend/client';
-import { paletteGradient, familyLabel } from '@/components/flower/paletteUi';
+import { paletteGradient, previewGradient, familyLabel } from '@/components/flower/paletteUi';
 import { familyDistribution, recentFlowers } from './dashboardStats';
 
 export default function Index() {
@@ -142,7 +142,7 @@ export default function Index() {
               >
                 <div
                   className="h-20 relative"
-                  style={{ background: paletteGradient(flower.params.palette?.stops ?? []) }}
+                  style={{ background: previewGradient(flower.params) }}
                 >
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                   {flower.isMinted && (
