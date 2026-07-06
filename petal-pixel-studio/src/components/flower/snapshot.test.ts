@@ -5,6 +5,7 @@ import {
   renderToBlob,
   fitWithin,
   frameCameraForBounds,
+  frameYaws,
 } from './snapshot';
 
 describe('fitWithin', () => {
@@ -79,6 +80,31 @@ describe('renderer registry', () => {
     await expect(renderToBlob()).resolves.toBeNull();
     await expect(captureFlowerPng()).resolves.toBeNull();
     off();
+  });
+});
+
+describe('frameYaws', () => {
+  it('returns `frames` evenly spaced yaws starting at 0', () => {
+    const ys = frameYaws(4);
+    expect(ys).toHaveLength(4);
+    expect(ys[0]).toBe(0);
+    expect(ys[1]).toBeCloseTo(Math.PI / 2, 10);
+    expect(ys[2]).toBeCloseTo(Math.PI, 10);
+    expect(ys[3]).toBeCloseTo((3 * Math.PI) / 2, 10);
+  });
+
+  it('excludes the 2π endpoint so the loop is seamless', () => {
+    expect(frameYaws(36).some((y) => y >= 2 * Math.PI)).toBe(false);
+  });
+
+  it('is strictly increasing', () => {
+    const ys = frameYaws(12);
+    for (let i = 1; i < ys.length; i++) expect(ys[i]).toBeGreaterThan(ys[i - 1]);
+  });
+
+  it('returns an empty array for non-positive frame counts', () => {
+    expect(frameYaws(0)).toEqual([]);
+    expect(frameYaws(-5)).toEqual([]);
   });
 });
 

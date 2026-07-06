@@ -7,7 +7,7 @@ import { FlowerInfo } from '@/components/flower/FlowerInfo';
 import { FlowerBadges } from '@/components/flower/FlowerBadges';
 import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal } from 'lucide-react';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
@@ -17,8 +17,20 @@ import {
   confirmMintViaGrpc,
   prepareMintViaGrpc,
 } from '@/integrations/flowerBackend/client';
-import { captureFlowerPng } from '@/components/flower/snapshot';
+import { captureFlowerPng, captureFlowerGif } from '@/components/flower/snapshot';
 import { extractMintedTokenId } from './mintReceipt';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -359,6 +371,8 @@ export default function CreateFlower() {
   const [mintResult, setMintResult] = useState<MintResult | null>(null);
   const [showRegenerateWarning, setShowRegenerateWarning] = useState(false);
   const [paramsDirty, setParamsDirty] = useState(false);
+  // UI-only: GIF encode in-flight (spinner + disabled state + re-entry guard).
+  const [isEncodingGif, setIsEncodingGif] = useState(false);
   // UI-only: mobile/tablet controls drawer visibility. Does NOT touch generation/mint state.
   const [controlsOpen, setControlsOpen] = useState(false);
 
@@ -505,21 +519,46 @@ export default function CreateFlower() {
     }
   };
 
+  // Shared blob-to-anchor download helper (PNG + GIF reuse the same sanitized-title
+  // filename and object-URL lifecycle).
+  const triggerDownload = (blob: Blob, ext: 'png' | 'gif') => {
+    const safeTitle = (titleInput.trim() || generationWord || 'flower').replace(/[\\/:*?"<>|]/g, '_');
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safeTitle}.${ext}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadPng = async () => {
     const blob = await captureFlowerPng();
     if (!blob) {
       toast.error('Could not capture the flower image. Is the 3D view visible?');
       return;
     }
-    const safeTitle = (titleInput.trim() || generationWord || 'flower').replace(/[\\/:*?"<>|]/g, '_');
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `${safeTitle}.png`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+    triggerDownload(blob, 'png');
+  };
+
+  const handleDownloadGif = async () => {
+    if (isEncodingGif) return; // re-entry guard, matches other handlers
+    setIsEncodingGif(true);
+    const toastId = toast.loading('Rendering GIF…');
+    try {
+      const blob = await captureFlowerGif({ frames: 36, size: 512, background: 'dark' });
+      if (!blob) {
+        toast.error('Could not render the GIF. Is the 3D view visible?', { id: toastId });
+        return;
+      }
+      triggerDownload(blob, 'gif');
+      toast.success('GIF downloaded', { id: toastId });
+    } catch {
+      toast.error('GIF export failed.', { id: toastId });
+    } finally {
+      setIsEncodingGif(false);
+    }
   };
 
   const handleConnectWallet = async (): Promise<string | null> => {
@@ -862,14 +901,42 @@ export default function CreateFlower() {
               <span>{isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}</span>
             </button>
 
-            <button
-              onClick={() => void handleDownloadPng()}
-              title="Download PNG snapshot"
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
-            >
-              <Download className="w-3 h-3" />
-              <span className="hidden sm:inline">PNG</span>
-            </button>
+            <TooltipProvider>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild disabled={isEncodingGif}>
+                      <button
+                        type="button"
+                        disabled={isEncodingGif}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      >
+                        {isEncodingGif
+                          ? <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
+                          : <Download className="w-3 h-3" />}
+                        <span className="hidden sm:inline">{isEncodingGif ? 'Encoding…' : 'Download'}</span>
+                        <ChevronDown className="w-3 h-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                    PNG is a still frame. GIF spins 36 frames — larger file (~1–4MB), a few seconds to encode.
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="min-w-[180px]">
+                  <DropdownMenuItem onSelect={() => void handleDownloadPng()} className="text-xs gap-2">
+                    <Image className="w-3.5 h-3.5" /> PNG · still frame
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => { e.preventDefault(); void handleDownloadGif(); }}
+                    disabled={isEncodingGif}
+                    className="text-xs gap-2"
+                  >
+                    <Film className="w-3.5 h-3.5" /> GIF · spinning (512²)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TooltipProvider>
 
             <button
               onClick={() => void handleMint()}

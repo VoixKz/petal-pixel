@@ -8,6 +8,8 @@
 // preserveDrawingBuffer stays OFF globally: the pass renders into its own
 // WebGLRenderTarget in the same synchronous task, so the readback is valid.
 
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+
 /** Options for a dedicated off-screen capture pass. */
 export type RenderOpts = {
   /** Square edge in px of the off-screen render target. Defaults to 1024. */
@@ -58,6 +60,81 @@ export async function renderToBlob(opts?: RenderOpts): Promise<Blob | null> {
  */
 export function captureFlowerPng(): Promise<Blob | null> {
   return renderToBlob({ size: 1024, background: 'studio' });
+}
+
+/** Evenly-spaced yaws over [0, 2π); excludes the 2π endpoint for a seamless loop. */
+export function frameYaws(frames: number): number[] {
+  if (frames <= 0) return [];
+  const step = (Math.PI * 2) / frames;
+  return Array.from({ length: frames }, (_, i) => i * step);
+}
+
+const yieldToMain = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/**
+ * Decode a PNG (or any image) Blob to RGBA ImageData at size×size, drawing onto a
+ * reused offscreen 2D canvas. Resolves null when the 2D context is unavailable.
+ */
+async function blobToImageData(
+  blob: Blob,
+  size: number,
+  canvas: HTMLCanvasElement,
+): Promise<ImageData | null> {
+  const bitmap = await createImageBitmap(blob);
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    bitmap.close?.();
+    return null;
+  }
+  ctx.clearRect(0, 0, size, size);
+  ctx.drawImage(bitmap, 0, 0, size, size);
+  bitmap.close?.();
+  return ctx.getImageData(0, 0, size, size);
+}
+
+/**
+ * Render a spinning animated GIF of the flower. For each of `frames` evenly-spaced
+ * yaws, runs the PUBLIC {@link renderToBlob} dedicated capture pass (never reads the
+ * live framebuffer), decodes the PNG blob to RGBA via createImageBitmap onto a reused
+ * offscreen canvas, quantizes a 256-color palette per frame, and encodes with gifenc.
+ * Yields to the event loop between frames so the UI stays responsive.
+ *
+ * NEVER throws. Resolves null when no renderer is registered, any frame fails to
+ * render/decode, or encoding errors.
+ *
+ * @param opts.frames  number of frames over one full rotation (default 36)
+ * @param opts.size    square edge in px of each frame (default 512)
+ * @param opts.background  background treatment forwarded to renderToBlob (default 'dark')
+ */
+export async function captureFlowerGif(
+  opts: { frames?: number; size?: number; background?: string } = {},
+): Promise<Blob | null> {
+  const frames = opts.frames ?? 36;
+  const size = opts.size ?? 512;
+  const background = opts.background ?? 'dark';
+  const yaws = frameYaws(frames);
+  if (yaws.length === 0) return null;
+  try {
+    const gif = GIFEncoder();
+    const canvas = document.createElement('canvas');
+    const delay = 1000 / frames;
+    for (const frameYaw of yaws) {
+      const blob = await renderToBlob({ frameYaw, size, background });
+      if (!blob) return null; // no renderer registered, or the pass failed
+      const data = await blobToImageData(blob, size, canvas);
+      if (!data) return null;
+      const palette = quantize(data.data, 256);
+      const indexed = applyPalette(data.data, palette);
+      gif.writeFrame(indexed, size, size, { palette, delay });
+      await yieldToMain(); // keep the main thread responsive between frames
+    }
+    gif.finish();
+    return new Blob([gif.bytesView()], { type: 'image/gif' });
+  } catch {
+    return null;
+  }
 }
 
 export const SNAPSHOT_MAX_EDGE = 512;
