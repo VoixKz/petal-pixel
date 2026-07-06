@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 export default function Profile() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const isVerified = user?.email_confirmed_at != null;
 
   const savedFlowers = useFlowerStore((s) => s.savedFlowers);
@@ -56,10 +56,11 @@ export default function Profile() {
       toast.error('Could not save profile', { description: error.message });
       return;
     }
-    // No refetch in AuthContext — reflect the saved values locally so the page
-    // (avatar, name, dirty-state) updates immediately.
+    // Reflect the saved values locally for an instant page update, then refresh
+    // the context profile so the sidebar footer + header avatar update live too.
     setSavedName(nextName);
     setSavedAvatarUrl(nextAvatar);
+    void refreshProfile();
     toast.success('Profile updated');
   };
 

@@ -40,6 +40,7 @@ interface AuthContextType {
         token: string,
     ) => Promise<{ error: Error | null }>;
     resendOtp: (email: string) => Promise<{ error: Error | null }>;
+    refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,6 +58,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .eq("user_id", userId)
             .single();
         setProfile(data);
+    };
+
+    // Re-pull the current user's profile so context consumers (sidebar footer,
+    // header avatar) reflect an edit made on the Profile page immediately.
+    const refreshProfile = async () => {
+        if (user) await fetchProfile(user.id);
     };
 
     useEffect(() => {
@@ -168,6 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 signOut,
                 verifyOtp,
                 resendOtp,
+                refreshProfile,
             }}
         >
             {children}
