@@ -16,6 +16,14 @@ import {
   prepareMintViaGrpc,
 } from '@/integrations/flowerBackend/client';
 import { captureFlowerPng } from '@/components/flower/snapshot';
+import { extractMintedTokenId } from './mintReceipt';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   shouldWarnRegenerate,
   isCheckingBackend,
@@ -217,6 +225,66 @@ function UnsavedChangesDialog({
   );
 }
 
+function CopyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-[10px] text-muted-foreground font-semibold w-20 shrink-0 uppercase">{label}</span>
+      <span className="text-xs text-foreground font-mono truncate flex-1">{value}</span>
+      <button
+        onClick={() => { void navigator.clipboard.writeText(value); toast.success(`${label} copied`); }}
+        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+        title={`Copy ${label}`}
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+export interface MintResult {
+  tokenId: number | null;
+  contractAddress: string;
+  txHash: string;
+  tokenUri: string;
+}
+
+function MintSuccessDialog({ result, onClose }: { result: MintResult; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <Gem className="w-4 h-4 text-primary" /> NFT minted
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Your flower is on-chain. Use the details below to import it into MetaMask.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-2.5">
+          <CopyRow label="Token ID" value={result.tokenId != null ? String(result.tokenId) : 'not detected'} />
+          <CopyRow label="Contract" value={result.contractAddress} />
+          <CopyRow label="Tx hash" value={result.txHash} />
+          {result.tokenUri && (
+            <a
+              href={result.tokenUri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline font-mono flex items-center gap-1"
+            >
+              metadata.json <ExternalLink className="w-3 h-3 shrink-0" />
+            </a>
+          )}
+        </div>
+        <div className="rounded-lg bg-secondary/60 border border-border p-3 text-[11px] text-muted-foreground leading-relaxed">
+          <p>1. In MetaMask, open the NFTs tab and choose "Import NFT".</p>
+          <p>2. Paste the contract address and Token ID shown above.</p>
+          <p>3. Confirm — your flower appears in your wallet.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Runs the Supabase-backed save and reports the outcome via toast.
 // saveFlower now reports which case occurred (Clusters A & D):
 //  - 'created': a genuinely new flower was added -> use createdMessage.
@@ -279,6 +347,7 @@ export default function CreateFlower() {
   const [isSaving, setIsSaving] = useState(false);
   const [mintTxHash, setMintTxHash] = useState('');
   const [mintTokenUri, setMintTokenUri] = useState('');
+  const [mintResult, setMintResult] = useState<MintResult | null>(null);
   const [showRegenerateWarning, setShowRegenerateWarning] = useState(false);
   const [paramsDirty, setParamsDirty] = useState(false);
 
@@ -594,7 +663,21 @@ export default function CreateFlower() {
       const signer = await provider.getSigner();
       const signerAddress = await signer.getAddress();
 
-      const prepared = await prepareMintViaGrpc(params.flowerId, signerAddress);
+      // Snapshot the rendered flower for the NFT image. Capture failure must
+      // never block the mint — degrade to metadata without an image.
+      let imageBytes: Uint8Array | undefined;
+      try {
+        const png = await captureFlowerPng();
+        if (png) {
+          imageBytes = new Uint8Array(await png.arrayBuffer());
+        } else {
+          toast.info('Could not capture flower image — minting without a preview.');
+        }
+      } catch {
+        toast.info('Could not capture flower image — minting without a preview.');
+      }
+
+      const prepared = await prepareMintViaGrpc(params.flowerId, signerAddress, imageBytes);
       if (!prepared.contractAddress) {
         throw new Error('Backend returned empty NFT contract address. Set NFT_CONTRACT_ADDRESS in backend env.');
       }
@@ -610,15 +693,28 @@ export default function CreateFlower() {
       const confirmedHash = (receipt?.hash as string | undefined) || (tx.hash as string);
       await confirmMintViaGrpc(params.flowerId, confirmedHash);
 
+      // ERC-721 Transfer(from=0x0, to, tokenId): tokenId is the third indexed topic.
+      const tokenId = receipt ? extractMintedTokenId(receipt.logs, prepared.contractAddress) : null;
+
       const tokenUri = prepared.mintTokenUri || prepared.tokenUri;
       if (tokenUri) setMintTokenUri(tokenUri);
 
-      const synced = await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined);
+      const synced = await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined, {
+        ...(tokenId != null ? { tokenId } : {}),
+        contractAddress: prepared.contractAddress,
+      });
       if (synced) {
         toast.success('NFT minted and confirmed in backend');
       } else {
         toast.warning('Minted on-chain but failed to sync to your collection');
       }
+
+      setMintResult({
+        tokenId,
+        contractAddress: prepared.contractAddress,
+        txHash: confirmedHash,
+        tokenUri: tokenUri || '',
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Mint failed';
       if (message.toLowerCase().includes('not_found') || message.toLowerCase().includes('not found')) {
@@ -647,6 +743,10 @@ export default function CreateFlower() {
           onDiscard={() => { clearEditMode(); blocker.proceed(); }}
           onStay={() => blocker.reset()}
         />
+      )}
+
+      {mintResult && (
+        <MintSuccessDialog result={mintResult} onClose={() => setMintResult(null)} />
       )}
 
       <div className="flex-1 flex flex-col relative">

@@ -54,6 +54,11 @@ export interface FlowerParams {
   sunflowerParams?: SunflowerParams;
   rhodoneaParams?: RhodoneaParams;
   superformulaParams?: SuperformulaParams;
+
+  // Mint results: stored inside params so they round-trip through the existing
+  // params jsonb column with zero DB migration. Set at mint time only.
+  mintTokenId?: number;
+  mintContractAddress?: string;
 }
 
 export interface SavedFlower {
@@ -104,7 +109,12 @@ interface FlowerStore {
   loadFlowerForEdit: (flower: SavedFlower) => void;
   clearEditMode: () => void;
   mintFlower: (id: string) => void;
-  markMintedByBackendFlowerId: (backendFlowerId: string, txHash?: string, tokenUri?: string) => Promise<boolean>;
+  markMintedByBackendFlowerId: (
+    backendFlowerId: string,
+    txHash?: string,
+    tokenUri?: string,
+    mint?: { tokenId?: number; contractAddress?: string },
+  ) => Promise<boolean>;
   loadFromBackend: () => Promise<void>;
   resetParams: () => void;
   resetFlowerStore: () => void;
@@ -546,12 +556,25 @@ export const useFlowerStore = create<FlowerStore>()(
       ),
     })),
 
-  markMintedByBackendFlowerId: async (backendFlowerId, txHash, tokenUri) => {
-    // Optimistic local update
+  markMintedByBackendFlowerId: async (backendFlowerId, txHash, tokenUri, mint) => {
+    // Optimistic local update. Mint results are stamped into params so they
+    // persist through the params jsonb round-trip (no DB migration).
     set((s) => ({
       savedFlowers: s.savedFlowers.map((f) =>
         f.backendFlowerId === backendFlowerId
-          ? { ...f, isMinted: true, txHash: txHash ?? f.txHash, tokenUri: tokenUri ?? f.tokenUri }
+          ? {
+              ...f,
+              isMinted: true,
+              txHash: txHash ?? f.txHash,
+              tokenUri: tokenUri ?? f.tokenUri,
+              params: mint
+                ? {
+                    ...f.params,
+                    ...(mint.tokenId != null ? { mintTokenId: mint.tokenId } : {}),
+                    ...(mint.contractAddress ? { mintContractAddress: mint.contractAddress } : {}),
+                  }
+                : f.params,
+            }
           : f,
       ),
     }));
@@ -562,11 +585,18 @@ export const useFlowerStore = create<FlowerStore>()(
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return true; // nothing to sync (not signed in)
 
+      const updatedParams = get().savedFlowers.find(
+        (f) => f.backendFlowerId === backendFlowerId,
+      )?.params;
+
       const { error } = await supabase.from('user_flowers')
         .update({
           is_minted: true,
           tx_hash: txHash ?? null,
           token_uri: tokenUri ?? null,
+          ...(mint && updatedParams
+            ? { params: updatedParams as unknown as import('@/integrations/supabase/types').Json }
+            : {}),
         })
         .eq('user_id', user.id)
         .eq('flower_id', backendFlowerId);

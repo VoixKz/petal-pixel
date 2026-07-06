@@ -26,8 +26,18 @@ export async function getFlowerViaGrpc(flowerId: string) {
   return client.getFlower(create(GetFlowerRequestSchema, { flowerId }));
 }
 
-export async function prepareMintViaGrpc(flowerId: string, walletAddress: string) {
-  return client.prepareMint(create(PrepareMintRequestSchema, { flowerId, walletAddress }));
+export async function prepareMintViaGrpc(
+  flowerId: string,
+  walletAddress: string,
+  imagePng?: Uint8Array,
+) {
+  return client.prepareMint(
+    create(PrepareMintRequestSchema, {
+      flowerId,
+      walletAddress,
+      ...(imagePng && imagePng.length > 0 ? { imagePng } : {}),
+    }),
+  );
 }
 
 export async function confirmMintViaGrpc(flowerId: string, txHash: string) {
