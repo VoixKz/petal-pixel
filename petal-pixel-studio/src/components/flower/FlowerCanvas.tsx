@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
+import { OrbitControls, Environment, Lightformer, ContactShadows } from '@react-three/drei';
+import { EffectComposer, Bloom, Vignette } from '@react-three/postprocessing';
 import {
   Color,
   Mesh,
@@ -19,18 +20,20 @@ import { useFlowerStore, type FlowerParams } from '@/stores/flowerStore';
 import { type FlowerBounds } from '@/math/flowerBounds';
 import { registerRenderer, frameCameraForBounds, type RenderOpts } from './snapshot';
 
-// Studio background: near-black but LIFTED so petals read bright (vs. the murky
-// on-screen #08080f). Kept as a plain hex the capture pass turns into a Color.
+// Studio background: near-black but LIFTED so petals read bright. This is now
+// ALSO the live on-screen clear color + fog (D2 "one bright config"): the studio
+// looks as good as the export instead of being a dim preview. Kept as a plain
+// hex the capture pass turns into a Color.
 const STUDIO_BG = '#14141c';
+// Darker backdrop retained only for the capture pass's explicit 'dark' option.
 const ONSCREEN_BG = '#08080f';
-// Bright-pass tuning: lift exposure and reflected environment so the export is
-// not pale/dim like the live framebuffer.
-const CAPTURE_EXPOSURE_MULT = 1.5;
-const CAPTURE_ENV_MAP_INTENSITY = 1.6;
 const DEFAULT_CAPTURE_SIZE = 1024;
 
 function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null; controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
-  const { camera } = useThree();
+  // invalidate() is needed under frameloop="demand": this imperative camera move
+  // happens in an effect the R3F reconciler does not auto-schedule a paint for,
+  // so we must explicitly request one repaint after recentering.
+  const { camera, invalidate } = useThree();
 
   useEffect(() => {
     if (!bounds) {
@@ -56,7 +59,8 @@ function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null;
       controlsRef.current.target.copy(bounds.center);
       controlsRef.current.update();
     }
-  }, [bounds, camera, controlsRef]);
+    invalidate();
+  }, [bounds, camera, controlsRef, invalidate]);
 
   return null;
 }
@@ -97,7 +101,7 @@ function pixelsToPngBlob(pixels: Uint8Array, size: number): Promise<Blob | null>
 }
 
 function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
-  const { gl, scene, camera } = useThree();
+  const { gl, scene, camera, invalidate } = useThree();
   // Keep the latest bounds available to the registered renderer without
   // re-registering on every bounds change.
   const boundsRef = useRef<FlowerBounds | null>(bounds);
@@ -115,19 +119,18 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
         const dpr = Math.min(gl.getPixelRatio() || 1, 2);
         const rtSize = Math.max(1, Math.round(size * dpr));
 
-        const { mesh, group } = findFlowerMeshAndGroup(scene);
-        const material =
-          mesh && mesh.material instanceof MeshPhysicalMaterial ? mesh.material : null;
+        // Only the group is needed now (for frameYaw); the material envMap bump
+        // that used to diverge the export from the live view has been removed so
+        // live brightness == export brightness (D2 "one bright config").
+        const { group } = findFlowerMeshAndGroup(scene);
 
         // ── Save on-screen state we are about to mutate ──────────────────────
         const prevSize = gl.getSize(new Vector2());
         const prevBg = scene.background;
         const prevFog = scene.fog;
-        const prevToneExp = gl.toneMappingExposure;
         const prevClearColor = new Color();
         gl.getClearColor(prevClearColor);
         const prevClearAlpha = gl.getClearAlpha();
-        const prevEnvMapIntensity = material ? material.envMapIntensity : 0;
         const prevYaw = group ? group.rotation.y : 0;
 
         const rt = new WebGLRenderTarget(rtSize, rtSize);
@@ -145,8 +148,9 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
           } else {
             scene.background = new Color(bg);
           }
-          gl.toneMappingExposure = prevToneExp * CAPTURE_EXPOSURE_MULT;
-          if (material) material.envMapIntensity = CAPTURE_ENV_MAP_INTENSITY;
+          // Exposure + envMapIntensity are NO LONGER bumped here: the renderer's
+          // toneMappingExposure (1.3, set on <Canvas>) is used for both the live
+          // view and this capture, so the export matches what is on screen.
           if (group && opts?.frameYaw != null) group.rotation.y = opts.frameYaw;
 
           // ── Clone the camera so the live OrbitControls camera is untouched ──
@@ -176,17 +180,17 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
           gl.setRenderTarget(null);
           scene.background = prevBg;
           scene.fog = prevFog;
-          gl.toneMappingExposure = prevToneExp;
-          if (material) material.envMapIntensity = prevEnvMapIntensity;
           if (group && opts?.frameYaw != null) group.rotation.y = prevYaw;
           gl.setSize(prevSize.x, prevSize.y);
           rt.dispose();
-          // Repaint the live view with the ORIGINAL camera so the on-screen
-          // frame is visually unchanged after a capture.
-          gl.render(scene, camera);
+          // Under frameloop="demand" a raw gl.render() would paint an UN-composed
+          // (bloom-less, vignette-less) frame that then stays stale on screen.
+          // invalidate() instead asks the EffectComposer to repaint one correct
+          // composed frame using the already-restored scene state.
+          invalidate();
         }
       }),
-    [gl, scene, camera],
+    [gl, scene, camera, invalidate],
   );
 
   return null;
@@ -203,14 +207,26 @@ export function FlowerCanvas({ params: paramsProp }: { params?: FlowerParams } =
   return (
     <div className="w-full h-full relative bg-canvas grid-bg rounded-lg overflow-hidden">
       <Canvas
+        // frameloop="demand" → the canvas only repaints when something asks it to
+        // (invalidate()). CONTRACT for ren-material (Flower3D.tsx): its idle
+        // useFrame spin FREEZES under demand unless that useFrame calls
+        // state.invalidate() every frame while params.idleMotion is true. drei's
+        // OrbitControls already calls invalidate() on its change event, and the
+        // AutoFrameCamera / SnapshotBridge effects here invalidate() explicitly.
+        frameloop="demand"
         camera={{ position: [0, 2, 4], fov: 45 }}
-        gl={{ antialias: true, alpha: false }}
+        // One bright config (D2): 1.3 exposure applies to BOTH the live view and
+        // the capture pass (which uses the same renderer), so studio == export.
+        gl={{ antialias: true, alpha: false, toneMappingExposure: 1.3 }}
       >
-        <color attach="background" args={[ONSCREEN_BG]} />
-        <fog attach="fog" args={[ONSCREEN_BG, 6, 14]} />
+        <color attach="background" args={[STUDIO_BG]} />
+        <fog attach="fog" args={[STUDIO_BG, 6, 14]} />
 
-        <ambientLight intensity={0.3} />
-        <directionalLight position={[5, 5, 5]} intensity={1} />
+        {/* Bright rig: warm/cool hemisphere fill + strong key, the two
+            palette-tied point lights, and a cool rim/back light so overlapping
+            petal layers separate. */}
+        <hemisphereLight args={['#fff4e6', '#1a1a24', 0.6]} />
+        <directionalLight position={[5, 6, 5]} intensity={1.2} />
         <pointLight
           position={[0, 2, 0]}
           intensity={params.glowIntensity * 2}
@@ -221,6 +237,7 @@ export function FlowerCanvas({ params: paramsProp }: { params?: FlowerParams } =
           intensity={0.5}
           color={params.colorB}
         />
+        <directionalLight position={[-4, 4, -6]} intensity={0.7} color="#bcd4ff" />
 
         <Flower3D params={params} onBoundsChange={setBounds} />
         <AutoFrameCamera bounds={bounds} controlsRef={controlsRef} />
@@ -253,7 +270,36 @@ export function FlowerCanvas({ params: paramsProp }: { params?: FlowerParams } =
             RIGHT: MOUSE.PAN,
           }}
         />
-        <Environment preset="night" />
+        {/*
+          In-memory IBL: replaces drei's preset="night" which fetched a remote
+          HDR from the pmndrs CDN at runtime (first-paint latency + CSP/offline
+          risk). frames={1} bakes this Lightformer rig into an env map ONCE; it
+          is lighting/reflection only (background stays STUDIO_BG), giving
+          metallic/glass petals soft warm+cool specular streaks instead of a
+          black blob.
+        */}
+        <Environment resolution={256} frames={1} environmentIntensity={0.9}>
+          <Lightformer form="rect" intensity={2.2} color="#fff2e0" position={[0, 4, -4]} scale={[8, 4, 1]} />
+          <Lightformer form="rect" intensity={1.1} color="#bcd4ff" position={[-5, 1, 2]} scale={[4, 4, 1]} />
+          <Lightformer form="ring" intensity={1.4} color="#ffd9b0" position={[4, 3, 3]} scale={3} />
+        </Environment>
+
+        {/*
+          Post-processing (LIVE VIEW ONLY): the capture pass renders straight
+          through gl.render into its own render target, bypassing this composer,
+          so the exported PNG/GIF is unchanged and stays deterministic. Bloom
+          intensity is bound to params.glowIntensity (0→1 maps 0.3→1.3) so the
+          Glow Intensity slider finally has visible meaning.
+        */}
+        <EffectComposer>
+          <Bloom
+            luminanceThreshold={0.6}
+            luminanceSmoothing={0.3}
+            mipmapBlur
+            intensity={0.3 + params.glowIntensity}
+          />
+          <Vignette eskil={false} offset={0.35} darkness={0.5} />
+        </EffectComposer>
       </Canvas>
     </div>
   );
