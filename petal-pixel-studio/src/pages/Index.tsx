@@ -1,17 +1,16 @@
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Flower2, Gem, FileEdit, Activity, PlusCircle, ArrowRight, BarChart3, Clock } from 'lucide-react';
+import { Flower2, Gem, FileEdit, PlusCircle, ArrowRight, BarChart3, Clock } from 'lucide-react';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
-import { checkFlowerBackendHealth } from '@/integrations/flowerBackend/client';
 import { paletteGradient, previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { FlowerThumb } from '@/components/flower/FlowerThumb';
 import { familyDistribution, recentFlowers } from './dashboardStats';
 
 export default function Index() {
   const savedFlowers = useFlowerStore((s) => s.savedFlowers);
   const loadFlowerForEdit = useFlowerStore((s) => s.loadFlowerForEdit);
   const navigate = useNavigate();
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
 
   const totalFlowers = savedFlowers.length;
   const mintedCount = useMemo(() => savedFlowers.filter((f) => f.isMinted).length, [savedFlowers]);
@@ -36,22 +35,10 @@ export default function Index() {
     navigate('/create', { state: { isEditing: true } });
   };
 
-  useEffect(() => {
-    checkFlowerBackendHealth()
-      .then((ok) => setBackendOnline(ok))
-      .catch(() => setBackendOnline(false));
-  }, []);
-
   const stats = [
     { label: 'Total Flowers', value: String(totalFlowers), icon: Flower2, color: 'text-primary' },
     { label: 'Minted NFTs', value: String(mintedCount), icon: Gem, color: 'text-accent' },
     { label: 'Drafts', value: String(draftCount), icon: FileEdit, color: 'text-primary' },
-    {
-      label: 'Backend',
-      value: backendOnline === null ? '...' : backendOnline ? 'Online' : 'Offline',
-      icon: Activity,
-      color: backendOnline ? 'text-emerald-400' : backendOnline === false ? 'text-rose-400' : 'text-muted-foreground',
-    },
   ];
 
   return (
@@ -73,7 +60,7 @@ export default function Index() {
         </Link>
       </motion.div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -133,32 +120,36 @@ export default function Index() {
           <p className="text-sm text-muted-foreground">No flowers yet — create your first bloom to start your garden.</p>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {recent.map((flower) => (
-              <button
-                key={flower.id}
-                onClick={() => handleEdit(flower)}
-                className="bg-card rounded-xl border border-border overflow-hidden text-left hover:border-primary/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                title={`Edit ${flower.title}`}
-              >
-                <div
-                  className="h-20 relative"
-                  style={{ background: previewGradient(flower.params) }}
+            {recent.map((flower) => {
+              const imgId = flower.backendFlowerId ?? flower.params.flowerId;
+              return (
+                <button
+                  key={flower.id}
+                  onClick={() => handleEdit(flower)}
+                  className="bg-card rounded-xl border border-border overflow-hidden text-left hover:border-primary/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  title={`Edit ${flower.title}`}
                 >
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                  {flower.isMinted && (
-                    <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
-                      <Gem className="w-3 h-3" /> Minted
-                    </span>
-                  )}
-                </div>
-                <div className="p-3">
-                  <p className="text-sm font-semibold text-foreground truncate">{flower.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-                    {familyLabel(flower.params)} · {flower.createdAt}
-                  </p>
-                </div>
-              </button>
-            ))}
+                  <FlowerThumb
+                    flowerId={imgId}
+                    params={flower.params}
+                    className="h-20 relative overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors" />
+                    {flower.isMinted && (
+                      <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
+                        <Gem className="w-3 h-3" /> Minted
+                      </span>
+                    )}
+                  </FlowerThumb>
+                  <div className="p-3">
+                    <p className="text-sm font-semibold text-foreground truncate">{flower.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 capitalize">
+                      {familyLabel(flower.params)} · {flower.createdAt}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </motion.div>
