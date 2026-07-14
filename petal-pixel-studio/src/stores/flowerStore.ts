@@ -86,6 +86,12 @@ interface FlowerStore {
   title: string;
   editingFlowerId: string | null;
   savedFlowers: SavedFlower[];
+  /**
+   * Ids currently soft-hidden by an in-flight undo-delete grace window. NOT
+   * persisted (see partialize) — a hard page reload abandons any pending delete,
+   * which is the safe outcome for a data-loss guard.
+   */
+  pendingDeleteIds: string[];
   isGenerating: boolean;
   lastError: string;
   /** The user id whose flowers are currently cached. Used to detect cross-user rehydration. */
@@ -113,6 +119,17 @@ interface FlowerStore {
   saveFlower: () => Promise<'created' | 'updated' | 'aborted'>;
   updateFlowerTitle: (id: string, newTitle: string) => Promise<void>;
   deleteFlower: (id: string) => Promise<void>;
+  /**
+   * Soft-delete with a grace window that SURVIVES navigation. The flower is
+   * hidden immediately via pendingDeleteIds but stays in savedFlowers until the
+   * grace elapses, at which point the real deleteFlower runs (hard delete +
+   * Supabase). The timer lives at MODULE scope, so leaving /my-flowers mid-window
+   * neither commits the delete early nor abandons it, and the globally-mounted
+   * Sonner toast's Undo can cancel it from any page.
+   */
+  scheduleDelete: (id: string) => void;
+  /** Cancel a pending scheduleDelete before its grace elapses (the toast's Undo). */
+  undoDelete: (id: string) => void;
   loadFlowerForEdit: (flower: SavedFlower) => void;
   clearEditMode: () => void;
   mintFlower: (id: string) => void;
@@ -150,6 +167,15 @@ function bumpSavedFlowersMutationCounter() {
   savedFlowersMutationCounter += 1;
   return savedFlowersMutationCounter;
 }
+
+// ─── Undo-delete grace window (survives navigation) ───────────────────────────
+// The pending-delete timers live at MODULE scope (not component/ref scope) so
+// navigating away from /my-flowers during the grace window neither commits the
+// delete early nor abandons it, and the globally-mounted Sonner toast's Undo can
+// cancel the delete from any page. pendingDeleteIds (store state, NOT persisted)
+// drives the optimistic hide. See scheduleDelete/undoDelete.
+export const DELETE_GRACE_MS = 6000;
+const pendingDeleteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function seedToDisplay(seed: bigint) {
   return seed.toString();
@@ -249,6 +275,7 @@ export const useFlowerStore = create<FlowerStore>()(
   isGenerating: false,
   lastError: "",
   savedFlowers: [],
+  pendingDeleteIds: [],
   ownerUserId: null,
 
   setParam: (key, value) =>
@@ -563,6 +590,33 @@ export const useFlowerStore = create<FlowerStore>()(
     }
   },
 
+  scheduleDelete: (id) => {
+    const { savedFlowers, pendingDeleteIds } = get();
+    // Only schedule a real, not-already-pending flower.
+    if (!savedFlowers.some((f) => f.id === id)) return;
+    if (pendingDeleteIds.includes(id)) return;
+
+    // Optimistic hide, driven by durable store state (not a component ref) so it
+    // stays consistent no matter which page is mounted.
+    set({ pendingDeleteIds: [...pendingDeleteIds, id] });
+
+    const timer = setTimeout(() => {
+      pendingDeleteTimers.delete(id);
+      set((s) => ({ pendingDeleteIds: s.pendingDeleteIds.filter((x) => x !== id) }));
+      // Hard delete (removes from savedFlowers + Supabase). Fires at module
+      // scope, so it completes even if /my-flowers has since unmounted.
+      void get().deleteFlower(id);
+    }, DELETE_GRACE_MS);
+    pendingDeleteTimers.set(id, timer);
+  },
+
+  undoDelete: (id) => {
+    const timer = pendingDeleteTimers.get(id);
+    if (timer) clearTimeout(timer);
+    pendingDeleteTimers.delete(id);
+    set((s) => ({ pendingDeleteIds: s.pendingDeleteIds.filter((x) => x !== id) }));
+  },
+
   loadFlowerForEdit: (flower) => {
     set({
       params: { ...flower.params },
@@ -786,8 +840,13 @@ export const useFlowerStore = create<FlowerStore>()(
     })),
 
   resetFlowerStore: () => {
+    // Cancel any in-flight undo-delete timers so a stray delete can't fire
+    // against a reset/logged-out store (or the next user's cache).
+    pendingDeleteTimers.forEach((t) => clearTimeout(t));
+    pendingDeleteTimers.clear();
     set({
       savedFlowers: [],
+      pendingDeleteIds: [],
       params: defaultParams,
       editingFlowerId: null,
       title: "Untitled Flower",

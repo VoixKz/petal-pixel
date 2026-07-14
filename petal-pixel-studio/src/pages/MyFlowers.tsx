@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
+import { useFlowerStore, DELETE_GRACE_MS, type SavedFlower } from '@/stores/flowerStore';
 import { Gem, Calendar, Flower2, Trash2, Pencil, Search, SearchX, Share2, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -70,7 +70,9 @@ const selectClass =
 export default function MyFlowers() {
   const savedFlowers = useFlowerStore((s) => s.savedFlowers);
   const loadFlowerForEdit = useFlowerStore((s) => s.loadFlowerForEdit);
-  const deleteFlower = useFlowerStore((s) => s.deleteFlower);
+  const scheduleDelete = useFlowerStore((s) => s.scheduleDelete);
+  const undoDelete = useFlowerStore((s) => s.undoDelete);
+  const pendingDeleteIds = useFlowerStore((s) => s.pendingDeleteIds);
   const updateFlowerTitle = useFlowerStore((s) => s.updateFlowerTitle);
   const toggleFavorite = useFlowerStore((s) => s.toggleFavorite);
   const navigate = useNavigate();
@@ -82,29 +84,13 @@ export default function MyFlowers() {
   const [sortOrder, setSortOrder] = useState<GallerySortOrder>('newest');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
 
-  // Undo-delete: deleting a card soft-hides it immediately and only calls the
-  // store's hard delete after a 6s grace window (cleared by Undo).
-  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
-  const commitTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
-  useEffect(() => {
-    // Flush any still-pending soft-deletes on unmount so nothing is silently
-    // orphaned (e.g. navigating away mid-undo-window).
-    return () => {
-      commitTimers.current.forEach((t, id) => {
-        clearTimeout(t);
-        void deleteFlower(id);
-      });
-    };
-  }, [deleteFlower]);
-
   const families = useMemo(() => collectFamilies(savedFlowers), [savedFlowers]);
   const visible = useMemo(() => {
     const filtered = filterFlowers(savedFlowers, { search, mint: mintFilter, family: familyFilter });
     const byFavorite = favoritesOnly ? filtered.filter((f) => f.isFavorite) : filtered;
     const sorted =
       sortOrder === 'favorites' ? sortByFavoritesFirst(byFavorite) : sortFlowers(byFavorite, sortOrder);
-    return sorted.filter((f) => !pendingDeleteIds.has(f.id));
+    return sorted.filter((f) => !pendingDeleteIds.includes(f.id));
   }, [savedFlowers, search, mintFilter, familyFilter, favoritesOnly, sortOrder, pendingDeleteIds]);
 
   const clearFilters = () => {
@@ -128,32 +114,16 @@ export default function MyFlowers() {
     );
 
   const requestDelete = (flower: SavedFlower) => {
-    setPendingDeleteIds((s) => new Set(s).add(flower.id));
-    const timer = setTimeout(() => {
-      commitTimers.current.delete(flower.id);
-      setPendingDeleteIds((s) => {
-        const next = new Set(s);
-        next.delete(flower.id);
-        return next;
-      });
-      void deleteFlower(flower.id);
-    }, 6000);
-    commitTimers.current.set(flower.id, timer);
-
+    // The pending-delete lifecycle lives in the store (module-scoped timer), so
+    // it survives navigating away from /my-flowers: the delete still commits
+    // after the grace, and the globally-mounted toast's Undo can cancel it from
+    // any page — no premature commit, no orphaned no-op Undo.
+    scheduleDelete(flower.id);
     toast('Flower deleted', {
-      duration: 6000,
+      duration: DELETE_GRACE_MS,
       action: {
         label: 'Undo',
-        onClick: () => {
-          const t = commitTimers.current.get(flower.id);
-          if (t) clearTimeout(t);
-          commitTimers.current.delete(flower.id);
-          setPendingDeleteIds((s) => {
-            const next = new Set(s);
-            next.delete(flower.id);
-            return next;
-          });
-        },
+        onClick: () => undoDelete(flower.id),
       },
     });
   };
