@@ -11,7 +11,6 @@ import {
   Vector2,
   Vector3,
   WebGLRenderTarget,
-  type Group,
   type Object3D,
 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -65,8 +64,25 @@ function AutoFrameCamera({ bounds, controlsRef }: { bounds: FlowerBounds | null;
   return null;
 }
 
-/** Find the flower mesh (first MeshPhysicalMaterial mesh) and its parent group. */
-function findFlowerMeshAndGroup(scene: Object3D): { mesh: Mesh | null; group: Group | null } {
+/**
+ * Find the flower mesh (first MeshPhysicalMaterial mesh) and the animated groups
+ * wrapping it (Flower3D.tsx). The v3 breath refactor nests the mesh under TWO
+ * groups:
+ *   - OUTER idle-spin group — carries GROUP_TILT_X / GROUP_SCALE / position AND
+ *     the idle spin that accumulates into `rotation.y`.
+ *   - INNER breath group    — base identity; the idle loop drives its `scale`
+ *     and `rotation.x/z` (seed-deterministic breathe + tilt).
+ *
+ * The capture must neutralize BOTH — pin the outer yaw and collapse the inner
+ * breath — to render the documented clock-independent, front-facing 3/4 pose.
+ * We walk every ancestor group from the mesh up to (not including) the scene so
+ * the outermost / innermost are found structurally rather than by a hard-coded
+ * depth.
+ */
+function findFlowerCaptureGroups(scene: Object3D): {
+  innerGroup: Object3D | null;
+  outerGroup: Object3D | null;
+} {
   let mesh: Mesh | null = null;
   scene.traverse((obj) => {
     if (mesh) return;
@@ -74,8 +90,20 @@ function findFlowerMeshAndGroup(scene: Object3D): { mesh: Mesh | null; group: Gr
       mesh = obj;
     }
   });
-  const group = mesh && mesh.parent ? (mesh.parent as Group) : null;
-  return { mesh, group };
+  const found = mesh as Mesh | null;
+  if (!found) return { innerGroup: null, outerGroup: null };
+
+  const groups: Object3D[] = [];
+  let node: Object3D | null = found.parent;
+  while (node && node !== scene) {
+    groups.push(node);
+    node = node.parent;
+  }
+  // groups[0] is the mesh's direct parent (inner breath group); the last entry
+  // is the outermost group under the scene (the one whose rotation.y idle spins).
+  const innerGroup = groups.length > 0 ? groups[0] : null;
+  const outerGroup = groups.length > 0 ? groups[groups.length - 1] : null;
+  return { innerGroup, outerGroup };
 }
 
 /**
@@ -119,10 +147,16 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
         const dpr = Math.min(gl.getPixelRatio() || 1, 2);
         const rtSize = Math.max(1, Math.round(size * dpr));
 
-        // Only the group is needed now (for frameYaw); the material envMap bump
-        // that used to diverge the export from the live view has been removed so
-        // live brightness == export brightness (D2 "one bright config").
-        const { group } = findFlowerMeshAndGroup(scene);
+        // Both animated groups are needed to make the pose deterministic: the
+        // OUTER group (idle spin on rotation.y) and the INNER breath group (live
+        // scale + tilt). Pinning only the mesh's direct parent (as the pre-fix
+        // code did) hit the inner breath group — whose rotation.y is always 0 —
+        // so the outer idle spin + breath leaked into the "deterministic" export.
+        const { innerGroup, outerGroup } = findFlowerCaptureGroups(scene);
+        // Only treat the inner group as the breath group when it is DISTINCT from
+        // the outer one: collapsing a lone combined group to identity would wipe
+        // GROUP_SCALE / GROUP_TILT_X and blow the flower out of frame.
+        const breathGroup = innerGroup && innerGroup !== outerGroup ? innerGroup : null;
 
         // ── Save on-screen state we are about to mutate ──────────────────────
         const prevSize = gl.getSize(new Vector2());
@@ -131,7 +165,12 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
         const prevClearColor = new Color();
         gl.getClearColor(prevClearColor);
         const prevClearAlpha = gl.getClearAlpha();
-        const prevYaw = group ? group.rotation.y : 0;
+        const prevOuterYaw = outerGroup ? outerGroup.rotation.y : 0;
+        // Clone (not alias) the live breath transform so restore is byte-for-byte —
+        // matters most when idleMotion is OFF and Flower3D's useFrame early-returns
+        // instead of re-driving these values after the capture.
+        const prevBreathScale = breathGroup ? breathGroup.scale.clone() : null;
+        const prevBreathRot = breathGroup ? breathGroup.rotation.clone() : null;
 
         const rt = new WebGLRenderTarget(rtSize, rtSize);
 
@@ -151,7 +190,19 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
           // Exposure + envMapIntensity are NO LONGER bumped here: the renderer's
           // toneMappingExposure (1.3, set on <Canvas>) is used for both the live
           // view and this capture, so the export matches what is on screen.
-          if (group && opts?.frameYaw != null) group.rotation.y = opts.frameYaw;
+          //
+          // ── Neutralize the FULL animated transform for a deterministic pose ──
+          // Pin the outer group's yaw to frameYaw (dropping both the user's
+          // rotation and the accumulated idle spin) and collapse the inner breath
+          // group to its identity base so no mid-breath scale/tilt is frozen in.
+          // Together these guarantee that the same flower captured at two idle
+          // clock times renders the identical front-facing 3/4 pose (mint PNG /
+          // OG preview / seamless GIF loop).
+          if (outerGroup && opts?.frameYaw != null) outerGroup.rotation.y = opts.frameYaw;
+          if (breathGroup) {
+            breathGroup.scale.set(1, 1, 1);
+            breathGroup.rotation.set(0, 0, 0);
+          }
 
           // ── Clone the camera so the live OrbitControls camera is untouched ──
           const cam = (camera as PerspectiveCamera).clone();
@@ -180,7 +231,12 @@ function SnapshotBridge({ bounds }: { bounds: FlowerBounds | null }) {
           gl.setRenderTarget(null);
           scene.background = prevBg;
           scene.fog = prevFog;
-          if (group && opts?.frameYaw != null) group.rotation.y = prevYaw;
+          // Restore the exact live animated transform we neutralized above.
+          if (outerGroup && opts?.frameYaw != null) outerGroup.rotation.y = prevOuterYaw;
+          if (breathGroup) {
+            if (prevBreathScale) breathGroup.scale.copy(prevBreathScale);
+            if (prevBreathRot) breathGroup.rotation.copy(prevBreathRot);
+          }
           gl.setSize(prevSize.x, prevSize.y);
           rt.dispose();
           // Under frameloop="demand" a raw gl.render() would paint an UN-composed
