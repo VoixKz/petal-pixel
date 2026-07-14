@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"context"
+	"testing"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
 
 func TestIsValidFlowerID(t *testing.T) {
 	cases := []struct {
@@ -56,6 +63,51 @@ func TestIsPNG(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isPNG(tc.b); got != tc.want {
 				t.Errorf("isPNG(%v) = %v, want %v", tc.b, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRecoveryUnaryInterceptorConvertsPanic(t *testing.T) {
+	h := func(ctx context.Context, req interface{}) (interface{}, error) { panic("boom") }
+	_, err := recoveryUnaryInterceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/M"}, h)
+	if status.Code(err) != codes.Internal {
+		t.Fatalf("code = %v, want Internal", status.Code(err))
+	}
+}
+
+func TestRecoveryUnaryInterceptorPassesSuccessThrough(t *testing.T) {
+	want := "ok"
+	h := func(ctx context.Context, req interface{}) (interface{}, error) { return want, nil }
+	got, err := recoveryUnaryInterceptor(context.Background(), nil, &grpc.UnaryServerInfo{}, h)
+	if err != nil || got != want {
+		t.Fatalf("got (%v,%v), want (ok,nil)", got, err)
+	}
+}
+
+func TestGrpcWebOriginAllowed(t *testing.T) {
+	cases := []struct {
+		name    string
+		origin  string
+		allowed []string
+		want    bool
+	}{
+		{"unset blocks remote", "https://evil.example.com", nil, false},
+		{"unset permits localhost", "http://localhost:8080", nil, true},
+		{"unset permits 127.0.0.1 any port", "http://127.0.0.1:5173", nil, true},
+		{"unset permits https localhost", "https://localhost", nil, true},
+		{"unset permits ipv6 loopback", "http://[::1]:8080", nil, true},
+		{"unset rejects localhost-suffix trick", "http://localhost.evil.com", nil, false},
+		{"unset rejects empty origin", "", nil, false},
+		{"list exact match", "http://localhost:8080", []string{"http://localhost:8080"}, true},
+		{"list case-insensitive", "HTTP://LOCALHOST:8080", []string{"http://localhost:8080"}, true},
+		{"list non-member blocked", "http://localhost:9999", []string{"http://localhost:8080"}, false},
+		{"list is authoritative over loopback", "http://127.0.0.1:8080", []string{"http://localhost:8080"}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := grpcWebOriginAllowed(tc.origin, tc.allowed); got != tc.want {
+				t.Errorf("grpcWebOriginAllowed(%q, %v) = %v, want %v", tc.origin, tc.allowed, got, tc.want)
 			}
 		})
 	}

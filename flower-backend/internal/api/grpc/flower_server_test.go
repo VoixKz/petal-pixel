@@ -5,13 +5,19 @@ import (
 
 	flowerv1 "flower-backend/gen/go/flower/v1"
 	"flower-backend/internal/flower"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // toProtoParams must map v1 scalars, family, a non-nil palette with >=2 stops,
 // and EXACTLY the oneof case matching Params.Family.
 func TestToProtoParamsScalarsFamilyPalette(t *testing.T) {
 	p := flower.GenerateFromName("Ada Lovelace")
-	got := toProtoParams(p)
+	got, err := toProtoParams(p)
+	if err != nil {
+		t.Fatalf("toProtoParams: %v", err)
+	}
 
 	if got == nil {
 		t.Fatal("toProtoParams returned nil")
@@ -59,7 +65,10 @@ func TestToProtoParamsOneofMatchesFamily(t *testing.T) {
 	// which family each name happens to hash to.
 	for _, name := range []string{"Ada Lovelace", "Grace Hopper", "こんにちは", "Zoë", "a"} {
 		p := flower.GenerateFromName(name)
-		got := toProtoParams(p)
+		got, err := toProtoParams(p)
+		if err != nil {
+			t.Fatalf("toProtoParams(%q): %v", name, err)
+		}
 		assertOneofMatchesFamily(t, name, p.Family, got)
 	}
 }
@@ -109,5 +118,21 @@ func assertOneofMatchesFamily(t *testing.T, name, family string, got *flowerv1.F
 		}
 	default:
 		t.Fatalf("name %q: unexpected family %q", name, family)
+	}
+}
+
+// TestToProtoParamsShapelessReturnsFailedPrecondition verifies that a
+// flower.Params carrying a family but NO shape pointer (modelling a legacy DB
+// row written before per-family shapes existed) does not panic — which would
+// crash the handler and kill the grpc-web connection — but instead surfaces a
+// FailedPrecondition the caller can return.
+func TestToProtoParamsShapelessReturnsFailedPrecondition(t *testing.T) {
+	p := flower.Params{Family: "classic"} // no Classic/Rose/Bloom/Sunflower/Rhodonea/Superformula set
+	got, err := toProtoParams(p)
+	if got != nil {
+		t.Errorf("params = %v, want nil on shapeless input", got)
+	}
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("code = %v (err=%v), want FailedPrecondition", status.Code(err), err)
 	}
 }

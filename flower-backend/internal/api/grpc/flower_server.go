@@ -3,7 +3,6 @@ package grpcapi
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"strings"
 
 	flowerv1 "flower-backend/gen/go/flower/v1"
@@ -63,9 +62,13 @@ func (s *FlowerServer) CreateFlower(ctx context.Context, req *flowerv1.CreateFlo
 		}
 	}
 
+	params, err := toProtoParams(p)
+	if err != nil {
+		return nil, err
+	}
 	return &flowerv1.CreateFlowerResponse{
 		FlowerId: flowerID,
-		Params:   toProtoParams(p),
+		Params:   params,
 	}, nil
 }
 
@@ -81,9 +84,13 @@ func (s *FlowerServer) GetFlower(ctx context.Context, req *flowerv1.GetFlowerReq
 	if err != nil {
 		return nil, err
 	}
+	params, err := toProtoParams(f.Params)
+	if err != nil {
+		return nil, err
+	}
 	return &flowerv1.GetFlowerResponse{
 		FlowerId: f.FlowerID,
-		Params:   toProtoParams(f.Params),
+		Params:   params,
 	}, nil
 }
 
@@ -142,8 +149,15 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		return nil, status.Error(codes.Internal, "failed to upload metadata")
 	}
 
-	// Persist mint-prep (status machine fleshed out later).
-	_ = s.store.UpsertMintPrepared(ctx, flowerID, wallet, tokenURI, s.chain.chainID, s.chain.contractAddress)
+	// Persist mint-prep (status machine fleshed out later). PrepareMint is the
+	// gate the frontend awaits BEFORE it sends the on-chain tx, so a write
+	// failure here must abort the flow: swallowing it would let a confirmed
+	// on-chain mint map to a permanently-NotFound row (ConfirmMint only carries
+	// flowerID+txHash and cannot reconstruct the wallet/token_uri/chain the
+	// mints row requires NOT NULL).
+	if err := s.store.UpsertMintPrepared(ctx, flowerID, wallet, tokenURI, s.chain.chainID, s.chain.contractAddress); err != nil {
+		return nil, err
+	}
 
 	return &flowerv1.PrepareMintResponse{
 		FlowerId:        flowerID,
@@ -219,7 +233,7 @@ func (s *FlowerServer) ConfirmMint(ctx context.Context, req *flowerv1.ConfirmMin
 // toProtoParams maps the generator's flower.Params onto the wire FlowerParams:
 // the 6 v1 scalars (fields 1-9, always populated for back-compat), family (10),
 // the baked palette (11), and the single oneof shape case matching p.Family (12-17).
-func toProtoParams(p flower.Params) *flowerv1.FlowerParams {
+func toProtoParams(p flower.Params) (*flowerv1.FlowerParams, error) {
 	out := &flowerv1.FlowerParams{
 		AlgoVersion:   p.AlgoVersion,
 		SchemaVersion: p.SchemaVersion,
@@ -233,8 +247,10 @@ func toProtoParams(p flower.Params) *flowerv1.FlowerParams {
 		Family:        p.Family,
 		Palette:       toProtoPalette(p.Palette),
 	}
-	setProtoShape(out, p)
-	return out
+	if err := setProtoShape(out, p); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func toProtoPalette(pal *flower.PaletteSpec) *flowerv1.PaletteSpec {
@@ -262,7 +278,10 @@ func toProtoPalette(pal *flower.PaletteSpec) *flowerv1.PaletteSpec {
 
 // setProtoShape sets exactly one oneof case on out, driven by p's populated
 // per-family pointer (which the generator sets consistently with p.Family).
-func setProtoShape(out *flowerv1.FlowerParams, p flower.Params) {
+// It returns a FailedPrecondition error (rather than panicking) when no shape
+// pointer is set, so a legacy DB row written before per-family shapes existed
+// can be surfaced to the caller instead of crashing the handler.
+func setProtoShape(out *flowerv1.FlowerParams, p flower.Params) error {
 	switch {
 	case p.Classic != nil:
 		out.Shape = &flowerv1.FlowerParams_Classic{Classic: &flowerv1.ClassicParams{
@@ -351,10 +370,10 @@ func setProtoShape(out *flowerv1.FlowerParams, p flower.Params) {
 			BriShift: p.Superformula.BriShift,
 		}}
 	default:
-		// GenerateFromName always sets exactly one shape pointer. Reaching here
-		// means a flower.Params was built outside the generator with no shape —
-		// fail loudly rather than emit a shapeless FlowerParams.
-		panic(fmt.Sprintf("setProtoShape: flower.Params has no shape pointer set (family=%q)", p.Family))
+		// A flower.Params built outside the generator (or a legacy row) with no
+		// shape pointer: fail loudly but recoverably instead of panicking.
+		return status.Errorf(codes.FailedPrecondition, "flower has no shape pointer set (family=%q)", p.Family)
 	}
+	return nil
 }
 

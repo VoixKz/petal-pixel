@@ -14,7 +14,7 @@ contract FlowerNFT is ERC721URIStorage, Ownable {
     function mint(
         address to,
         string calldata tokenURI
-    ) external onlyOwner returns (uint256) {
+    ) external returns (uint256) {
         uint256 tokenId = nextTokenId++;
         _safeMint(to, tokenId);
         _setTokenURI(tokenId, tokenURI);

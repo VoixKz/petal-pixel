@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
@@ -113,7 +114,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.UnaryInterceptor(recoveryUnaryInterceptor))
 
 	flowerv1.RegisterFlowerServiceServer(s, grpcapi.NewFlowerServer(store, upl, chainID, contractAddress))
 
@@ -127,15 +128,7 @@ func main() {
 	wrapped := grpcweb.WrapServer(
 		s,
 		grpcweb.WithOriginFunc(func(origin string) bool {
-			if len(allowedOrigins) == 0 {
-				return true
-			}
-			for _, allowed := range allowedOrigins {
-				if strings.EqualFold(origin, allowed) {
-					return true
-				}
-			}
-			return false
+			return grpcWebOriginAllowed(origin, allowedOrigins)
 		}),
 	)
 
@@ -273,6 +266,7 @@ func setAPICORSHeaders(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	w.Header().Set("Content-Type", "application/json")
@@ -287,6 +281,7 @@ func setPreviewCORSHeaders(w http.ResponseWriter, r *http.Request) {
 		origin = "*"
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Vary", "Origin")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	w.Header().Set("Content-Type", "application/json")
@@ -596,4 +591,44 @@ func parseCSVEnv(key string) []string {
 		}
 	}
 	return out
+}
+
+// recoveryUnaryInterceptor converts a panic in any unary handler into a
+// codes.Internal error, so a single malformed row can never crash the process
+// or tear down the grpc-web connection.
+func recoveryUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in unary handler", "method", info.FullMethod, "panic", r)
+			err = status.Error(codes.Internal, "internal error")
+		}
+	}()
+	return handler(ctx, req)
+}
+
+// isLocalDevOrigin reports whether origin is a loopback http(s) origin. These
+// are the only origins allowed when GRPC_WEB_ALLOWED_ORIGINS is unset, so an
+// unconfigured server fails closed to remote origins instead of reflecting all.
+func isLocalDevOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	host := u.Hostname() // strips :port and [] brackets
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+// grpcWebOriginAllowed is the grpc-web CORS decision. An explicit allowlist is
+// authoritative (case-insensitive exact match). With NO allowlist configured it
+// fails closed: only loopback dev origins pass, never every origin.
+func grpcWebOriginAllowed(origin string, allowed []string) bool {
+	if len(allowed) == 0 {
+		return isLocalDevOrigin(origin)
+	}
+	for _, a := range allowed {
+		if strings.EqualFold(origin, a) {
+			return true
+		}
+	}
+	return false
 }
