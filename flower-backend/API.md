@@ -165,7 +165,7 @@ grpcurl -plaintext \
 
 - **gRPC**
   - `GRPC_ADDR` (default `:50051`)
-  - `GRPC_WEB_ALLOWED_ORIGINS` (optional CSV list of allowed browser origins; if unset all origins are allowed)
+  - `GRPC_WEB_ALLOWED_ORIGINS` (optional CSV list of allowed browser origins; if unset the server FAILS CLOSED — only loopback dev origins like `http://localhost:8080` / `127.0.0.1` / `::1` are allowed. Set this explicitly to serve a non-loopback frontend.)
 - **Database**
   - `DB_DSN` (Postgres DSN)
   - `DB_AUTO_MIGRATE` (`true`/`false`)

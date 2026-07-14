@@ -1,7 +1,12 @@
-import { id } from 'ethers';
-
-/** keccak256("Transfer(address,address,uint256)") — shared by ERC-20 and ERC-721. */
-export const TRANSFER_TOPIC = id('Transfer(address,address,uint256)');
+/**
+ * keccak256("Transfer(address,address,uint256)") — the canonical ERC-20/ERC-721
+ * Transfer event topic0. Hard-coded as the well-known constant (not computed via
+ * ethers `id()`) so this module has NO top-level `ethers` value import: importing
+ * it into the lazy CreateFlower route chunk must not drag the whole vendor-ethers
+ * bundle in eagerly and defeat the mint handler's `await import('ethers')`.
+ */
+export const TRANSFER_TOPIC =
+  '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 /** 32-byte zero word — the `from` topic of a mint Transfer (0x0 → recipient). */
 export const ZERO_ADDRESS_TOPIC = '0x' + '0'.repeat(64);
