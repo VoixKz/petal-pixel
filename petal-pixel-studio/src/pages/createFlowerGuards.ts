@@ -4,14 +4,23 @@ export type HealthStatus = 'idle' | 'checking' | 'ok' | 'error';
  * Defect #11: the regenerate warning must fire not only when the generation
  * word changed, but also when the user made manual parameter (slider) tweaks
  * while the word stayed the same — otherwise Generate silently discards them.
+ *
+ * Cluster B1 extension: the warning must ALSO fire in CREATE mode once a flower
+ * has been generated (`flowerId` set) but not yet saved (`flowerId` absent from
+ * `savedIds`) — regenerating would otherwise silently discard unsaved work. The
+ * two trailing args are OPTIONAL (default `""` / `[]`) so the existing 4-arg
+ * caller keeps compiling and behaving identically (create mode → false) until
+ * the create page wires them. Delegates to the tested `hasUnsavedWork`.
  */
 export function shouldWarnRegenerate(
   isEditMode: boolean,
   word: string,
   generationWord: string,
   paramsDirty: boolean,
+  flowerId: string = "",
+  savedIds: ReadonlySet<string> | readonly string[] = [],
 ): boolean {
-  return isEditMode && (paramsDirty || word !== generationWord);
+  return hasUnsavedWork(isEditMode, paramsDirty, word !== generationWord, flowerId, savedIds);
 }
 
 /** Defect #13: used to disable the Backend button and short-circuit re-entry. */

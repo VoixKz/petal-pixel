@@ -54,7 +54,7 @@ describe('renderer registry', () => {
       return new Blob();
     });
     await captureFlowerPng();
-    expect(seen[0]).toEqual({ size: 1024, background: 'studio' });
+    expect(seen[0]).toEqual({ size: 1024, background: 'studio', frameYaw: 0 });
     off();
   });
 

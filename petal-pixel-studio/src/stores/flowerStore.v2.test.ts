@@ -138,4 +138,20 @@ describe("generateFromWord v2 branch", () => {
     expect(p.superformulaParams?.m1).toBe(6);
     expect(p.rhodoneaParams).toBeUndefined();
   });
+
+  it("sets deterministic v2 colors, overriding any leftover v1 hsl (bleed regression)", async () => {
+    // v1 first: colorA/colorB become hue-derived hsl(...) and linger in params.
+    createFlowerViaGrpc.mockResolvedValue(v1Response());
+    await useFlowerStore.getState().generateFromWord("classic");
+    expect(useFlowerStore.getState().params.colorA).toContain("hsl");
+
+    // Then v2: the v2 branch must OVERRIDE the leftover hsl with the fixed shared
+    // constants so the studio emissive/point-light tint matches the /share render
+    // (shareParams' v2 arm uses the same V2_COLOR_A/V2_COLOR_B).
+    createFlowerViaGrpc.mockResolvedValue(v2Response());
+    await useFlowerStore.getState().generateFromWord("golden fields");
+    const p = useFlowerStore.getState().params;
+    expect(p.colorA).toBe("#10b981");
+    expect(p.colorB).toBe("#2563eb");
+  });
 });

@@ -43,6 +43,16 @@ describe('extractMintedTokenId', () => {
     expect(extractMintedTokenId([erc20], CONTRACT)).toBeNull();
   });
 
+  it('ignores a non-mint Transfer (from != 0x0, e.g. a resale)', () => {
+    // Same contract + 4 topics, but `from` (topics[1]) is a real address, not
+    // the zero word — this is a transfer/resale, not a mint, and must be skipped.
+    const resale = {
+      address: CONTRACT,
+      topics: [TRANSFER_TOPIC, RECIPIENT_WORD, RECIPIENT_WORD, '0x' + (5).toString(16).padStart(64, '0')],
+    };
+    expect(extractMintedTokenId([resale], CONTRACT)).toBeNull();
+  });
+
   it('returns null for an empty log list', () => {
     expect(extractMintedTokenId([], CONTRACT)).toBeNull();
   });

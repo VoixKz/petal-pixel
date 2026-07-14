@@ -11,6 +11,7 @@
 import { buildShareUrl, flowerBackendBaseUrl } from '@/integrations/flowerBackend/client';
 import type { FlowerParamsJson } from '@/integrations/flowerBackend/client';
 import type { FlowerParams } from '@/stores/flowerStore';
+import { V2_COLOR_A, V2_COLOR_B } from '@/lib/v2Colors';
 import type { Palette, PaletteStop } from '@/math/palette';
 import {
   DEFAULT_BLOOM_PARAMS,
@@ -291,12 +292,12 @@ export function mapBackendJsonToFlowerParams(
     flowerType: (FLOWER_TYPES as readonly string[]).includes(fam)
       ? (fam as FlowerType)
       : common.flowerType,
-    // v2 parity: flowerStore.generateFromWord's v2 path never overrides colorA/
-    // colorB, so they keep the store's defaultParams values. Match them here (do
-    // NOT use the hue-derived hsl the v1 path sets) so the share page's emissive
-    // tint + point-light colors agree with the studio. (v1 path keeps its hsl.)
-    colorA: '#10b981',
-    colorB: '#2563eb',
+    // v2 parity: flowerStore.generateFromWord's v2 branch sets colorA/colorB to
+    // these same shared constants (do NOT use the hue-derived hsl the v1 path
+    // sets) so the share page's emissive tint + point-light colors agree with the
+    // studio. (v1 path keeps its hsl.)
+    colorA: V2_COLOR_A,
+    colorB: V2_COLOR_B,
     stemEnabled: false, // v2 flowers never inherit a v1 stem
   };
 

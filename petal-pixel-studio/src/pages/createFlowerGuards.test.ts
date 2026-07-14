@@ -25,6 +25,19 @@ describe("shouldWarnRegenerate", () => {
   it("warns when both word changed and params dirty", () => {
     expect(shouldWarnRegenerate(true, "tulip", "rose", true)).toBe(true);
   });
+
+  // ── Cluster B1: create-mode regenerate warning (new optional 5th/6th args) ──
+  it("create mode: warns once a flower is generated but unsaved", () => {
+    expect(shouldWarnRegenerate(false, "rose", "rose", false, "flw-1", [])).toBe(true);
+  });
+
+  it("create mode: does NOT warn before anything is generated (no flowerId)", () => {
+    expect(shouldWarnRegenerate(false, "rose", "tulip", true, "", [])).toBe(false);
+  });
+
+  it("create mode: does NOT warn once the generated flower is saved", () => {
+    expect(shouldWarnRegenerate(false, "rose", "rose", false, "flw-1", ["flw-1"])).toBe(false);
+  });
 });
 
 describe("isCheckingBackend", () => {

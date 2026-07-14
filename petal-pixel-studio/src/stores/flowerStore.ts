@@ -20,6 +20,7 @@ import type { Palette } from "@/math/palette";
 import { toTechniqueParams, toV2Params } from "@/math/flowerGeometry";
 import { createFlowerViaGrpc } from "@/integrations/flowerBackend/client";
 import { supabase } from "@/integrations/supabase/client";
+import { V2_COLOR_A, V2_COLOR_B } from "@/lib/v2Colors";
 
 export interface FlowerParams {
   flowerId: string;
@@ -59,6 +60,11 @@ export interface FlowerParams {
   // params jsonb column with zero DB migration. Set at mint time only.
   mintTokenId?: number;
   mintContractAddress?: string;
+
+  // Favorites: mirrored into params jsonb (same precedent as mintTokenId) so the
+  // flag is durable through the authoritative Supabase reload, not just local
+  // state / localStorage. See toggleFavorite + loadFromBackend's mapper.
+  isFavorite?: boolean;
 }
 
 export interface SavedFlower {
@@ -71,6 +77,7 @@ export interface SavedFlower {
   isMinted: boolean;
   txHash?: string;
   tokenUri?: string;
+  isFavorite?: boolean;
 }
 
 interface FlowerStore {
@@ -109,6 +116,8 @@ interface FlowerStore {
   loadFlowerForEdit: (flower: SavedFlower) => void;
   clearEditMode: () => void;
   mintFlower: (id: string) => void;
+  /** Toggle the persisted favorite flag on a saved flower (consumed by feat-galleries). */
+  toggleFavorite: (id: string) => Promise<void>;
   markMintedByBackendFlowerId: (
     backendFlowerId: string,
     txHash?: string,
@@ -182,10 +191,10 @@ const defaultParams: FlowerParams = {
   frequency: 2,
   rotation: 0,
   symmetry: 6,
-  colorA: "#10b981",
-  colorB: "#2563eb",
+  colorA: V2_COLOR_A,
+  colorB: V2_COLOR_B,
   glowIntensity: 0.5,
-  material: "metallic",
+  material: "matte",
   idleMotion: true,
   rotationSpeed: 0.5,
   stemEnabled: false,
@@ -314,6 +323,12 @@ export const useFlowerStore = create<FlowerStore>()(
             rhodoneaParams: v2.rhodoneaParams,
             superformulaParams: v2.superformulaParams,
             rotation: Number(seed % BigInt(360)),
+            // v2 colors are FIXED constants (shared with shareParams so studio ==
+            // /share). Setting them explicitly also fixes the bleed bug where
+            // `...get().params` carried a prior v1 flower's hue-derived hsl into a
+            // v2 flower's emissive/point-light tint.
+            colorA: V2_COLOR_A,
+            colorB: V2_COLOR_B,
             // Refresh the UI read-outs and clear any leftover v1 stem so a v2
             // flower never inherits a stem from a previously-generated v1 one.
             petalCount: Math.max(3, backendParams.petalCount || 6),
@@ -573,6 +588,30 @@ export const useFlowerStore = create<FlowerStore>()(
       ),
     })),
 
+  toggleFavorite: async (id) => {
+    const { savedFlowers } = get();
+    const target = savedFlowers.find((f) => f.id === id);
+    if (!target) return; // unknown id → no-op
+    const next = !target.isFavorite;
+    // Dual-write: the local flag AND params.isFavorite (durable via params jsonb).
+    const updated = savedFlowers.map((f) =>
+      f.id === id ? { ...f, isFavorite: next, params: { ...f.params, isFavorite: next } } : f,
+    );
+    set({ savedFlowers: updated });
+    bumpSavedFlowersMutationCounter();
+
+    // Best-effort Supabase sync (mirrors the params jsonb). No-op when the
+    // flower has no backend id or the user is signed out; failures are swallowed
+    // since the local optimistic update already reflects the intent.
+    const flowerId = target.backendFlowerId;
+    if (!flowerId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const params = updated.find((f) => f.id === id)?.params;
+      if (params) await supabaseUpdateFlower(user.id, flowerId, { params });
+    }
+  },
+
   markMintedByBackendFlowerId: async (backendFlowerId, txHash, tokenUri, mint) => {
     // Optimistic local update. Mint results are stamped into params so they
     // persist through the params jsonb round-trip (no DB migration).
@@ -703,6 +742,7 @@ export const useFlowerStore = create<FlowerStore>()(
           isMinted: row.is_minted ?? false,
           txHash: row.tx_hash ?? undefined,
           tokenUri: row.token_uri ?? undefined,
+          isFavorite: (row.params as unknown as FlowerParams)?.isFavorite ?? false,
         }));
 
       set({ savedFlowers: mapped, ownerUserId: user.id });

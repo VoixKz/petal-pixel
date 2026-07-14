@@ -63,11 +63,14 @@ export async function renderToBlob(opts?: RenderOpts): Promise<Blob | null> {
 
 /**
  * Frozen preset used by the Download PNG button and the mint flow (both call it
- * with no args). Studio background, 1024px square. Never throws; resolves null
- * when unregistered or on any error.
+ * with no args). Studio background, 1024px square. A FIXED `frameYaw: 0` pins the
+ * flower to a deterministic front-facing 3/4 view: the renderer only overrides
+ * group yaw when `frameYaw != null`, so omitting it would leave the live
+ * idle-rotated yaw and make the minted PNG / OG capture non-deterministic. Never
+ * throws; resolves null when unregistered or on any error.
  */
 export function captureFlowerPng(): Promise<Blob | null> {
-  return renderToBlob({ size: 1024, background: 'studio' });
+  return renderToBlob({ size: 1024, background: 'studio', frameYaw: 0 });
 }
 
 /** Evenly-spaced yaws over [0, 2π); excludes the 2π endpoint for a seamless loop. */
