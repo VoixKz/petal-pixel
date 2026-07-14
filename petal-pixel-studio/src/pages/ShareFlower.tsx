@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Sparkles, Flower2 } from 'lucide-react';
-import { fetchFlowerById, type FlowerListItem } from '@/integrations/flowerBackend/client';
+import { Sparkles, Flower2, Twitter, Send, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import {
+  fetchFlowerById,
+  buildShareUrl,
+  flowerBackendBaseUrl,
+  type FlowerListItem,
+} from '@/integrations/flowerBackend/client';
 import { mapBackendJsonToFlowerParams } from './shareParams';
 import { SharePreview } from '@/components/flower/SharePreview';
+import { captureFlowerPng } from '@/components/flower/snapshot';
+import { buildTweetUrl, buildTelegramUrl, shareCardText, shareCardFilename } from '@/lib/shareCard';
 
 type Status = 'loading' | 'ready' | 'notfound' | 'error';
 
@@ -18,6 +26,8 @@ export default function ShareFlower() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<Status>('loading');
   const [item, setItem] = useState<FlowerListItem | null>(null);
+  const [yourName, setYourName] = useState('');
+  const [isDownloadingCard, setIsDownloadingCard] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +51,40 @@ export default function ShareFlower() {
       cancelled = true;
     };
   }, [flowerId]);
+
+  // Viral loop: build the SPA deep-link that seeds the create page with this
+  // visitor's own name. Reading `?name=` back out is feat-create's job — this
+  // page only emits the link shape `/create?name=<encoded>`.
+  const handleMakeYourOwn = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = yourName.trim();
+    if (!trimmed) return;
+    navigate(`/create?name=${encodeURIComponent(trimmed)}`);
+  };
+
+  // Blob-to-anchor download, mirroring CreateFlower's triggerDownload pattern
+  // (kept local here — ShareFlower may not import from CreateFlower.tsx).
+  const handleDownloadCard = async () => {
+    if (isDownloadingCard || !item) return;
+    setIsDownloadingCard(true);
+    try {
+      const blob = await captureFlowerPng();
+      if (!blob) {
+        toast.error('Could not capture the flower image. Is the preview visible?');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = shareCardFilename(item.person_name);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloadingCard(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background grid-bg">
@@ -84,12 +128,73 @@ export default function ShareFlower() {
         )}
 
         {status === 'ready' && item && (
-          <SharePreview
-            params={mapBackendJsonToFlowerParams(item.flower_id, item.params)}
-            personName={item.person_name}
-            onOpenStudio={() => navigate('/create')}
-            onMint={() => navigate('/create')}
-          />
+          <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
+            <SharePreview
+              params={mapBackendJsonToFlowerParams(item.flower_id, item.params)}
+              personName={item.person_name}
+              onOpenStudio={() => navigate('/create')}
+              onMint={() => navigate('/create')}
+            />
+
+            <form
+              onSubmit={handleMakeYourOwn}
+              className="flex flex-col sm:flex-row gap-2 p-4 rounded-xl border border-border bg-card"
+            >
+              <div className="flex-1 flex flex-col gap-1.5">
+                <label htmlFor="your-name" className="text-xs font-medium text-foreground">
+                  Make one for your name
+                </label>
+                <input
+                  id="your-name"
+                  type="text"
+                  value={yourName}
+                  onChange={(e) => setYourName(e.target.value)}
+                  placeholder="Your name"
+                  className="h-10 px-3 rounded-lg border border-border bg-background text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!yourName.trim()}
+                className="sm:self-end h-10 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Bloom mine
+              </button>
+            </form>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={buildTweetUrl(
+                  buildShareUrl(flowerBackendBaseUrl, item.flower_id),
+                  shareCardText(item.person_name),
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Twitter className="w-4 h-4" /> Share on X
+              </a>
+              <a
+                href={buildTelegramUrl(
+                  buildShareUrl(flowerBackendBaseUrl, item.flower_id),
+                  shareCardText(item.person_name),
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Send className="w-4 h-4" /> Share on Telegram
+              </a>
+              <button
+                type="button"
+                onClick={handleDownloadCard}
+                disabled={isDownloadingCard}
+                className="inline-flex h-10 items-center justify-center gap-2 px-4 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <Download className="w-4 h-4" /> {isDownloadingCard ? 'Preparing…' : 'Download card'}
+              </button>
+            </div>
+          </div>
         )}
       </main>
     </div>
