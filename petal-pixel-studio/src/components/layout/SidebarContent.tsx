@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { LogOut, Sparkles } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { generativeAvatarDataUri } from '@/lib/generativeAvatar';
+import { BRAND_NAME, BRAND_TAGLINE } from '@/lib/brand';
 import { NAV_ITEMS } from './navItems';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -30,8 +31,8 @@ export function SidebarBody({
           <Sparkles className="w-5 h-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">FlowerNFT</h1>
-          <p className="text-xs text-sidebar-foreground font-mono">GENERATOR</p>
+          <h1 className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">{BRAND_NAME}</h1>
+          <p className="text-xs text-sidebar-foreground">{BRAND_TAGLINE}</p>
         </div>
       </div>
 

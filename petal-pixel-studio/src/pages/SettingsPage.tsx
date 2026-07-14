@@ -63,16 +63,6 @@ export default function SettingsPage() {
     navigate('/login');
   };
 
-  const handleDeleteAccount = () => {
-    const confirmed = window.confirm(
-      'Delete your account permanently? This cannot be undone.',
-    );
-    if (!confirmed) return;
-    // Supabase does not expose user self-deletion on the anon client, so we do
-    // not fake an irreversible action. Be honest that this needs a backend.
-    toast.error('Account deletion needs the backend. This is not available yet.');
-  };
-
   const intro = reduceMotion
     ? {}
     : { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 } };
@@ -277,11 +267,15 @@ export default function SettingsPage() {
           <Button
             variant="destructive"
             className="h-10 w-full sm:w-auto"
-            onClick={handleDeleteAccount}
+            disabled
           >
             <Trash2 className="w-4 h-4" />
             Delete account
           </Button>
+          <p className="text-xs text-muted-foreground">
+            Self-service deletion isn't available yet — contact support to
+            remove your account.
+          </p>
         </section>
       </motion.div>
     </div>

@@ -150,7 +150,6 @@ export function FlowerControls({ className }: { className?: string } = {}) {
               min={depthMap.min} max={depthMap.max} step={depthMap.step}
               onChange={(v) => writeMapped(depthMap, v)} />
           )}
-          <ToggleControl label="Stem (coming soon)" value={params.stemEnabled} onChange={(v) => setParam('stemEnabled', v)} />
         </Section>
 
         <div className="h-px bg-border" />

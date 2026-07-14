@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import { Sparkles, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { BRAND_NAME } from "@/lib/brand";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -30,6 +32,22 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Enter your email first, then tap Forgot password.");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (error) toast.error(error.message);
+      else toast.success("Password reset link sent — check your email.");
+    } catch {
+      toast.error("Couldn't reach the auth service. Try again shortly.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <motion.div
@@ -45,7 +63,7 @@ export default function Login() {
             Welcome back
           </h1>
           <p className="text-sm text-muted-foreground">
-            Sign in to your FlowerNFT account
+            Sign in to your {BRAND_NAME} account
           </p>
         </div>
 
@@ -67,9 +85,18 @@ export default function Login() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-foreground">
-              Password
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-foreground">
+                Password
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleForgotPassword()}
+                className="text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Forgot password?
+              </button>
+            </div>
             <div className="relative">
               <input
                 type={showPassword ? "text" : "password"}
