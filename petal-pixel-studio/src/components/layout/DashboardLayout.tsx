@@ -6,6 +6,7 @@ import { SidebarBody } from './SidebarContent';
 import { ThemeToggle } from './ThemeToggle';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { useFlowerStore } from '@/stores/flowerStore';
+import { BRAND_NAME } from '@/lib/brand';
 
 export function DashboardLayout() {
   const loadFromBackend = useFlowerStore((s) => s.loadFromBackend);
@@ -40,7 +41,7 @@ export function DashboardLayout() {
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center glow-primary">
                 <Sparkles className="w-4 h-4 text-primary" />
               </div>
-              <span className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">FlowerNFT</span>
+              <span className="text-sm font-semibold text-sidebar-accent-foreground tracking-tight">{BRAND_NAME}</span>
             </div>
           </div>
           <ThemeToggle />
