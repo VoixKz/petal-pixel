@@ -202,9 +202,14 @@ var familyTable = []struct {
 	name string
 	w    int
 }{
-	{"classic", 22}, {"rose", 18}, {"zinnia", 11}, {"camellia", 10},
-	{"lotus", 9}, {"dahlia", 9}, {"sunflower", 8}, {"rhodonea", 7}, {"superformula", 6},
+	{"classic", 18}, {"rose", 15}, {"zinnia", 11}, {"camellia", 10},
+	{"lotus", 9}, {"dahlia", 9}, {"sunflower", 9}, {"rhodonea", 10}, {"superformula", 9},
 }
+
+// rhodoneaK is the curated set of k values that always yield clean, symmetric
+// rose curves; k=2,3,7,9 either produce spindly/odd petal counts or a
+// non-monotonic petal count relative to k (rhodonea curves are finicky).
+var rhodoneaK = []uint32{4, 5, 6, 8}
 
 func pickFamily(seed uint64) string {
 	roll := stream(seed, "family").IntRange(1, 100)
@@ -247,9 +252,9 @@ func buildRose(seed uint64) *RoseParams {
 func buildBloom(seed uint64) *BloomParams {
 	return &BloomParams{
 		Scale:     float32(stream(seed, "bloom.scale").FloatRange(240, 360)),
-		Opening:   float32(stream(seed, "bloom.opening").FloatRange(0.75, 1.30)),
+		Opening:   float32(stream(seed, "bloom.opening").FloatRange(0.60, 1.50)),
 		Density:   float32(stream(seed, "bloom.density").FloatRange(0.80, 1.25)),
-		PetalFreq: float32(stream(seed, "bloom.petal_freq").FloatRange(0.85, 1.20)),
+		PetalFreq: float32(stream(seed, "bloom.petal_freq").FloatRange(0.70, 1.40)),
 		PetalAmp:  float32(stream(seed, "bloom.petal_amp").FloatRange(0.80, 1.25)),
 		HangDown:  float32(stream(seed, "bloom.hang_down").FloatRange(0.75, 1.35)),
 		Fade:      float32(stream(seed, "bloom.fade").FloatRange(0.85, 1.20)),
@@ -265,10 +270,10 @@ func buildSunflower(seed uint64) *SunflowerParams {
 		Scale:        float32(stream(seed, "sunflower.scale").FloatRange(200, 380)),
 		FloretRings:  uint32(stream(seed, "sunflower.floret_rings").IntRange(40, 150)),
 		FloretSpokes: uint32(stream(seed, "sunflower.floret_spokes").IntRange(120, 320)),
-		DomeHeight:   float32(stream(seed, "sunflower.dome_height").FloatRange(0, 90)),
-		DiscRatio:    float32(stream(seed, "sunflower.disc_ratio").FloatRange(0.40, 0.78)),
+		DomeHeight:   float32(stream(seed, "sunflower.dome_height").FloatRange(15, 90)),  // floor so the disc always domes
+		DiscRatio:    float32(stream(seed, "sunflower.disc_ratio").FloatRange(0.40, 0.65)), // ceil lowered so rays frame the disc
 		RayPetals:    uint32(stream(seed, "sunflower.ray_petals").IntRange(13, 55)),
-		RayLength:    float32(stream(seed, "sunflower.ray_length").FloatRange(0.25, 0.75)),
+		RayLength:    float32(stream(seed, "sunflower.ray_length").FloatRange(0.40, 0.75)), // floor lifted so rays read as petals
 		RayWidth:     float32(stream(seed, "sunflower.ray_width").FloatRange(0.40, 1.20)),
 		SeedPacking:  float32(stream(seed, "sunflower.seed_packing").FloatRange(0.70, 1.40)),
 		SatShift:     float32(stream(seed, "sunflower.sat_shift").FloatRange(-0.15, 0.15)),
@@ -279,10 +284,10 @@ func buildSunflower(seed uint64) *SunflowerParams {
 func buildRhodonea(seed uint64) *RhodoneaParams {
 	return &RhodoneaParams{
 		Radius:        float32(stream(seed, "rhodonea.radius").FloatRange(180, 340)),
-		K:             uint32(stream(seed, "rhodonea.k").IntRange(2, 9)),
+		K:             rhodoneaK[stream(seed, "rhodonea.k").IntRange(0, len(rhodoneaK)-1)], // curated; k=3 -> 3 spindly petals, counts non-monotonic
 		PetalSpan:     float32(stream(seed, "rhodonea.petal_span").FloatRange(0.60, 1.00)),
 		WidthProfile:  float32(stream(seed, "rhodonea.width_profile").FloatRange(0.20, 0.70)),
-		HeightProfile: float32(stream(seed, "rhodonea.height_profile").FloatRange(0, 120)),
+		HeightProfile: float32(stream(seed, "rhodonea.height_profile").FloatRange(30, 120)), // floor 30: 0 collapses to a flat 2D star
 		Thickness:     float32(stream(seed, "rhodonea.thickness").FloatRange(0, 18)),
 		Curl:          float32(stream(seed, "rhodonea.curl").FloatRange(0, 1)),
 		LengthSeg:     uint32(stream(seed, "rhodonea.length_seg").IntRange(12, 48)),
@@ -295,10 +300,10 @@ func buildRhodonea(seed uint64) *RhodoneaParams {
 func buildSuperformula(seed uint64) *SuperformulaParams {
 	return &SuperformulaParams{
 		Scale:    float32(stream(seed, "superformula.scale").FloatRange(200, 360)),
-		M1:       float32(stream(seed, "superformula.m1").FloatRange(4, 12)),   // >=4 for lobes
-		N1a:      float32(stream(seed, "superformula.n1a").FloatRange(0.30, 1.20)), // >0
-		N2a:      float32(stream(seed, "superformula.n2a").FloatRange(0.40, 1.80)),
-		N3a:      float32(stream(seed, "superformula.n3a").FloatRange(0.40, 1.80)),
+		M1:       float32(stream(seed, "superformula.m1").IntRange(5, 10)), // integer lobe count; non-integer m = lopsided/self-overlapping
+		N1a:      float32(stream(seed, "superformula.n1a").FloatRange(0.60, 1.20)), // >0, raised floor keeps body full
+		N2a:      float32(stream(seed, "superformula.n2a").FloatRange(0.60, 1.40)), // capped so spikes stay soft
+		N3a:      float32(stream(seed, "superformula.n3a").FloatRange(0.60, 1.40)),
 		A1:       float32(stream(seed, "superformula.a1").FloatRange(0.85, 1.15)),
 		B1:       float32(stream(seed, "superformula.b1").FloatRange(0.85, 1.15)),
 		M2:       float32(stream(seed, "superformula.m2").FloatRange(1, 6)),
@@ -335,7 +340,7 @@ func GenerateFromName(name string) Params {
 	seed := seedFromString(norm)
 
 	family := pickFamily(seed)
-	palette := buildPalette(seed)
+	palette := buildPalette(seed, family)
 
 	p := Params{
 		AlgoVersion:   AlgoVersion,

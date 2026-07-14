@@ -65,30 +65,89 @@ var paletteCatalog = []paletteDef{
 	{"violet_ember", []ColorStop{stop(0, 0.92, 0.72, 0.86), stop(0.5, 0.64, 0.30, 0.66), stop(1, 0.34, 0.10, 0.40)}},
 }
 
-// buildPalette picks a catalog entry deterministically from seed, draws name-derived
-// hue/sat/bri shifts, BAKES them into every stop (both Hex and R/G/B post-shift), and
+// warmPaletteIDs are the warm/pink/gold catalog entries. Families whose real-world
+// counterpart is never teal/blue (rose, camellia, dahlia, sunflower) are restricted
+// to this subset so a "rose" name can never bake into an ocean-teal rose.
+var warmPaletteIDs = map[string]bool{
+	"sunset_coral": true, "blush_rose": true, "golden_hour": true, "crimson_velvet": true,
+	"tangerine_pop": true, "peach_cream": true, "magenta_dream": true, "honey_amber": true,
+	"cherry_snow": true, "plum_wine": true, "saffron_gold": true, "rose_quartz": true,
+	"coral_reef": true, "violet_ember": true,
+}
+
+// warmFamily reports whether family must be restricted to the warm/pink/gold
+// palette allow-list. Abstract/exotic families (rhodonea/superformula/zinnia/
+// classic/lotus) are unrestricted and may draw any catalog entry, including cool
+// teal/blue/green ones.
+func warmFamily(family string) bool {
+	switch family {
+	case "rose", "camellia", "dahlia", "sunflower":
+		return true
+	}
+	return false
+}
+
+// paletteIndicesFor returns the catalog indices allowed for family: the warm
+// subset for warm families, or the full catalog otherwise. Never empty (14 warm
+// ids exist in the 20-entry catalog).
+func paletteIndicesFor(family string) []int {
+	idx := make([]int, 0, len(paletteCatalog))
+	warm := warmFamily(family)
+	for i, d := range paletteCatalog {
+		if !warm || warmPaletteIDs[d.id] {
+			idx = append(idx, i)
+		}
+	}
+	return idx
+}
+
+// buildPalette picks a catalog entry deterministically from seed (restricted to
+// family's allowed subset), draws name-derived hue/sat/bri shifts, BAKES them
+// into every stop (both Hex and R/G/B post-shift), applies a brightness
+// guardrail so no palette ever bakes down to a muddy near-black blob, and
 // echoes the shift values on PaletteSpec for provenance (contract lines 342-357).
 //
 // NOTE: uses paletteStream (palette-local helper) rather than the package-level stream/
 // deriveSeed/FloatRange/IntRange that Task 3 will add to generator.go.  When Task 3
 // lands, no rename is needed — paletteStream is intentionally distinct to avoid collision.
-func buildPalette(seed uint64) *PaletteSpec {
+func buildPalette(seed uint64, family string) *PaletteSpec {
+	allowed := paletteIndicesFor(family)
 	pick := paletteStream(seed, "palette.pick")
-	idx := pick.paletteIntRange(0, len(paletteCatalog)-1)
-	base := paletteCatalog[idx]
+	base := paletteCatalog[allowed[pick.paletteIntRange(0, len(allowed)-1)]]
 
 	hueShift := float32(paletteStream(seed, "palette.hue_shift").paletteFloatRange(-30, 30))
-	satShift := float32(paletteStream(seed, "palette.sat_shift").paletteFloatRange(-0.20, 0.20))
+	satShift := float32(paletteStream(seed, "palette.sat_shift").paletteFloatRange(-0.12, 0.18)) // multiplicative, +biased; additive -0.20 nuked pastels to gray
 	briShift := float32(paletteStream(seed, "palette.bri_shift").paletteFloatRange(-0.15, 0.15))
 
-	baked := make([]ColorStop, len(base.stops))
+	type hsbTmp struct{ h, s, v float32 }
+	tmp := make([]hsbTmp, len(base.stops))
+	maxV := float32(0)
 	for i, s := range base.stops {
 		h, sat, val := srgbToHSB(s.R, s.G, s.B)
 		h = float32(math.Mod(float64(h+hueShift)+360, 360)) // wrap hue into [0,360)
-		sat = clamp01(sat + satShift)
+		sat = clamp01(sat * (1 + satShift))
 		val = clamp01(val + briShift)
-		r, g, b := hsbToSRGB(h, sat, val)
-		baked[i] = ColorStop{Position: s.Position, Hex: hexOf(r, g, b), R: r, G: g, B: b}
+		tmp[i] = hsbTmp{h, sat, val}
+		if val > maxV {
+			maxV = val
+		}
+	}
+	// Brightness guardrail: if the brightest stop is muddy, scale ALL values up so
+	// the brightest reaches ~0.9 (preserves the gradient shape); then floor every stop.
+	if maxV > 0 && maxV < 0.65 {
+		k := 0.9 / maxV
+		for i := range tmp {
+			tmp[i].v = clamp01(tmp[i].v * k)
+		}
+	}
+	baked := make([]ColorStop, len(base.stops))
+	for i, c := range tmp {
+		v := c.v
+		if v < 0.30 {
+			v = 0.30
+		}
+		r, g, b := hsbToSRGB(c.h, c.s, v)
+		baked[i] = ColorStop{Position: base.stops[i].Position, Hex: hexOf(r, g, b), R: r, G: g, B: b}
 	}
 
 	return &PaletteSpec{

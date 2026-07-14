@@ -8,8 +8,8 @@ import (
 // buildPalette must be deterministic: same seed -> identical id + provenance shifts.
 func TestBuildPaletteDeterministic(t *testing.T) {
 	const seed uint64 = 0x0123456789abcdef
-	a := buildPalette(seed)
-	b := buildPalette(seed)
+	a := buildPalette(seed, "rose")
+	b := buildPalette(seed, "rose")
 	if a.ID != b.ID {
 		t.Fatalf("id not deterministic: %q vs %q", a.ID, b.ID)
 	}
@@ -31,7 +31,7 @@ func TestBuildPaletteDeterministic(t *testing.T) {
 func TestBuildPaletteVariesAcrossSeeds(t *testing.T) {
 	seen := map[string]bool{}
 	for s := uint64(0); s < 200; s++ {
-		seen[buildPalette(s).ID] = true
+		seen[buildPalette(s, pickFamily(s)).ID] = true
 	}
 	if len(seen) < 2 {
 		t.Fatalf("expected multiple palette ids across seeds, saw %d", len(seen))
@@ -41,12 +41,12 @@ func TestBuildPaletteVariesAcrossSeeds(t *testing.T) {
 // Provenance shifts stay in the canonical ranges (contract lines 348-349, 88-90).
 func TestBuildPaletteShiftRanges(t *testing.T) {
 	for s := uint64(0); s < 500; s++ {
-		p := buildPalette(s)
+		p := buildPalette(s, "rhodonea")
 		if p.HueShift < -30 || p.HueShift > 30 {
 			t.Fatalf("seed %d hue_shift out of [-30,30]: %v", s, p.HueShift)
 		}
-		if p.SatShift < -0.20 || p.SatShift > 0.20 {
-			t.Fatalf("seed %d sat_shift out of [-0.20,0.20]: %v", s, p.SatShift)
+		if p.SatShift < -0.12 || p.SatShift > 0.18 {
+			t.Fatalf("seed %d sat_shift out of [-0.12,0.18]: %v", s, p.SatShift)
 		}
 		if p.BriShift < -0.15 || p.BriShift > 0.15 {
 			t.Fatalf("seed %d bri_shift out of [-0.15,0.15]: %v", s, p.BriShift)
@@ -54,11 +54,58 @@ func TestBuildPaletteShiftRanges(t *testing.T) {
 	}
 }
 
+// The bake-time brightness guardrail must prevent muddy near-black stops:
+// every baked stop's HSB value stays >= 0.30 regardless of drawn shifts/base.
+func TestBuildPaletteBrightnessFloor(t *testing.T) {
+	for s := uint64(0); s < 500; s++ {
+		p := buildPalette(s, "rhodonea")
+		for i, st := range p.Stops {
+			_, _, v := srgbToHSB(st.R, st.G, st.B)
+			if v < 0.30-1e-4 {
+				t.Fatalf("seed %d stop %d: brightness %v below 0.30 floor", s, i, v)
+			}
+		}
+	}
+}
+
+// Family-aware palette selection: warm families (rose/camellia/dahlia/sunflower)
+// are restricted to the warm/pink/gold allow-list (no teal/blue); abstract
+// families (rhodonea/superformula/zinnia/classic/lotus) keep the full range.
+func TestBuildPaletteFamilyAware(t *testing.T) {
+	const seed uint64 = 0xfeedfacecafebeef
+	a := buildPalette(seed, "rose")
+	b := buildPalette(seed, "rose")
+	if a.ID != b.ID {
+		t.Fatalf("family-scoped pick not deterministic: %q vs %q", a.ID, b.ID)
+	}
+
+	coolIDs := map[string]bool{
+		"ocean_teal": true, "lavender_mist": true, "deep_iris": true,
+		"mint_frost": true, "sky_periwinkle": true, "emerald_leaf": true,
+	}
+	for s := uint64(0); s < 500; s++ {
+		id := buildPalette(s, "rose").ID
+		if coolIDs[id] {
+			t.Fatalf("seed %d: rose picked cool palette %q, want warm/pink/gold only", s, id)
+		}
+	}
+	sawCool := false
+	for s := uint64(0); s < 500; s++ {
+		if coolIDs[buildPalette(s, "rhodonea").ID] {
+			sawCool = true
+			break
+		}
+	}
+	if !sawCool {
+		t.Fatal("rhodonea (abstract family) never picked a cool palette across 500 seeds; allow-list too narrow")
+	}
+}
+
 // Every returned palette is a valid gradient: >=2 stops, ascending 0..1, first=0 last=1,
 // rgb in [0,1], and Hex consistent with round(r*255),round(g*255),round(b*255).
 func TestBuildPaletteStopValidity(t *testing.T) {
 	for s := uint64(0); s < 500; s++ {
-		p := buildPalette(s)
+		p := buildPalette(s, "rhodonea")
 		if len(p.Stops) < 2 {
 			t.Fatalf("seed %d: want >=2 stops, got %d", s, len(p.Stops))
 		}

@@ -219,6 +219,18 @@ func TestSuperformulaGuardRails(t *testing.T) {
 	if sp.USeg < 120 || sp.USeg > 340 || sp.VSeg < 80 || sp.VSeg > 200 {
 		t.Fatalf("seg counts out of range: u=%d v=%d", sp.USeg, sp.VSeg)
 	}
+	if sp.M1 != float32(int(sp.M1)) {
+		t.Fatalf("m1 %v not integer", sp.M1)
+	}
+	if sp.M1 < 5 || sp.M1 > 10 {
+		t.Fatalf("m1 %v out of [5,10]", sp.M1)
+	}
+	if sp.N1a < 0.60 {
+		t.Fatalf("n1a %v below 0.60 floor", sp.N1a)
+	}
+	if sp.N2a < 0.60 || sp.N2a > 1.40 || sp.N3a < 0.60 || sp.N3a > 1.40 {
+		t.Fatalf("n2a/n3a out of [0.6,1.4]: %v/%v", sp.N2a, sp.N3a)
+	}
 }
 
 func TestRhodoneaGuardRails(t *testing.T) {
@@ -232,8 +244,10 @@ func TestRhodoneaGuardRails(t *testing.T) {
 	if rp == nil {
 		t.Fatal("never produced a rhodonea in 5000 names")
 	}
-	if rp.K < 2 || rp.K > 9 {
-		t.Fatalf("k %d out of canonical [2,9]", rp.K)
+	switch rp.K {
+	case 4, 5, 6, 8:
+	default:
+		t.Fatalf("k %d not in curated {4,5,6,8}", rp.K)
 	}
 	if rp.Radius < 180 || rp.Radius > 340 {
 		t.Fatalf("radius %f out of [180,340]", rp.Radius)
@@ -243,6 +257,9 @@ func TestRhodoneaGuardRails(t *testing.T) {
 	}
 	if rp.LengthSeg < 12 || rp.LengthSeg > 48 || rp.WidthSeg < 8 || rp.WidthSeg > 32 {
 		t.Fatalf("seg counts out of range: len=%d width=%d", rp.LengthSeg, rp.WidthSeg)
+	}
+	if rp.HeightProfile < 30 {
+		t.Fatalf("height_profile %v below 30 loft floor", rp.HeightProfile)
 	}
 }
 
@@ -269,11 +286,17 @@ func TestSunflowerRangeBounds(t *testing.T) {
 	if sf.RayPetals < 13 || sf.RayPetals > 55 {
 		t.Fatalf("ray_petals %d out of [13,55]", sf.RayPetals)
 	}
-	if sf.DiscRatio < 0.40 || sf.DiscRatio > 0.78 {
-		t.Fatalf("disc_ratio %f out of [0.40,0.78]", sf.DiscRatio)
+	if sf.DiscRatio < 0.40 || sf.DiscRatio > 0.65 {
+		t.Fatalf("disc_ratio %f out of [0.40,0.65]", sf.DiscRatio)
 	}
 	if sf.SatShift < -0.15 || sf.SatShift > 0.15 || sf.BriShift < -0.12 || sf.BriShift > 0.12 {
 		t.Fatalf("shift fractions out of range: sat=%f bri=%f", sf.SatShift, sf.BriShift)
+	}
+	if sf.RayLength < 0.40 || sf.RayLength > 0.75 {
+		t.Fatalf("ray_length %v out of [0.40,0.75]", sf.RayLength)
+	}
+	if sf.DomeHeight < 15 || sf.DomeHeight > 90 {
+		t.Fatalf("dome_height %v out of [15,90]", sf.DomeHeight)
 	}
 }
 
@@ -297,6 +320,27 @@ func TestBloomShiftsAreHSBUnits(t *testing.T) {
 	}
 	if bp.Scale < 240 || bp.Scale > 360 {
 		t.Fatalf("bloom scale %f out of [240,360]", bp.Scale)
+	}
+}
+
+func TestBloomPetalFreqOpeningRange(t *testing.T) {
+	// Bloom family divergence: petalFreq/opening widened so zinnia/camellia/lotus/dahlia
+	// names visibly separate (frontend bloomProfiles.ts derives lobe count + phi from these).
+	var bp *BloomParams
+	for i := 0; i < 5000 && bp == nil; i++ {
+		p := GenerateFromName("bl2-" + itoa(i))
+		if p.Bloom != nil {
+			bp = p.Bloom
+		}
+	}
+	if bp == nil {
+		t.Fatal("never produced a bloom in 5000 names")
+	}
+	if bp.PetalFreq < 0.70 || bp.PetalFreq > 1.40 {
+		t.Fatalf("petal_freq %v out of [0.70,1.40]", bp.PetalFreq)
+	}
+	if bp.Opening < 0.60 || bp.Opening > 1.50 {
+		t.Fatalf("opening %v out of [0.60,1.50]", bp.Opening)
 	}
 }
 
