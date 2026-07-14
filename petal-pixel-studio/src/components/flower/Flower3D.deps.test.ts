@@ -36,12 +36,13 @@ describe("Flower3D useMemo dependency arrays", () => {
   });
 
   it("material memo depends only on color/glow/material fields, never on the whole params or rotation", () => {
-    const deps = depsAfter("emissiveIntensity: params.glowIntensity * 0.16");
+    const deps = depsAfter("emissiveIntensity: params.glowIntensity * 0.03");
     expect(deps).toContain("params.flowerType");
     expect(deps).toContain("params.material");
     expect(deps).toContain("params.colorA");
     expect(deps).toContain("params.colorB");
     expect(deps).toContain("params.glowIntensity");
+    expect(deps).toContain("params.palette");
     expect(deps).not.toMatch(/\[\s*params\s*\]/);
     expect(deps).not.toContain("params.rotation");
     expect(deps).not.toContain("params.classicParams");
