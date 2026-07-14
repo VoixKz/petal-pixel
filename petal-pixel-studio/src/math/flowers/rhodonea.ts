@@ -1,11 +1,24 @@
 import * as THREE from "three";
 import type { RhodoneaParams } from "@/math/flowerTypes";
-import type { Palette } from "@/math/palette";
-import { samplePaletteInto } from "@/math/palette";
+import type { Palette, RgbStop } from "@/math/palette";
+import {
+  prepareStops,
+  sampleStopsInto,
+  liftValueFloor,
+  EDGE_VALUE_FLOOR,
+} from "@/math/palette";
 import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
+import { solidify, SHELL_THICKNESS } from "@/math/flowers/shell";
+import { addCenterDome } from "@/math/flowers/center";
 import { hsbToThreeColor } from "@/math/supplement";
 
+/** Final post-shell vertex ceiling (pinned by rhodonea.test.ts). */
 export const RHODONEA_VERTEX_CAP = 130000;
+/**
+ * Pre-shell surface budget: solidify() ~doubles the vertex count, so the base
+ * surface is capped at half the final ceiling to keep the post-shell mesh <=cap.
+ */
+const RHODONEA_SURFACE_CAP = 65000;
 
 /**
  * Rhodonea (rose-curve) 3D family. r = radius * cos(k*theta) turned into P
@@ -28,8 +41,8 @@ export function createRhodoneaGeometry(
   let lengthSeg = Math.max(12, Math.round(rp.lengthSeg));
   let widthSeg = Math.max(8, Math.round(rp.widthSeg));
   const estimate = P * (lengthSeg + 1) * (widthSeg + 1);
-  if (estimate > RHODONEA_VERTEX_CAP) {
-    const shrink = Math.sqrt(RHODONEA_VERTEX_CAP / estimate);
+  if (estimate > RHODONEA_SURFACE_CAP) {
+    const shrink = Math.sqrt(RHODONEA_SURFACE_CAP / estimate);
     lengthSeg = Math.max(12, Math.round(lengthSeg * shrink));
     widthSeg = Math.max(8, Math.round(widthSeg * shrink));
   }
@@ -49,6 +62,8 @@ export function createRhodoneaGeometry(
   // json.palette is absent) — mirrors superformula.ts. Falls back to the HSB
   // ramp below instead of throwing (never-throws render contract).
   const hasPalette = palette != null && palette.stops != null && palette.stops.length > 0;
+  // Perf: parse palette stops to linear RGB once, then numeric-lerp per row.
+  const prepared: RgbStop[] | null = hasPalette ? prepareStops(palette.stops) : null;
   const scratch = new THREE.Color();
 
   const positions: number[] = [];
@@ -73,11 +88,16 @@ export function createRhodoneaGeometry(
       const angHalf = phiMax * Math.pow(Math.sin(Math.PI * u), 0.5);
 
       // Palette / HSB color for this length row.
-      if (hasPalette) {
-        // Reconciliation #8: sample palette without re-applying per-shape shifts.
-        samplePaletteInto(palette.stops, u, scratch);
+      if (prepared) {
+        // Bright-tips sampling: catalog palettes ascend bright(pos0)->dark(pos1),
+        // so sample at (1 - u) — the petal tip (u=1) lands on the bright pos-0
+        // stop instead of the darkest stop that vanished into the scene.
+        // Reconciliation #8: no per-shape shifts re-applied (palette is baked).
+        sampleStopsInto(prepared, 1 - u, scratch);
+        // Guarantee the outermost (tip) row separates from the dark background.
+        if (iu === lengthSeg) liftValueFloor(scratch, EDGE_VALUE_FLOOR);
       } else {
-        // HSB fallback: hue rotates per petal, sat/bri ramp along u.
+        // HSB fallback (v1 identity): hue rotates per petal, sat/bri ramp along u.
         const hue = 340 - 6 * p;
         const sat = 85 - 15 * u + satShiftHsb;
         const bri = 30 + 55 * u + briShiftHsb;
@@ -118,10 +138,31 @@ export function createRhodoneaGeometry(
   // have distinct indices but (near-)coincident positions (petal base collapse).
   const filteredIndices = filterZeroAreaTriangles(positions, indices);
 
+  // Small deep dome where the petals converge at the origin, coloured with the
+  // deep inner stop (pos-1 under the reversed sampling). Appended after the base.
+  const innerColor = prepared
+    ? new THREE.Color().setRGB(
+        prepared[prepared.length - 1].r,
+        prepared[prepared.length - 1].g,
+        prepared[prepared.length - 1].b,
+      )
+    : scratch.clone();
+  addCenterDome(positions, colors, filteredIndices, {
+    radius: Math.max(4, radius * 0.08),
+    height: Math.max(4, heightProfile * 0.25),
+    color: innerColor,
+    up: "y",
+    baseOffset: 0,
+    stamens: 6,
+  });
+
+  // Petal thickness: append a normal-offset backing shell after the base surface.
+  const solid = solidify(positions, colors, filteredIndices, SHELL_THICKNESS);
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(filteredIndices);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(solid.positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(solid.colors, 3));
+  geometry.setIndex(solid.indices);
   geometry.computeVertexNormals();
   return geometry;
 }

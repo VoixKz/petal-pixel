@@ -34,7 +34,11 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
       },
       color: (r, params) =>
         params.palette
-          ? samplePalette(params.palette.stops, r)
+          ? // Bright-tips: catalog palettes ascend bright(pos0)->dark(pos1), so
+            // sample at (1 - r) — the petal edge (r=1) lands on the bright pos-0
+            // stop instead of the darkest stop that vanished into the scene. The
+            // HSB fallback below stays at `r` (v1 identity).
+            samplePalette(params.palette.stops, 1 - r)
           : hsbToThreeColor(335, -r * 40 + 100 + params.satShift, r * 50 + 50 + params.briShift),
     };
   }
@@ -56,7 +60,7 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
           params.petalAmp,
       color: (r, params) =>
         params.palette
-          ? samplePalette(params.palette.stops, r)
+          ? samplePalette(params.palette.stops, 1 - r) // bright-tips (see zinnia)
           : hsbToThreeColor(335, -r * 5 + 10 + params.satShift, r * 50 + 50 + params.briShift),
     };
   }
@@ -78,7 +82,7 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
           params.petalAmp,
       color: (r, params) =>
         params.palette
-          ? samplePalette(params.palette.stops, r)
+          ? samplePalette(params.palette.stops, 1 - r) // bright-tips (see zinnia)
           : hsbToThreeColor(310, (r * 50 - 30) * 3 + 5 + params.satShift, 100 + params.briShift),
     };
   }
@@ -99,7 +103,7 @@ export function getBloomProfile(type: FlowerType): BloomProfile {
         params.petalAmp,
     color: (r, params) =>
       params.palette
-        ? samplePalette(params.palette.stops, r)
+        ? samplePalette(params.palette.stops, 1 - r) // bright-tips (see zinnia)
         : hsbToThreeColor(20 - r * 20, 80 - r * 40 + params.satShift, 60 + r * 40 + params.briShift),
   };
 }

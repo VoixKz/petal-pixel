@@ -1,11 +1,19 @@
 import * as THREE from "three";
 import type { SuperformulaParams } from "@/math/flowerTypes";
-import type { Palette } from "@/math/palette";
-import { samplePaletteInto } from "@/math/palette";
+import type { Palette, RgbStop } from "@/math/palette";
+import {
+  prepareStops,
+  sampleStopsInto,
+  liftValueFloor,
+  EDGE_VALUE_FLOOR,
+} from "@/math/palette";
 import { superShape, hsbToThreeColor } from "@/math/supplement";
 import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
+import { solidify, SHELL_THICKNESS } from "@/math/flowers/shell";
 
-const MAX_VERTICES = 130_000;
+// Pre-shell surface budget (halved from the 130k final ceiling): solidify()
+// ~doubles the vertex count, so keep the surface <=60k so post-shell <=130k.
+const MAX_VERTICES = 60_000;
 
 /**
  * Build a THREE.BufferGeometry from a dual-superformula spherical product.
@@ -55,6 +63,8 @@ export function createSuperformulaGeometry(
     palette != null &&
     palette.stops != null &&
     palette.stops.length >= 2;
+  // Perf: parse palette stops to linear RGB once, then numeric-lerp per vertex.
+  const prepared: RgbStop[] | null = hasPalette ? prepareStops(palette.stops) : null;
   const scratch = new THREE.Color();
 
   // grid[i][j] holds the flat vertex index, or -1 if the vertex was skipped.
@@ -93,10 +103,16 @@ export function createSuperformulaGeometry(
 
       // Color: tLat = (phi + π/2) / π  ∈ [0, 1] (south→north)
       const tLat = (phi + Math.PI / 2) / Math.PI;
-      if (hasPalette) {
+      if (prepared) {
         // v2: palette is authoritative (backend already baked its shifts) — do
         // NOT re-apply the per-shape satShift/briShift here (reconciliation #8).
-        samplePaletteInto(palette.stops, tLat, scratch);
+        // Mapping is NOT reversed here (superformula has no radial rim); instead
+        // lift the equatorial band (widest cross-section = the silhouette) up to
+        // the edge floor so the outline separates from the dark scene, while the
+        // poles keep the full gradient.
+        sampleStopsInto(prepared, tLat, scratch);
+        const w = 1 - Math.abs(2 * tLat - 1);
+        if (w > 0.6) liftValueFloor(scratch, EDGE_VALUE_FLOOR);
       } else {
         // Fallback ramp (only used when no palette is provided)
         const lobe = 0.5 * (1 + Math.cos(m1 * theta));
@@ -119,10 +135,15 @@ export function createSuperformulaGeometry(
   stitchQuads(grid, rawIndices);
   const indices = filterZeroAreaTriangles(positions, rawIndices);
 
+  // Petal/shell thickness: append a normal-offset backing shell after the base
+  // surface (D2 global look). For this closed solid the shell is an inner offset
+  // layer; front-vertex indexing is preserved (append-after-base).
+  const solid = solidify(positions, colors, indices, SHELL_THICKNESS);
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(solid.positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(solid.colors, 3));
+  geometry.setIndex(solid.indices);
   geometry.computeVertexNormals();
   return geometry;
 }

@@ -1,13 +1,21 @@
 import * as THREE from "three";
 import type { SunflowerParams } from "@/math/flowerTypes";
-import type { Palette } from "@/math/palette";
-import { samplePaletteInto } from "@/math/palette";
+import type { Palette, RgbStop } from "@/math/palette";
+import {
+  prepareStops,
+  sampleStopsInto,
+  liftValueFloor,
+  EDGE_VALUE_FLOOR,
+} from "@/math/palette";
 import { stitchQuads, filterZeroAreaTriangles } from "@/math/flowers/stitch";
+import { solidify, SHELL_THICKNESS } from "@/math/flowers/shell";
 import { degToRad, hsbToThreeColor } from "@/math/supplement";
 
 // Fixed math constant (NOT a param): 180 * (3 - sqrt(5)).
 const GOLDEN_ANGLE_DEG = 137.50776405003785;
-const MAX_VERTICES = 130000;
+// Pre-shell surface budget (halved from the 130k final ceiling): solidify()
+// ~doubles the vertex count, so keep the surface at <=65k so post-shell <=130k.
+const MAX_VERTICES = 60000;
 const RAY_RADIAL_SEG = 10; // petalRadialSeg
 const RAY_CROSS_SEG = 6; // petalCrossSeg
 
@@ -57,22 +65,35 @@ export function createSunflowerGeometry(
   // no-palette golden-disc ramp below instead of throwing (never-throws render
   // contract). Requires >=2 stops so samplePaletteInto has an interval.
   const hasPalette = palette != null && palette.stops != null && palette.stops.length >= 2;
+  // Perf: parse the palette stops to linear RGB ONCE, then numeric-lerp per
+  // vertex (no hex parse / THREE.Color alloc in the hot loop). Identical output
+  // to samplePaletteInto (palette.test "prepared-stop sampling is identical").
+  const prepared: RgbStop[] | null = hasPalette ? prepareStops(palette.stops) : null;
 
-  const pushVertex = (x: number, y: number, z: number, t: number): number => {
+  // `edgeFloor` lifts the sampled colour to EDGE_VALUE_FLOOR so outer petal tips
+  // separate from the near-black scene; used on the ray-petal tip row only.
+  const pushVertex = (
+    x: number,
+    y: number,
+    z: number,
+    t: number,
+    edgeFloor = false,
+  ): number => {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
       return -1;
     }
     const vi = positions.length / 3;
     positions.push(x, y, z);
     const tc = THREE.MathUtils.clamp(t, 0, 1);
-    if (hasPalette) {
-      samplePaletteInto(palette.stops, tc, scratch);
+    if (prepared) {
+      sampleStopsInto(prepared, tc, scratch);
     } else {
       // Fallback golden-disc ramp when no palette is supplied.
       const sat = THREE.MathUtils.clamp(60 + 30 * tc + satShift * 100, 0, 100);
       const bri = THREE.MathUtils.clamp(40 + 40 * tc + briShift * 100, 0, 100);
       scratch.copy(hsbToThreeColor(45, sat, bri));
     }
+    if (edgeFloor) liftValueFloor(scratch, EDGE_VALUE_FLOOR);
     colors.push(scratch.r, scratch.g, scratch.b);
     return vi;
   };
@@ -161,7 +182,11 @@ export function createSunflowerGeometry(
         const x = rad * Math.cos(alpha);
         const z = rad * Math.sin(alpha);
         const y = -(domeHeight * 0.15 + lift);
-        petalGrid[si][wi] = pushVertex(x, y, z, s);
+        // Bright-tips sampling: catalog palettes ascend bright(pos0)->dark(pos1),
+        // so sample the ray at (1 - s) — the petal tip (s=1) lands on the bright
+        // pos-0 stop instead of the darkest stop that vanished into the scene.
+        // Guarantee brightness on the outermost (tip) row via the edge floor.
+        petalGrid[si][wi] = pushVertex(x, y, z, 1 - s, si === RAY_RADIAL_SEG);
       }
     }
     // At s=0 (base), taper = sin(0)^0.6 = 0 → all cross-section verts same position.
@@ -181,10 +206,15 @@ export function createSunflowerGeometry(
   // (e.g. petal base/tip rows after row collapse, or seam verts coinciding).
   const filteredIndices = filterZeroAreaTriangles(positions, indices);
 
+  // Petal thickness: append a normal-offset backing shell (D2 global look). The
+  // back/rim verts are appended AFTER the base surface, so existing front-vertex
+  // indexing is preserved.
+  const solid = solidify(positions, colors, filteredIndices, SHELL_THICKNESS);
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(filteredIndices);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(solid.positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(solid.colors, 3));
+  geometry.setIndex(solid.indices);
   geometry.computeVertexNormals();
   return geometry;
 }

@@ -87,8 +87,12 @@ describe("createSuperformulaGeometry", () => {
     const geom = createSuperformulaGeometry(PARAMS, PALETTE);
     const pos = geom.getAttribute("position").array;
     const col = geom.getAttribute("color").array;
-    for (let i = 0; i < pos.length; i += 1) expect(Number.isFinite(pos[i])).toBe(true);
-    for (let i = 0; i < col.length; i += 1) expect(Number.isFinite(col[i])).toBe(true);
+    // Aggregate to a single assert (the shell doubles the vertex count, so a
+    // per-element expect() loop would time out at 20s).
+    let ok = true;
+    for (let i = 0; i < pos.length; i += 1) if (!Number.isFinite(pos[i])) { ok = false; break; }
+    for (let i = 0; i < col.length && ok; i += 1) if (!Number.isFinite(col[i])) { ok = false; break; }
+    expect(ok).toBe(true);
   });
 
   it("emits only strictly positive-area triangles (poles/degenerates skipped)", () => {
@@ -102,15 +106,34 @@ describe("createSuperformulaGeometry", () => {
     const pos = geom.getAttribute("position");
     const bound = 2 * PARAMS.scale;
     const v = new THREE.Vector3();
+    // Aggregate to a single assert (post-shell the vertex count is doubled).
+    let maxLen = 0;
     for (let i = 0; i < pos.count; i += 1) {
       v.fromBufferAttribute(pos, i);
-      expect(v.length()).toBeLessThanOrEqual(bound);
+      maxLen = Math.max(maxLen, v.length());
     }
+    expect(maxLen).toBeLessThanOrEqual(bound);
   });
 
-  it("honors the vertex cap (shrinks uSeg/vSeg when the grid would exceed MAX)", () => {
+  it("honors the vertex cap (shrinks uSeg/vSeg when the grid would exceed MAX, post-shell)", () => {
     const huge = createSuperformulaGeometry({ ...PARAMS, uSeg: 340, vSeg: 200 }, PALETTE);
     expect(huge.getAttribute("position").count).toBeLessThanOrEqual(130000);
+  });
+
+  it("lifts the equatorial silhouette to the edge-brightness floor", () => {
+    const geom = createSuperformulaGeometry(PARAMS, PALETTE);
+    const pos = geom.getAttribute("position");
+    const col = geom.getAttribute("color");
+    // The vertex with the largest planar radius sits on the widest cross-section
+    // (the silhouette); its brightness must clear the floor.
+    let maxR = -1;
+    let idx = 0;
+    for (let i = 0; i < pos.count; i += 1) {
+      const r = Math.hypot(pos.getX(i), pos.getZ(i));
+      if (r > maxR) { maxR = r; idx = i; }
+    }
+    const v = Math.max(col.getX(idx), col.getY(idx), col.getZ(idx));
+    expect(v).toBeGreaterThanOrEqual(0.55 - 1e-6);
   });
 
   it("colors vertices from the palette (not all identical)", () => {

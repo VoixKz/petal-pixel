@@ -69,8 +69,13 @@ describe("createSunflowerGeometry", () => {
     const geometry = createSunflowerGeometry(PARAMS, PALETTE);
     const pos = geometry.getAttribute("position").array as Float32Array;
     const color = geometry.getAttribute("color").array as Float32Array;
-    for (let i = 0; i < pos.length; i += 1) expect(Number.isNaN(pos[i])).toBe(false);
-    for (let i = 0; i < color.length; i += 1) expect(Number.isNaN(color[i])).toBe(false);
+    // Aggregate to a single assert: the shell doubles the vertex count, so a
+    // per-element expect() loop times out at 20s. (perf-split later applies this
+    // same aggregation project-wide.)
+    let bad = false;
+    for (let i = 0; i < pos.length; i += 1) if (Number.isNaN(pos[i])) { bad = true; break; }
+    for (let i = 0; i < color.length && !bad; i += 1) if (Number.isNaN(color[i])) { bad = true; break; }
+    expect(bad).toBe(false);
   });
 
   it("emits only strictly positive-area triangles", () => {
@@ -79,7 +84,7 @@ describe("createSunflowerGeometry", () => {
     expect(minTriangleArea(geometry)).toBeGreaterThan(1e-6);
   });
 
-  it("stays within the 130k vertex cap even at maximum resolution", () => {
+  it("stays within the 130k vertex cap even at maximum resolution (post-shell)", () => {
     const dense: SunflowerParams = {
       ...PARAMS,
       floretRings: 150,
@@ -89,6 +94,35 @@ describe("createSunflowerGeometry", () => {
     const geometry = createSunflowerGeometry(dense, PALETTE);
     expect(geometry.getAttribute("position").count).toBeLessThanOrEqual(VERTEX_CAP);
     expect(geometry.getAttribute("position").count).toBeGreaterThan(0);
+  });
+
+  it("adds a backing shell (vertex count doubled, colors copied per vertex)", () => {
+    const geometry = createSunflowerGeometry(PARAMS, PALETTE);
+    const pos = geometry.getAttribute("position");
+    const color = geometry.getAttribute("color");
+    // solidify() appends a back layer of equal size -> total is exactly even,
+    // and each back vertex carries a copied color.
+    expect(pos.count % 2).toBe(0);
+    expect(color.count).toBe(pos.count);
+    // Post-shell it comfortably exceeds a bare single-sided surface.
+    expect(pos.count).toBeGreaterThan(1000);
+  });
+
+  it("makes the outermost ray-petal tips bright (edge-brightness floor)", () => {
+    const geometry = createSunflowerGeometry(PARAMS, PALETTE);
+    const pos = geometry.getAttribute("position");
+    const color = geometry.getAttribute("color");
+    // Find the vertex with the largest planar radius (a ray-petal tip / rim).
+    let maxR = -1;
+    let idx = 0;
+    for (let i = 0; i < pos.count; i += 1) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const r = Math.hypot(x, z);
+      if (r > maxR) { maxR = r; idx = i; }
+    }
+    const v = Math.max(color.getX(idx), color.getY(idx), color.getZ(idx));
+    expect(v).toBeGreaterThanOrEqual(0.55 - 1e-6);
   });
 
   it("degrades gracefully at degenerate params (ray_petals below floor, tiny grid)", () => {
@@ -102,7 +136,9 @@ describe("createSunflowerGeometry", () => {
     };
     const geometry = createSunflowerGeometry(degenerate, PALETTE);
     const pos = geometry.getAttribute("position").array as Float32Array;
-    for (let i = 0; i < pos.length; i += 1) expect(Number.isNaN(pos[i])).toBe(false);
+    let bad = false;
+    for (let i = 0; i < pos.length; i += 1) if (Number.isNaN(pos[i])) { bad = true; break; }
+    expect(bad).toBe(false);
     expect(minTriangleArea(geometry)).toBeGreaterThan(1e-6);
   });
 });

@@ -126,10 +126,34 @@ describe("createRhodoneaGeometry", () => {
       { ...BASE, k: 9, lengthSeg: 48, widthSeg: 32 },
       PALETTE
     );
-    // P=9 * 49 * 33 = 14553 -> under cap; assert the exported cap and that we
-    // never exceed it even at the max range.
+    // P=9 * 49 * 33 = 14553 -> under surface cap; post-shell it stays under the
+    // exported final ceiling. Assert the exported cap and that we never exceed it.
     expect(RHODONEA_VERTEX_CAP).toBe(130000);
     expect(g.getAttribute("position").count).toBeLessThanOrEqual(RHODONEA_VERTEX_CAP);
+  });
+
+  it("adds a backing shell + center dome after the base surface", () => {
+    const g = createRhodoneaGeometry(BASE, PALETTE);
+    const pos = g.getAttribute("position");
+    const col = g.getAttribute("color");
+    // solidify() copies a color per back vertex; the dome adds its own colored verts.
+    expect(col.count).toBe(pos.count);
+    // Base surface for BASE params ~ P(5)*31*21 = 3255; post shell+dome is larger.
+    expect(pos.count).toBeGreaterThan(3255);
+  });
+
+  it("makes the outermost petal tips bright (edge-brightness floor)", () => {
+    const g = createRhodoneaGeometry(BASE, PALETTE);
+    const pos = g.getAttribute("position");
+    const col = g.getAttribute("color");
+    let maxR = -1;
+    let idx = 0;
+    for (let i = 0; i < pos.count; i += 1) {
+      const r = Math.hypot(pos.getX(i), pos.getZ(i));
+      if (r > maxR) { maxR = r; idx = i; }
+    }
+    const v = Math.max(col.getX(idx), col.getY(idx), col.getZ(idx));
+    expect(v).toBeGreaterThanOrEqual(0.55 - 1e-6);
   });
 
   it("coerces k into [2,9] as an integer (guards pi/(2k))", () => {

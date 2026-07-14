@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import type { RoseParams } from "@/math/flowerTypes";
 import { degToRad, hsbToThreeColor } from "@/math/supplement";
-import { samplePalette } from "@/math/palette";
+import { samplePalette, liftValueFloor, EDGE_VALUE_FLOOR } from "@/math/palette";
+import { solidify, SHELL_THICKNESS } from "@/math/flowers/shell";
+import { addCenterDome } from "@/math/flowers/center";
 
 const ROSE_COLS = 600;
 const ROSE_ROWS = 30;
@@ -70,6 +72,11 @@ export function createRoseFlowerGeometry(params: RoseParams) {
     const rowColor = params.palette
       ? samplePalette(params.palette.stops, rowT)
       : hsbToThreeColor(340, 100, -20 + rowT * 120);
+    // Edge-brightness floor on the outermost row only (palette branch only —
+    // keep the HSB branch unfloored for v1 identity). Not reversed: rose keeps
+    // centre=pos0 / edge=pos1; flooring the rim silhouette lifts it off the
+    // near-black scene while inner rows keep the full gradient.
+    if (params.palette && r === rows) liftValueFloor(rowColor, EDGE_VALUE_FLOOR);
     const centerBud = THREE.MathUtils.smoothstep(rowT, 0.05, 0.35);
 
     for (let theta = 0; theta <= cols; theta += 1) {
@@ -117,10 +124,33 @@ export function createRoseFlowerGeometry(params: RoseParams) {
     }
   }
 
+  // The append helpers work on plain number[] — convert the typed buffers once.
+  // Both the centre dome and the shell append AFTER the base surface, so the
+  // row-major front indexing (row*verticesPerRow) that rose.palette.test relies
+  // on is preserved.
+  const posArr: number[] = Array.from(positions);
+  const colArr: number[] = Array.from(colors);
+
+  // Fill the flat bud centre with a small deep dome + stamens (deep inner stop).
+  const innerColor = params.palette
+    ? samplePalette(params.palette.stops, 1) // deepest stop
+    : hsbToThreeColor(340, 90, 30);
+  addCenterDome(posArr, colArr, indices, {
+    radius: 20,
+    height: 15,
+    color: innerColor,
+    up: "y",
+    baseOffset: 0,
+    stamens: 7,
+  });
+
+  // Petal thickness: append a normal-offset backing shell after the base surface.
+  const solid = solidify(posArr, colArr, indices, SHELL_THICKNESS);
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(solid.positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(solid.colors, 3));
+  geometry.setIndex(solid.indices);
   geometry.computeVertexNormals();
   return geometry;
 }

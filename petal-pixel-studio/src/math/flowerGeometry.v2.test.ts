@@ -75,17 +75,20 @@ function nonDegenerate(geometry: THREE.BufferGeometry) {
   expect(color.count).toBe(pos.count);
   expect(index).toBeTruthy();
   expect(index!.count).toBeGreaterThan(0);
-  // finite vertices
-  for (let i = 0; i < pos.count; i += 1) {
-    expect(Number.isFinite(pos.getX(i))).toBe(true);
-    expect(Number.isFinite(pos.getY(i))).toBe(true);
-    expect(Number.isFinite(pos.getZ(i))).toBe(true);
+  // finite vertices — aggregate to ONE assert (post-shell the family geometries
+  // carry 2x the vertices, so a per-element expect() loop would time out at 20s).
+  let allFinite = true;
+  for (let i = 0; i < pos.count && allFinite; i += 1) {
+    if (!Number.isFinite(pos.getX(i)) || !Number.isFinite(pos.getY(i)) || !Number.isFinite(pos.getZ(i))) {
+      allFinite = false;
+    }
   }
-  // at least one triangle with positive area
+  expect(allFinite).toBe(true);
+  // at least one triangle with positive area — early-exit once found.
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
   const ab = new THREE.Vector3(), ac = new THREE.Vector3();
   let maxArea = 0;
-  for (let i = 0; i < index!.count; i += 3) {
+  for (let i = 0; i < index!.count && maxArea === 0; i += 3) {
     a.fromBufferAttribute(pos, index!.getX(i));
     b.fromBufferAttribute(pos, index!.getX(i + 1));
     c.fromBufferAttribute(pos, index!.getX(i + 2));
@@ -96,9 +99,26 @@ function nonDegenerate(geometry: THREE.BufferGeometry) {
 }
 
 describe("createClassicFlowerGeometryV2", () => {
-  it("adds a per-vertex color attribute and keeps v1 position count", () => {
+  it("adds a per-vertex color attribute to the v1 surface (plus a centre cap)", () => {
     const geometry = createClassicFlowerGeometryV2(DEFAULT_CLASSIC_PARAMS, PALETTE);
     nonDegenerate(geometry);
+  });
+
+  it("closes the open centre with an on-axis apex vertex", () => {
+    const geometry = createClassicFlowerGeometryV2(DEFAULT_CLASSIC_PARAMS, PALETTE);
+    const pos = geometry.getAttribute("position");
+    const { fD, rows, cols } = DEFAULT_CLASSIC_PARAMS;
+    // The base surface loop starts at theta=1, so pre-fix nothing sat inside the
+    // innermost ring (radius ≈ fD/rows). The appended dome adds an apex on the
+    // axis plus stamens well inside that hole.
+    const holeR = fD / rows;
+    let insideHole = 0;
+    for (let i = 0; i < pos.count; i += 1) {
+      if (Math.hypot(pos.getX(i), pos.getY(i)) < holeR * 0.7) insideHole += 1;
+    }
+    expect(insideHole).toBeGreaterThanOrEqual(1);
+    // sanity: the base surface still contributes its (rows-1)*cols vertices.
+    expect(pos.count).toBeGreaterThan((rows - 1) * cols);
   });
 });
 

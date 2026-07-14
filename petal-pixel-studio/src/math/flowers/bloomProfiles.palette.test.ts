@@ -64,18 +64,19 @@ describe("bloomProfiles color: v2 palette branch", () => {
     ],
   };
 
-  it("zinnia samples the palette at r when palette is present", () => {
+  it("zinnia samples the palette at (1 - r) when palette is present (bright-tips)", () => {
     const params: BloomParams = { ...baseParams, palette };
     const c = getBloomProfile("zinnia").color(R, params);
-    const expected = samplePalette(palette.stops, R);
+    // Bright-tips reversal: edge (r=1) -> bright pos-0 stop, so interior r samples 1-r.
+    const expected = samplePalette(palette.stops, 1 - R);
     expect(c.r).toBeCloseTo(expected.r, 12);
     expect(c.g).toBeCloseTo(expected.g, 12);
     expect(c.b).toBeCloseTo(expected.b, 12);
   });
 
-  it("all four families route through the palette when present", () => {
+  it("all four families route through the palette at (1 - r) when present", () => {
     const params: BloomParams = { ...baseParams, palette };
-    const expected = samplePalette(palette.stops, R);
+    const expected = samplePalette(palette.stops, 1 - R);
     for (const type of ["zinnia", "camellia", "lotus", "dahlia"] as const) {
       const c = getBloomProfile(type).color(R, params);
       expect(c.r).toBeCloseTo(expected.r, 12);

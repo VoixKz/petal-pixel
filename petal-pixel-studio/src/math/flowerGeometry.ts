@@ -22,7 +22,14 @@ import { createSunflowerGeometry } from "@/math/flowers/sunflower";
 import { createRhodoneaGeometry } from "@/math/flowers/rhodonea";
 import { createSuperformulaGeometry } from "@/math/flowers/superformula";
 import type { Palette, PaletteStop } from "@/math/palette";
-import { samplePalette } from "@/math/palette";
+import {
+  samplePalette,
+  prepareStops,
+  sampleStopsInto,
+  liftValueFloor,
+  EDGE_VALUE_FLOOR,
+} from "@/math/palette";
+import { addCenterDome } from "@/math/flowers/center";
 import { bumpiness, vShape } from "@/math/supplement";
 
 export { createClassicFlowerGeometry, createParametricBloomGeometry, createRoseFlowerGeometry };
@@ -177,8 +184,12 @@ export function buildV2Geometry(params: V2Params): THREE.BufferGeometry {
 
 /**
  * v2 classic: reruns the v1 createClassicFlowerGeometry position/index math
- * verbatim and adds a per-vertex color attribute sampled from the palette at the
- * radial parameter t = theta/rows. v1 createClassicFlowerGeometry stays untouched.
+ * verbatim for the base surface and adds a per-vertex color attribute sampled
+ * from the palette at the radial parameter t = theta/rows. The outermost row is
+ * lifted to the edge-brightness floor so the silhouette separates from the dark
+ * scene, and a small deep centre dome is appended AFTER the base surface to
+ * close the open middle (the surface loop starts at theta=1, leaving an inner
+ * hole). v1 createClassicFlowerGeometry stays untouched.
  */
 export function createClassicFlowerGeometryV2(params: ClassicParams, palette: Palette): THREE.BufferGeometry {
   const { rows, cols, pNum, fD, pLen, pSharp, fHeight, curve1, curve2, b, bNum } = params;
@@ -186,9 +197,22 @@ export function createClassicFlowerGeometryV2(params: ClassicParams, palette: Pa
   const colors: number[] = [];
   const indices: number[] = [];
 
+  // Perf: parse palette stops to linear RGB once, then numeric-lerp per row.
+  const hasPalette = palette != null && palette.stops != null && palette.stops.length >= 2;
+  const prepared = hasPalette ? prepareStops(palette.stops) : null;
+  const rowColor = new THREE.Color();
+
   for (let theta = 1; theta < rows; theta += 1) {
     const t = theta / rows; // radial 0..1
-    const color = samplePalette(palette.stops, t);
+    if (prepared) {
+      sampleStopsInto(prepared, t, rowColor);
+    } else {
+      // Degenerate palette (<2 stops): delegate to samplePalette's guards.
+      rowColor.copy(samplePalette(palette.stops, t));
+    }
+    // Not reversed (centre=pos0 / edge=pos1); lift only the outer rim so the
+    // silhouette clears the near-black background while inner rows keep the ramp.
+    if (theta === rows - 1) liftValueFloor(rowColor, EDGE_VALUE_FLOOR);
     for (let phi = 0; phi < cols; phi += 1) {
       const angle = (phi * Math.PI * 2) / cols;
       const r = ((pLen * Math.pow(Math.abs(Math.sin((pNum / 2) * angle)), pSharp) + fD) * theta) / rows;
@@ -196,7 +220,7 @@ export function createClassicFlowerGeometryV2(params: ClassicParams, palette: Pa
       const y = r * Math.sin(angle);
       const z = vShape(fHeight, r / 100, curve1, curve2, 1.5) - 200 + bumpiness(b, r / 100, bNum, angle);
       positions.push(x, y, z);
-      colors.push(color.r, color.g, color.b);
+      colors.push(rowColor.r, rowColor.g, rowColor.b);
     }
   }
 
@@ -210,6 +234,33 @@ export function createClassicFlowerGeometryV2(params: ClassicParams, palette: Pa
       indices.push(a, bIndex, c);
       indices.push(a, c, d);
     }
+  }
+
+  // Close the open centre: the surface starts at theta=1 (r≈fD/rows), so the
+  // inner disc is a hole. Fit a small deep dome to the innermost ring (the first
+  // `cols` vertices) and cap it with an apex on the axis. Appended after the
+  // base surface (append-after-base) so front-vertex indexing is unaffected.
+  let innerZ = 0;
+  let innerR = 0;
+  const innerCount = Math.min(cols, positions.length / 3);
+  for (let i = 0; i < innerCount; i += 1) {
+    innerZ += positions[i * 3 + 2];
+    innerR += Math.hypot(positions[i * 3], positions[i * 3 + 1]);
+  }
+  if (innerCount > 0) {
+    innerZ /= innerCount;
+    innerR /= innerCount;
+    const deep = hasPalette
+      ? samplePalette(palette.stops, 1) // deepest stop
+      : new THREE.Color("#2a2a2a");
+    addCenterDome(positions, colors, indices, {
+      radius: Math.max(1, innerR * 1.1),
+      height: Math.max(6, pLen * 0.25),
+      color: deep,
+      up: "z",
+      baseOffset: innerZ,
+      stamens: 6,
+    });
   }
 
   const geometry = new THREE.BufferGeometry();
