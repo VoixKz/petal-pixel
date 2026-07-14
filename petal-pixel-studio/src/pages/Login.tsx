@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Sparkles, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,6 +14,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, signInWithOAuth } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleOAuth = async (provider: "google" | "apple") => {
     const { error } = await signInWithOAuth(provider);
@@ -28,7 +29,13 @@ export default function Login() {
     if (error) {
       toast.error(error.message);
     } else {
-      navigate("/");
+      // ProtectedRoute stashes the pre-login target (e.g. /create?name=X from
+      // the share "make one for your name" CTA) as state.from — honor it so
+      // the deep-link survives the login round-trip instead of always
+      // dropping the user at "/".
+      const from = location.state?.from as { pathname?: string; search?: string } | undefined;
+      const target = from?.pathname ? `${from.pathname}${from.search ?? ""}` : "/";
+      navigate(target);
     }
   };
 

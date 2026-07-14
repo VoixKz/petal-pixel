@@ -664,6 +664,16 @@ export default function CreateFlower() {
   // manufacture false unsaved work (params.flowerId stays empty). Keyed on
   // location.key so it re-runs per navigation, in step with the reconciliation
   // effect above that may clear wordInput on a stale edit exit.
+  //
+  // isEditMode is also a dep: the reconciliation effect above (defined
+  // earlier, so it flushes first in the same commit) can call clearEditMode()
+  // when exiting a stale edit session on this same navigation. That store
+  // write lands after this effect's closure already captured the OLD
+  // (still-true) isEditMode, so without isEditMode in deps this effect would
+  // bail out on the stale value and never get a second chance — since
+  // `profile`/`location.key` don't change again, the prefill would be lost
+  // for that navigation. Listing isEditMode here lets the effect re-run once
+  // it flips to false.
   useEffect(() => {
     if (prefilledRef.current || isEditMode) return;
     const queryName = new URLSearchParams(location.search).get('name');
@@ -672,17 +682,21 @@ export default function CreateFlower() {
       displayName: profile?.display_name,
       hasOnboarded: hasCreateOnboarded(),
     });
-    if (markOnboarded) markCreateOnboarded();
     if (name && !wordInput) {
       prefilledRef.current = true;
       setWordInput(name);
       nameInputRef.current?.focus();
+      // Only consume the one-time onboarding gate when the prefill actually
+      // applied — otherwise a user who typed before `profile` loaded would
+      // permanently lose their first-visit display-name prefill even though
+      // it never ran.
+      if (markOnboarded) markCreateOnboarded();
     } else if (queryName) {
       // A deep-link with a blank/edit state still counts as handled.
       prefilledRef.current = true;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, location.key]);
+  }, [profile, location.key, isEditMode]);
 
   const handleCheckBackend = async () => {
     if (isCheckingBackend(healthStatus)) return;
