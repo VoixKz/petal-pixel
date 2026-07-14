@@ -7,6 +7,7 @@ import { FlowerInfo } from '@/components/flower/FlowerInfo';
 import { FlowerBadges } from '@/components/flower/FlowerBadges';
 import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
+import { useAuth } from '@/contexts/AuthContext';
 import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown, Share2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { toast } from 'sonner';
@@ -88,6 +89,117 @@ declare global {
     ethereum?: {
       request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
     };
+  }
+}
+
+// ── Input affordances: variations, recent-name chips, first-visit prefill ────
+// Pure, dependency-light helpers kept INLINE in this file (single-file
+// ownership for this change). NOTHING here calls the backend or mutates the
+// store — determinism is inherited from the single existing generateFromWord
+// path these words feed: same (name, index) → same word → same SHA-256 seed →
+// same flower. The v1 path and v1 saved flowers stay pixel-identical.
+
+// Mirrors the name input's contract (see handleWordInputChange), plus a trim.
+function sanitizeName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 64);
+}
+
+// Fixed salt appended to the base name before it feeds the deterministic
+// generate path. Keep VARIATION_SEP stable so a given name's siblings stay
+// stable across builds. 1-based index for human-readable labels ("#1").
+const VARIATION_SEP = ' #';
+function variationWord(name: string, index: number): string {
+  return `${name.trim()}${VARIATION_SEP}${index + 1}`;
+}
+
+// FNV-1a 32-bit — a tiny deterministic string hash used ONLY to colour the
+// preview swatch. It never touches the backend seed (SHA-256 of the word).
+function fnv1a(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function variationGradient(word: string): string {
+  const h = fnv1a(word);
+  const hueA = h % 360;
+  const hueB = (hueA + 40 + ((h >> 8) % 80)) % 360;
+  return `linear-gradient(135deg, hsl(${hueA} 70% 55%), hsl(${hueB} 68% 48%))`;
+}
+
+interface FlowerVariation { key: string; word: string; gradient: string }
+
+// 3–4 deterministic siblings of the current name; [] for a blank name so the
+// row disappears on cold-start (no noise before the user has typed anything).
+function buildVariations(name: string, count = 4): FlowerVariation[] {
+  const base = name.trim();
+  if (!base) return [];
+  return Array.from({ length: count }, (_, i) => {
+    const word = variationWord(base, i);
+    return { key: String(i), word, gradient: variationGradient(word) };
+  });
+}
+
+// Newest-first, de-duplicated recent generation words from the user's saved
+// flowers; skips blanks and the "unknown" placeholder the store writes when a
+// flower has no captured word.
+function recentGenerationWords(
+  flowers: { generationWord?: string }[],
+  limit = 6,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (let i = flowers.length - 1; i >= 0 && out.length < limit; i--) {
+    const w = flowers[i].generationWord?.trim();
+    if (!w || w === 'unknown' || seen.has(w)) continue;
+    seen.add(w);
+    out.push(w);
+  }
+  return out;
+}
+
+// One-shot entry prefill precedence: an explicit ?name= deep-link always wins
+// and does NOT consume the onboarding gate (a first-time user arriving via a
+// shared link still gets their display-name prefill on a later plain visit).
+// Otherwise, on first visit only, prefill the loaded display name and mark
+// onboarded. A not-yet-loaded display name yields a no-op so a later render
+// (when it loads) can retry.
+function resolveInitialName(opts: {
+  queryName: string | null;
+  displayName: string | null | undefined;
+  hasOnboarded: boolean;
+}): { name: string; markOnboarded: boolean } {
+  const q = opts.queryName ? sanitizeName(opts.queryName) : '';
+  if (q) return { name: q, markOnboarded: false };
+  if (!opts.hasOnboarded) {
+    const dn = opts.displayName ? sanitizeName(opts.displayName) : '';
+    if (dn) return { name: dn, markOnboarded: true };
+  }
+  return { name: '', markOnboarded: false };
+}
+
+// Device-local "has the user seen the Create studio at least once" flag.
+// A one-shot gate for the first-visit name prefill, NOT a Settings toggle, so
+// it lives under its own localStorage key and is try/catch-guarded so a
+// throwing/absent localStorage (SSR, private mode) degrades to "not onboarded".
+const CREATE_ONBOARDED_KEY = 'petal-create-onboarded';
+
+function hasCreateOnboarded(): boolean {
+  try {
+    return localStorage.getItem(CREATE_ONBOARDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markCreateOnboarded(): void {
+  try {
+    localStorage.setItem(CREATE_ONBOARDED_KEY, '1');
+  } catch {
+    /* best-effort; a failed write just means the prefill may repeat */
   }
 }
 
@@ -364,6 +476,7 @@ export async function runSaveFlow(
 export default function CreateFlower() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const params = useFlowerStore((s) => s.params);
   const generationWord = useFlowerStore((s) => s.generationWord);
@@ -407,6 +520,17 @@ export default function CreateFlower() {
   const originalWordRef = useRef(generationWord);
   const originalTitleRef = useRef(title);
   const originalParamsRef = useRef('');
+
+  // Name input, so the prefill/recent affordances can focus it after refilling.
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // One-shot guard so a late-loading display name / re-render never clobbers
+  // text the user has since typed.
+  const prefilledRef = useRef(false);
+
+  // Deterministic "more like this" siblings of the current name, and the
+  // user's recent generation words. Both are pure/derived — no store writes.
+  const variations = useMemo(() => buildVariations(wordInput), [wordInput]);
+  const recentNames = useMemo(() => recentGenerationWords(savedFlowers), [savedFlowers]);
 
   // Single reconciliation effect for every /create mount / same-route
   // navigation event (location.key is unique per navigation, so this fires
@@ -531,6 +655,34 @@ export default function CreateFlower() {
       setTitleInput(title);
     }
   }, [isEditMode, generationWord, title]);
+
+  // One-shot entry prefill: an explicit ?name= deep-link (viral loop) wins over
+  // the first-visit onboarding prefill and does NOT consume the onboarding
+  // gate. Guarded by prefilledRef and !wordInput so it never clobbers text the
+  // user has typed; depends on `profile` so a late-loading display name still
+  // prefills. Sets only local wordInput — it never calls generate, so it can't
+  // manufacture false unsaved work (params.flowerId stays empty). Keyed on
+  // location.key so it re-runs per navigation, in step with the reconciliation
+  // effect above that may clear wordInput on a stale edit exit.
+  useEffect(() => {
+    if (prefilledRef.current || isEditMode) return;
+    const queryName = new URLSearchParams(location.search).get('name');
+    const { name, markOnboarded } = resolveInitialName({
+      queryName,
+      displayName: profile?.display_name,
+      hasOnboarded: hasCreateOnboarded(),
+    });
+    if (markOnboarded) markCreateOnboarded();
+    if (name && !wordInput) {
+      prefilledRef.current = true;
+      setWordInput(name);
+      nameInputRef.current?.focus();
+    } else if (queryName) {
+      // A deep-link with a blank/edit state still counts as handled.
+      prefilledRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, location.key]);
 
   const handleCheckBackend = async () => {
     if (isCheckingBackend(healthStatus)) return;
@@ -896,6 +1048,7 @@ export default function CreateFlower() {
           <div className="flex items-center gap-2 px-3 pt-2 pb-1 flex-wrap">
             <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5 min-w-0 flex-1 max-w-[260px]">
               <input
+                ref={nameInputRef}
                 type="text"
                 value={wordInput}
                 onChange={(e) => handleWordInputChange(e.target.value)}
@@ -935,6 +1088,45 @@ export default function CreateFlower() {
               />
             </div>
           </div>
+
+          {/* Variations: deterministic "more like this" siblings of the current
+              name. Clicking reuses the existing guarded handleGenerate — in edit
+              mode it routes through the regenerate-warning dialog; in create
+              mode shouldWarnRegenerate returns false so it just generates. */}
+          {variations.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 pb-1 flex-wrap">
+              <span className="text-xs text-muted-foreground">More like this:</span>
+              {variations.map((v) => (
+                <button
+                  key={v.key}
+                  onClick={() => { setWordInput(v.word); void handleGenerate(v.word); }}
+                  disabled={isGenerating}
+                  title={v.word}
+                  className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: v.gradient }} />
+                  <span>{v.word.slice(v.word.lastIndexOf('#'))}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Recent generation words — refill only (does NOT auto-generate). */}
+          {!isEditMode && recentNames.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 pb-1.5 flex-wrap">
+              <span className="text-xs text-muted-foreground">Recent:</span>
+              {recentNames.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setWordInput(n); nameInputRef.current?.focus(); }}
+                  title={`Reuse "${n}"`}
+                  className="text-xs px-2 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors motion-reduce:transition-none truncate max-w-[160px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Row 2: actions */}
           <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
