@@ -85,20 +85,26 @@ describe("createRhodoneaGeometry", () => {
   it("contains no NaN or non-finite vertex coordinates", () => {
     const g = createRhodoneaGeometry(BASE, PALETTE);
     const pos = g.getAttribute("position");
-    for (let i = 0; i < pos.count * 3; i += 1) {
-      expect(Number.isFinite(pos.array[i])).toBe(true);
+    // Aggregate to a single assert (a per-element expect() loop over every
+    // vertex component times out at 20s once the shell doubles vertex count).
+    let posFinite = true;
+    for (let i = 0; i < pos.count * 3 && posFinite; i += 1) {
+      if (!Number.isFinite(pos.array[i])) posFinite = false;
     }
+    expect(posFinite).toBe(true);
   });
 
   it("contains no NaN color channels and all channels are in [0,1]", () => {
     const g = createRhodoneaGeometry(BASE, PALETTE);
     const col = g.getAttribute("color");
-    for (let i = 0; i < col.count * 3; i += 1) {
+    // Aggregate to a single assert (three expects per channel per vertex would
+    // time out at 20s once the shell doubles vertex count).
+    let colOk = true;
+    for (let i = 0; i < col.count * 3 && colOk; i += 1) {
       const v = col.array[i];
-      expect(Number.isFinite(v)).toBe(true);
-      expect(v).toBeGreaterThanOrEqual(0);
-      expect(v).toBeLessThanOrEqual(1);
+      if (!Number.isFinite(v) || v < 0 || v > 1) colOk = false;
     }
+    expect(colOk).toBe(true);
   });
 
   it("produces only strictly positive-area triangles (degenerate quads skipped)", () => {
@@ -161,17 +167,21 @@ describe("createRhodoneaGeometry", () => {
     const g = createRhodoneaGeometry({ ...BASE, k: 0 }, PALETTE);
     const pos = g.getAttribute("position");
     expect(pos.count).toBeGreaterThan(0);
-    for (let i = 0; i < pos.count * 3; i += 1) {
-      expect(Number.isFinite(pos.array[i])).toBe(true);
+    let posFinite = true;
+    for (let i = 0; i < pos.count * 3 && posFinite; i += 1) {
+      if (!Number.isFinite(pos.array[i])) posFinite = false;
     }
+    expect(posFinite).toBe(true);
   });
 
   it("falls back to the HSB ramp when palette has no stops", () => {
     const g = createRhodoneaGeometry(BASE, { id: "empty", stops: [] });
     const col = g.getAttribute("color");
     expect(col.count).toBeGreaterThan(0);
-    for (let i = 0; i < col.count * 3; i += 1) {
-      expect(Number.isFinite(col.array[i])).toBe(true);
+    let colFinite = true;
+    for (let i = 0; i < col.count * 3 && colFinite; i += 1) {
+      if (!Number.isFinite(col.array[i])) colFinite = false;
     }
+    expect(colFinite).toBe(true);
   });
 });

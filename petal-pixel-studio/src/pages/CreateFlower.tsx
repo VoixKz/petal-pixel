@@ -11,7 +11,7 @@ import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, P
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
-import { BrowserProvider, Contract } from 'ethers';
+import type { BrowserProvider } from 'ethers';
 import {
   checkFlowerBackendHealth,
   confirmMintViaGrpc,
@@ -618,6 +618,7 @@ export default function CreateFlower() {
       return null;
     }
     try {
+      const { BrowserProvider } = await import('ethers');
       const provider = new BrowserProvider(window.ethereum);
       await provider.send('eth_requestAccounts', []);
       await ensureCorrectNetwork(provider);
@@ -784,6 +785,7 @@ export default function CreateFlower() {
     setMintTokenUri('');
 
     try {
+      const { BrowserProvider, Contract } = await import('ethers');
       const provider = new BrowserProvider(window.ethereum);
       await ensureCorrectNetwork(provider);
       const signer = await provider.getSigner();
