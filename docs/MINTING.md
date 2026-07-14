@@ -18,9 +18,11 @@ The local chain is Anvil (chain id **1337**), reset on every `docker compose up`
    ```
    ⚠️ This is the **public, well-known Anvil test key**. Local chain only — never
    put real funds on it.
-   ⚠️ **Minting only works from this account**: `FlowerNFT.mint` is `onlyOwner`,
-   and the contract owner is the deployer = Anvil account #0. A mint sent from
-   any other account reverts.
+   ℹ️ **Any account with local ETH can mint.** `FlowerNFT.mint` is no longer
+   `onlyOwner` — the contract does not restrict minting to the deployer, so a
+   mint sent from any connected wallet succeeds. Importing Anvil account #0 is
+   still convenient (it is pre-funded with test ETH) but is no longer required;
+   any Anvil dev account works.
 
 ## 1. Mint
 
