@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
-import { Gem, Calendar, Flower2, Trash2, AlertTriangle, Pencil, Search, SearchX, Share2 } from 'lucide-react';
+import { Gem, Calendar, Flower2, Trash2, Pencil, Search, SearchX, Share2, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { FlowerThumb } from '@/components/flower/FlowerThumb';
 import { shareFlowerLink } from './shareParams';
 import {
   collectFamilies,
@@ -14,40 +15,16 @@ import {
   type SortOrder,
 } from './myFlowersUtils';
 
-function DeleteConfirmDialog({ flowerTitle, onConfirm, onCancel }: { flowerTitle: string; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl"
-      >
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-10 h-10 rounded-full bg-rose-500/10 flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-rose-400" />
-          </div>
-          <h3 className="text-sm font-semibold text-foreground">Delete flower?</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mb-5">
-          Are you sure you want to delete <span className="font-semibold text-foreground">{flowerTitle}</span>? This action cannot be undone.
-        </p>
-        <div className="flex items-center gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            className="text-xs px-4 py-2 rounded-lg bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="text-xs px-4 py-2 rounded-lg bg-rose-500 text-white hover:bg-rose-600 transition-colors"
-          >
-            Delete
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
+// myFlowersUtils.ts's SortOrder doesn't include "favorites" (out of scope for
+// this task's owned files) — extend it locally and handle the extra case
+// in-component instead of forking/duplicating the shared sort helper.
+type GallerySortOrder = SortOrder | 'favorites';
+
+function sortByFavoritesFirst(flowers: SavedFlower[]): SavedFlower[] {
+  return [...flowers].sort((a, b) => {
+    const d = (b.isFavorite ? 1 : 0) - (a.isFavorite ? 1 : 0);
+    return d !== 0 ? d : b.createdAt.localeCompare(a.createdAt);
+  });
 }
 
 function RenameInput({
@@ -95,29 +72,46 @@ export default function MyFlowers() {
   const loadFlowerForEdit = useFlowerStore((s) => s.loadFlowerForEdit);
   const deleteFlower = useFlowerStore((s) => s.deleteFlower);
   const updateFlowerTitle = useFlowerStore((s) => s.updateFlowerTitle);
+  const toggleFavorite = useFlowerStore((s) => s.toggleFavorite);
   const navigate = useNavigate();
 
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [mintFilter, setMintFilter] = useState<MintFilter>('all');
   const [familyFilter, setFamilyFilter] = useState('all');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
+  const [sortOrder, setSortOrder] = useState<GallerySortOrder>('newest');
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  // Undo-delete: deleting a card soft-hides it immediately and only calls the
+  // store's hard delete after a 6s grace window (cleared by Undo).
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<Set<string>>(new Set());
+  const commitTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    // Flush any still-pending soft-deletes on unmount so nothing is silently
+    // orphaned (e.g. navigating away mid-undo-window).
+    return () => {
+      commitTimers.current.forEach((t, id) => {
+        clearTimeout(t);
+        void deleteFlower(id);
+      });
+    };
+  }, [deleteFlower]);
 
   const families = useMemo(() => collectFamilies(savedFlowers), [savedFlowers]);
-  const visible = useMemo(
-    () =>
-      sortFlowers(
-        filterFlowers(savedFlowers, { search, mint: mintFilter, family: familyFilter }),
-        sortOrder,
-      ),
-    [savedFlowers, search, mintFilter, familyFilter, sortOrder],
-  );
+  const visible = useMemo(() => {
+    const filtered = filterFlowers(savedFlowers, { search, mint: mintFilter, family: familyFilter });
+    const byFavorite = favoritesOnly ? filtered.filter((f) => f.isFavorite) : filtered;
+    const sorted =
+      sortOrder === 'favorites' ? sortByFavoritesFirst(byFavorite) : sortFlowers(byFavorite, sortOrder);
+    return sorted.filter((f) => !pendingDeleteIds.has(f.id));
+  }, [savedFlowers, search, mintFilter, familyFilter, favoritesOnly, sortOrder, pendingDeleteIds]);
 
   const clearFilters = () => {
     setSearch('');
     setMintFilter('all');
     setFamilyFilter('all');
+    setFavoritesOnly(false);
   };
 
   const handleEdit = (flower: SavedFlower) => {
@@ -133,10 +127,35 @@ export default function MyFlowers() {
       (m) => toast.error(m),
     );
 
-  const handleDelete = async (id: string) => {
-    await deleteFlower(id);
-    setDeleteTarget(null);
-    toast.success('Flower deleted');
+  const requestDelete = (flower: SavedFlower) => {
+    setPendingDeleteIds((s) => new Set(s).add(flower.id));
+    const timer = setTimeout(() => {
+      commitTimers.current.delete(flower.id);
+      setPendingDeleteIds((s) => {
+        const next = new Set(s);
+        next.delete(flower.id);
+        return next;
+      });
+      void deleteFlower(flower.id);
+    }, 6000);
+    commitTimers.current.set(flower.id, timer);
+
+    toast('Flower deleted', {
+      duration: 6000,
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const t = commitTimers.current.get(flower.id);
+          if (t) clearTimeout(t);
+          commitTimers.current.delete(flower.id);
+          setPendingDeleteIds((s) => {
+            const next = new Set(s);
+            next.delete(flower.id);
+            return next;
+          });
+        },
+      },
+    });
   };
 
   const handleRenameCommit = async (id: string, raw: string) => {
@@ -150,14 +169,6 @@ export default function MyFlowers() {
 
   return (
     <div className="h-full overflow-y-auto p-6 space-y-6">
-      {deleteTarget && (
-        <DeleteConfirmDialog
-          flowerTitle={deleteTarget.title}
-          onConfirm={() => void handleDelete(deleteTarget.id)}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-
       <div>
         <h1 className="text-2xl font-bold text-foreground">My Flowers</h1>
         <p className="text-sm text-muted-foreground mt-1">Your personal garden of generated flowers</p>
@@ -192,6 +203,18 @@ export default function MyFlowers() {
             ))}
           </div>
 
+          <button
+            onClick={() => setFavoritesOnly((v) => !v)}
+            aria-pressed={favoritesOnly}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none ${
+              favoritesOnly
+                ? 'bg-primary/15 text-primary'
+                : 'bg-secondary text-secondary-foreground hover:bg-muted'
+            }`}
+          >
+            <Star className={`w-3.5 h-3.5 ${favoritesOnly ? 'fill-primary' : ''}`} /> Favorites
+          </button>
+
           <select
             value={familyFilter}
             onChange={(e) => setFamilyFilter(e.target.value)}
@@ -208,13 +231,14 @@ export default function MyFlowers() {
 
           <select
             value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+            onChange={(e) => setSortOrder(e.target.value as GallerySortOrder)}
             aria-label="Sort flowers"
             className={selectClass}
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="name">Name A–Z</option>
+            <option value="favorites">Favorites first</option>
           </select>
         </div>
       )}
@@ -250,33 +274,44 @@ export default function MyFlowers() {
             className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/30 transition-all group cursor-default relative"
             onDoubleClick={() => handleEdit(flower)}
           >
-            <div
+            <FlowerThumb
+              flowerId={flower.backendFlowerId ?? flower.params.flowerId}
+              params={flower.params}
               className="h-48 relative overflow-hidden"
-              style={{
-                background: `radial-gradient(ellipse at center, ${flower.params.colorA}33 0%, transparent 70%), linear-gradient(135deg, hsl(240 10% 6%), hsl(240 10% 3%))`,
-              }}
             >
-              <div className="absolute inset-0 grid-bg opacity-30" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Flower2
-                  className="w-16 h-16 opacity-40 group-hover:opacity-60 transition-opacity"
-                  style={{ color: flower.params.colorA }}
-                />
+              <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
+
+              <div className="absolute top-3 right-3 flex items-center gap-2">
+                {flower.isMinted && (
+                  <div className="flex items-center gap-1 bg-accent/20 text-accent-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+                    <Gem className="w-3 h-3" /> NFT
+                  </div>
+                )}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void toggleFavorite(flower.id);
+                  }}
+                  aria-pressed={!!flower.isFavorite}
+                  aria-label={flower.isFavorite ? 'Unfavorite' : 'Favorite'}
+                  title={flower.isFavorite ? 'Unfavorite' : 'Favorite'}
+                  className="w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center hover:bg-black/50 transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                >
+                  <Star
+                    className={`w-4 h-4 ${flower.isFavorite ? 'fill-amber-400 text-amber-400' : 'text-white/80'}`}
+                  />
+                </button>
               </div>
-              {flower.isMinted && (
-                <div className="absolute top-3 right-3 flex items-center gap-1 bg-accent/20 text-accent-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm">
-                  <Gem className="w-3 h-3" /> NFT
-                </div>
-              )}
+
               <div className="absolute bottom-3 left-3 text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm capitalize">
                 {familyLabel(flower.params)}
               </div>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDeleteTarget({ id: flower.id, title: flower.title });
+                  requestDelete(flower);
                 }}
-                className="absolute top-3 left-3 w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-rose-500/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                className="absolute top-3 left-3 w-9 h-9 rounded-full bg-rose-500/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-opacity hover:bg-rose-500/30 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                 title="Delete flower"
               >
                 <Trash2 className="w-4 h-4 text-rose-400" />
@@ -286,7 +321,7 @@ export default function MyFlowers() {
                   e.stopPropagation();
                   handleShare(flower);
                 }}
-                className="absolute top-3 left-14 w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                className="absolute top-3 left-14 w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-opacity hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                 title="Share flower"
               >
                 <Share2 className="w-4 h-4 text-primary" />
@@ -301,7 +336,7 @@ export default function MyFlowers() {
               >
                 <Pencil className="w-3.5 h-3.5" /> Edit
               </button>
-            </div>
+            </FlowerThumb>
 
             <div className="h-1.5 w-full" style={{ background: previewGradient(flower.params) }} />
 
@@ -321,7 +356,7 @@ export default function MyFlowers() {
                         e.stopPropagation();
                         setRenamingId(flower.id);
                       }}
-                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0 p-1.5 -m-1.5 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-foreground shrink-0 p-1.5 -m-1.5 rounded focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
                       title="Rename flower"
                     >
                       <Pencil className="w-4 h-4" />
