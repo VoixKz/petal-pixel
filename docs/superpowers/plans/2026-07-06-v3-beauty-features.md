@@ -75,4 +75,23 @@ rings respected. Reuse shared helpers (paletteUi, designTokens, snapshot).
     (kills "FlowerNFT/GENERATOR" vs "Petal Pixel"); "Forgot password?" on Login (reuse resetPasswordForEmail);
     remove/disable dead controls (stem "coming soon" toggle, placeholder Settings switches/Delete, if not wired).
 
-<!-- Task briefs assembled by the drafting workflow are appended below. -->
+## WAVE SCHEDULE (from consistency pass w5r2ze7y9; briefs in scratchpad/v3briefs/)
+- **Wave 1** (8 disjoint roots, parallel — run in 2 batches of 4 to bound test-runner load):
+  1a: gen-be (Go), bug-be (Go), math-fe (TS math), ren-scene (TS canvas)
+  1b: bug-fe (TS store/snapshot), feat-index (TS Index + shared helper/thumb), feat-share-social (TS ShareFlower+lib), feat-brand-auth (TS brand/auth/settings)
+- **Wave 2** (parallel): perf-split, ren-material, feat-galleries
+- **Wave 3**: feat-create (CreateFlower.tsx, after perf-split's ethers change)
+
+## BINDING CONFLICT RESOLUTIONS (override the briefs)
+- **extractMintedTokenId stays `number|null`** (bug-fe): add ONLY the mint-only guard (require `topics[1]==zero-address`); do NOT change the return type to bigint/string (tokenIds start at 0 and won't exceed 2^53 for ages; a type change would ripple into CreateFlower.tsx owned by other tasks and red the project-wide tsc across waves). Note the precision limit in a comment.
+- **feat-index is the SOLE producer** of the shared thumbnail helper + component: it creates `src/lib/flowerImage.ts` (`flowerImageUrl(flowerId, base?)` + base const, reading the MinIO public base from the existing client env) and `src/components/flower/FlowerThumb.tsx`. feat-galleries (wave 2) IMPORTS both — it must NOT create its own copy or edit `.env.example`. Canonical signature: `flowerImageUrl(flowerId: string, base?: string)`.
+- **Geometry test files**: math-fe (wave 1) lands its new assertions first; perf-split (wave 2) applies the "one boolean, assert once" aggregation on top of math-fe's committed versions.
+- **CreateFlower.tsx sequencing**: perf-split (wave 2) lands the ethers→dynamic change ONLY; feat-create (wave 3) re-locates every anchor by CONTENT (not brief line numbers) and rebases on perf-split.
+- **v1 non-double-invert**: gen-be does NOT reverse the palette catalog order; math-fe fixes sampling direction at render time (fixes saved flowers too). gen-be's brightness guardrail touches stop VALUE only, not order — complementary.
+- **frameloop contract**: ren-scene sets `frameloop="demand"`; ren-material's idle `useFrame` must call `invalidate()` while animating.
+
+## REVIEW STRATEGY
+Implementer per task with TDD self-gates in waves; quiet-tree gate after each wave (tsc + vitest + go build/test); one comprehensive whole-branch adversarial review at the end (the net that caught the renderer-clobber + seed-truncation last cycle), then a fix wave. Then docker rebuild (backend for gen + contract redeploy; frontend for everything) + live verification.
+
+<!-- Full task briefs live as files in scratchpad/v3briefs/ (referenced by dispatch, not inlined). -->
+
