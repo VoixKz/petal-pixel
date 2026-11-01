@@ -1,0 +1,468 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-01T13:00:54+00:00",
+  "title": "Design System: Petal Pixel",
+  "extensions": {
+    "colorMeta": {
+      "petal-accent": {
+        "role": "primary",
+        "displayName": "Petal Accent",
+        "canonical": "#ffec2e",
+        "tonalRamp": [
+          "oklch(15.0% 0.0466 103.2)",
+          "oklch(26.4% 0.0821 103.2)",
+          "oklch(37.9% 0.1177 103.2)",
+          "oklch(49.3% 0.1532 103.2)",
+          "oklch(60.7% 0.1843 103.2)",
+          "oklch(72.1% 0.1487 103.2)",
+          "oklch(83.6% 0.1132 103.2)",
+          "oklch(95.0% 0.0777 103.2)"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Accent",
+        "canonical": "#141412",
+        "tonalRamp": [
+          "oklch(15.0% 0.0010 106.8)",
+          "oklch(26.4% 0.0017 106.8)",
+          "oklch(37.9% 0.0025 106.8)",
+          "oklch(49.3% 0.0032 106.8)",
+          "oklch(60.7% 0.0039 106.8)",
+          "oklch(72.1% 0.0032 106.8)",
+          "oklch(83.6% 0.0024 106.8)",
+          "oklch(95.0% 0.0016 106.8)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#141412",
+        "tonalRamp": [
+          "oklch(15.0% 0.0010 106.8)",
+          "oklch(26.4% 0.0017 106.8)",
+          "oklch(37.9% 0.0025 106.8)",
+          "oklch(49.3% 0.0032 106.8)",
+          "oklch(60.7% 0.0039 106.8)",
+          "oklch(72.1% 0.0032 106.8)",
+          "oklch(83.6% 0.0024 106.8)",
+          "oklch(95.0% 0.0016 106.8)"
+        ]
+      },
+      "ink-hover": {
+        "role": "neutral",
+        "displayName": "Ink Hover",
+        "canonical": "#33332f",
+        "tonalRamp": [
+          "oklch(15.0% 0.0017 106.8)",
+          "oklch(26.4% 0.0031 106.8)",
+          "oklch(37.9% 0.0044 106.8)",
+          "oklch(49.3% 0.0057 106.8)",
+          "oklch(60.7% 0.0069 106.8)",
+          "oklch(72.1% 0.0055 106.8)",
+          "oklch(83.6% 0.0042 106.8)",
+          "oklch(95.0% 0.0029 106.8)"
+        ]
+      },
+      "muted-ink": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#5a5a5e",
+        "tonalRamp": [
+          "oklch(15.0% 0.0016 286.2)",
+          "oklch(26.4% 0.0028 286.2)",
+          "oklch(37.9% 0.0040 286.2)",
+          "oklch(49.3% 0.0052 286.2)",
+          "oklch(60.7% 0.0063 286.2)",
+          "oklch(72.1% 0.0051 286.2)",
+          "oklch(83.6% 0.0039 286.2)",
+          "oklch(95.0% 0.0027 286.2)"
+        ]
+      },
+      "paper-white": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.0% 0.0000 89.9)",
+          "oklch(26.4% 0.0000 89.9)",
+          "oklch(37.9% 0.0000 89.9)",
+          "oklch(49.3% 0.0000 89.9)",
+          "oklch(60.7% 0.0000 89.9)",
+          "oklch(72.1% 0.0000 89.9)",
+          "oklch(83.6% 0.0000 89.9)",
+          "oklch(95.0% 0.0000 89.9)"
+        ]
+      },
+      "gallery-ground": {
+        "role": "neutral",
+        "displayName": "Gallery Ground",
+        "canonical": "#f0f0f1",
+        "tonalRamp": [
+          "oklch(15.0% 0.0003 286.4)",
+          "oklch(26.4% 0.0006 286.4)",
+          "oklch(37.9% 0.0008 286.4)",
+          "oklch(49.3% 0.0011 286.4)",
+          "oklch(60.7% 0.0013 286.4)",
+          "oklch(72.1% 0.0011 286.4)",
+          "oklch(83.6% 0.0008 286.4)",
+          "oklch(95.0% 0.0006 286.4)"
+        ]
+      },
+      "plinth": {
+        "role": "neutral",
+        "displayName": "Plinth",
+        "canonical": "#e5e5e7",
+        "tonalRamp": [
+          "oklch(15.0% 0.0007 286.3)",
+          "oklch(26.4% 0.0012 286.3)",
+          "oklch(37.9% 0.0017 286.3)",
+          "oklch(49.3% 0.0022 286.3)",
+          "oklch(60.7% 0.0027 286.3)",
+          "oklch(72.1% 0.0021 286.3)",
+          "oklch(83.6% 0.0016 286.3)",
+          "oklch(95.0% 0.0011 286.3)"
+        ]
+      },
+      "plinth-deep": {
+        "role": "neutral",
+        "displayName": "Plinth Deep",
+        "canonical": "#d6d6d9",
+        "tonalRamp": [
+          "oklch(15.0% 0.0010 286.3)",
+          "oklch(26.4% 0.0018 286.3)",
+          "oklch(37.9% 0.0026 286.3)",
+          "oklch(49.3% 0.0034 286.3)",
+          "oklch(60.7% 0.0040 286.3)",
+          "oklch(72.1% 0.0033 286.3)",
+          "oklch(83.6% 0.0025 286.3)",
+          "oklch(95.0% 0.0017 286.3)"
+        ]
+      },
+      "night": {
+        "role": "neutral",
+        "displayName": "Night",
+        "canonical": "#141412",
+        "tonalRamp": [
+          "oklch(15.0% 0.0010 106.8)",
+          "oklch(26.4% 0.0017 106.8)",
+          "oklch(37.9% 0.0025 106.8)",
+          "oklch(49.3% 0.0032 106.8)",
+          "oklch(60.7% 0.0039 106.8)",
+          "oklch(72.1% 0.0032 106.8)",
+          "oklch(83.6% 0.0024 106.8)",
+          "oklch(95.0% 0.0016 106.8)"
+        ]
+      },
+      "error-red": {
+        "role": "semantic",
+        "displayName": "Error Red",
+        "canonical": "#a3222a",
+        "tonalRamp": [
+          "oklch(15.0% 0.0411 23.5)",
+          "oklch(26.4% 0.0724 23.5)",
+          "oklch(37.9% 0.1037 23.5)",
+          "oklch(49.3% 0.1350 23.5)",
+          "oklch(60.7% 0.1624 23.5)",
+          "oklch(72.1% 0.1311 23.5)",
+          "oklch(83.6% 0.0998 23.5)",
+          "oklch(95.0% 0.0685 23.5)"
+        ]
+      },
+      "console-amber": {
+        "role": "console",
+        "displayName": "Console Amber",
+        "canonical": "hsl(43 96% 53%)",
+        "tonalRamp": [
+          "oklch(15.0% 0.0417 82.3)",
+          "oklch(26.4% 0.0734 82.3)",
+          "oklch(37.9% 0.1052 82.3)",
+          "oklch(49.3% 0.1369 82.3)",
+          "oklch(60.7% 0.1647 82.3)",
+          "oklch(72.1% 0.1329 82.3)",
+          "oklch(83.6% 0.1012 82.3)",
+          "oklch(95.0% 0.0694 82.3)"
+        ]
+      },
+      "console-destructive": {
+        "role": "console",
+        "displayName": "Console Destructive",
+        "canonical": "hsl(0 72% 51%)",
+        "tonalRamp": [
+          "oklch(15.0% 0.0534 27.2)",
+          "oklch(26.4% 0.0941 27.2)",
+          "oklch(37.9% 0.1349 27.2)",
+          "oklch(49.3% 0.1756 27.2)",
+          "oklch(60.7% 0.2112 27.2)",
+          "oklch(72.1% 0.1705 27.2)",
+          "oklch(83.6% 0.1298 27.2)",
+          "oklch(95.0% 0.0891 27.2)"
+        ]
+      },
+      "console-dark-ground": {
+        "role": "console",
+        "displayName": "Console Dark Ground",
+        "canonical": "hsl(60 5% 7%)",
+        "tonalRamp": [
+          "oklch(15.0% 0.0009 106.7)",
+          "oklch(26.4% 0.0016 106.7)",
+          "oklch(37.9% 0.0022 106.7)",
+          "oklch(49.3% 0.0029 106.7)",
+          "oklch(60.7% 0.0035 106.7)",
+          "oklch(72.1% 0.0028 106.7)",
+          "oklch(83.6% 0.0022 106.7)",
+          "oklch(95.0% 0.0015 106.7)"
+        ]
+      },
+      "console-dark-card": {
+        "role": "console",
+        "displayName": "Console Dark Card",
+        "canonical": "hsl(60 4% 10%)",
+        "tonalRamp": [
+          "oklch(15.0% 0.0010 106.7)",
+          "oklch(26.4% 0.0017 106.7)",
+          "oklch(37.9% 0.0025 106.7)",
+          "oklch(49.3% 0.0032 106.7)",
+          "oklch(60.7% 0.0039 106.7)",
+          "oklch(72.1% 0.0031 106.7)",
+          "oklch(83.6% 0.0024 106.7)",
+          "oklch(95.0% 0.0016 106.7)"
+        ]
+      },
+      "console-dark-ink": {
+        "role": "console",
+        "displayName": "Console Dark Ink",
+        "canonical": "hsl(0 0% 96%)",
+        "tonalRamp": [
+          "oklch(15.0% 0.0000 89.9)",
+          "oklch(26.4% 0.0000 89.9)",
+          "oklch(37.9% 0.0000 89.9)",
+          "oklch(49.3% 0.0000 89.9)",
+          "oklch(60.7% 0.0000 89.9)",
+          "oklch(72.1% 0.0000 89.9)",
+          "oklch(83.6% 0.0000 89.9)",
+          "oklch(95.0% 0.0000 89.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The single largest sentence on a page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Every section heading, one short sentence."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Question summaries, process clauses, the wordmark, panel leads."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Paragraphs, capped between 26em and 38em."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Bar links, pills at weight 500, slider ends, footnotes."
+      },
+      "console-page-title": {
+        "displayName": "Console Page Title",
+        "purpose": "Screen titles in the console."
+      },
+      "console-body": {
+        "displayName": "Console Body",
+        "purpose": "Dense working text in the console."
+      },
+      "console-meta": {
+        "displayName": "Console Meta",
+        "purpose": "Monospace data and metadata in the console."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-form",
+        "value": "0 24px 60px rgba(20, 20, 18, 0.22)",
+        "purpose": "The white form in the closing section. The only CSS shadow on the public face."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "160ms ease",
+        "purpose": "Pill, field and link state changes."
+      },
+      {
+        "name": "fade",
+        "value": "240ms ease",
+        "purpose": "Scroll notes and the lit panel in the sideways row."
+      },
+      {
+        "name": "accordion",
+        "value": "200ms ease",
+        "purpose": "Question ground and sign."
+      },
+      {
+        "name": "settle",
+        "value": "500ms cubic-bezier(0.2, 0.7, 0.2, 1)",
+        "purpose": "Flower turn on tile hover."
+      },
+      {
+        "name": "poster-out",
+        "value": "500ms ease",
+        "purpose": "Poster still fading out when the live flower is ready."
+      },
+      {
+        "name": "rise",
+        "value": "620ms cubic-bezier(0.2, 0.7, 0.2, 1)",
+        "purpose": "Blocks rising 24px once on entering view, staggered 70ms."
+      },
+      {
+        "name": "grow",
+        "value": "3800ms cubic ease-out",
+        "purpose": "A new flower opening, driven by script."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Pill",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one action shape on the public face.",
+      "html": "<button class=\"ds-btn-primary\">Grow it</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 24px; border: 0; border-radius: 999px; font: 500 14px/1.45 'Hanken Grotesk Variable', system-ui, sans-serif; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease; background: #141412; color: #fff; } .ds-btn-primary:hover { background: #33332f; } .ds-btn-primary:active { transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 3px solid #141412; outline-offset: 3px; } .ds-btn-primary:disabled { background: #d6d6d9; color: #5a5a5e; cursor: not-allowed; transform: none; }"
+    },
+    {
+      "name": "Quiet Pill",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Secondary action on light grounds, used on the sign-in pages.",
+      "html": "<button class=\"ds-btn-quiet\">Continue with Google</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 24px; border: 0; border-radius: 999px; font: 500 14px/1.45 'Hanken Grotesk Variable', system-ui, sans-serif; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease; background: #e5e5e7; color: #141412; } .ds-btn-quiet:hover { background: #d6d6d9; } .ds-btn-quiet:active { transform: scale(0.97); } .ds-btn-quiet:focus-visible { outline: 3px solid #141412; outline-offset: 3px; }"
+    },
+    {
+      "name": "Light Pill",
+      "kind": "button",
+      "refersTo": "button-light",
+      "description": "The pill for Night grounds.",
+      "html": "<div class=\"ds-night\"><button class=\"ds-btn-light\">Next</button></div>",
+      "css": ".ds-night { background: #141412; padding: 24px; } .ds-btn-light { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 24px; border: 0; border-radius: 999px; font: 500 14px/1.45 'Hanken Grotesk Variable', system-ui, sans-serif; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease; background: #fff; color: #141412; } .ds-btn-light:hover { background: #e5e5e7; } .ds-btn-light:active { transform: scale(0.97); }"
+    },
+    {
+      "name": "Pill Field",
+      "kind": "input",
+      "refersTo": "input-pill",
+      "description": "Text field for names and sign-in.",
+      "html": "<input class=\"ds-input\" placeholder=\"Type a name\" aria-label=\"A name to grow\" />",
+      "css": ".ds-input { height: 48px; width: 280px; padding: 0 18px; border: 1px solid #d6d6d9; border-radius: 999px; background: #fff; color: #141412; font: 400 17px/1.45 'Hanken Grotesk Variable', system-ui, sans-serif; transition: border-color 160ms ease; } .ds-input::placeholder { color: #5a5a5e; } .ds-input:hover { border-color: #5a5a5e; } .ds-input:focus-visible { outline: 3px solid #141412; outline-offset: 3px; }"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "nav-bar",
+      "description": "Solid bar with wordmark, label links and one pill.",
+      "html": "<header class=\"ds-bar\"><a class=\"ds-bar-mark\" href=\"#\">Petal Pixel</a><nav class=\"ds-bar-links\"><a href=\"#\">Flowers</a><a href=\"#\">How it works</a><a class=\"ds-bar-pill\" href=\"#\">Open console</a></nav></header>",
+      "css": ".ds-bar { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 32px; background: #f0f0f1; color: #141412; font-family: 'Hanken Grotesk Variable', system-ui, sans-serif; } .ds-bar a { color: inherit; text-decoration: none; } .ds-bar-mark { font-size: 26px; font-weight: 500; letter-spacing: -0.04em; } .ds-bar-links { display: flex; align-items: center; gap: 28px; font-size: 14px; } .ds-bar-links a:not(.ds-bar-pill) { transition: opacity 160ms ease; } .ds-bar-links a:not(.ds-bar-pill):hover { opacity: 0.6; } .ds-bar a.ds-bar-pill { display: inline-flex; align-items: center; min-height: 48px; padding: 0 24px; border-radius: 999px; background: #141412; color: #fff; font-weight: 500; } .ds-bar a.ds-bar-pill:hover { background: #33332f; }"
+    },
+    {
+      "name": "Specimen Tile",
+      "kind": "card",
+      "refersTo": "specimen-tile",
+      "description": "A flower on a plinth with its name strip; picking it grows that name.",
+      "html": "<button class=\"ds-tile\"><span class=\"ds-tile-picture\"><svg viewBox=\"0 0 100 100\" width=\"120\" height=\"120\" aria-hidden=\"true\"><circle cx=\"50\" cy=\"50\" r=\"30\" fill=\"#ffec2e\"/><circle cx=\"50\" cy=\"50\" r=\"12\" fill=\"#fbb914\"/></svg></span><span class=\"ds-tile-strip\"><span class=\"ds-tile-name\">Dana</span><span>Dahlia</span></span></button>",
+      "css": ".ds-tile { display: flex; flex-direction: column; width: 240px; padding: 0; border: 0; border-radius: 24px; overflow: hidden; background: #e5e5e7; color: #141412; font-family: 'Hanken Grotesk Variable', system-ui, sans-serif; text-align: left; cursor: pointer; } .ds-tile-picture { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; } .ds-tile-picture svg { transition: transform 500ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-tile:hover svg { transform: scale(1.05) rotate(-2deg); } .ds-tile:focus-visible { outline: 3px solid #141412; outline-offset: 3px; } .ds-tile-strip { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 14px 18px; background: #d6d6d9; font-size: 14px; } .ds-tile-name { font-size: 17px; font-weight: 500; }"
+    },
+    {
+      "name": "Accordion Item",
+      "kind": "custom",
+      "refersTo": "accordion-open",
+      "description": "A question block; opening it takes the accent ground.",
+      "html": "<details class=\"ds-faq\" open><summary>Do I need an account?<span class=\"ds-faq-sign\" aria-hidden=\"true\"></span></summary><p>Not to grow a flower.</p></details>",
+      "css": ".ds-faq { max-width: 560px; border-radius: 24px; background: #e5e5e7; color: #141412; font-family: 'Hanken Grotesk Variable', system-ui, sans-serif; transition: background-color 200ms ease; } .ds-faq[open] { background: #ffec2e; color: #141412; } .ds-faq summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 72px; padding: 16px 24px; font-size: 26px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.15; list-style: none; cursor: pointer; } .ds-faq summary::-webkit-details-marker { display: none; } .ds-faq summary:focus-visible { outline: 3px solid #141412; outline-offset: 3px; } .ds-faq-sign { position: relative; flex: 0 0 16px; height: 16px; } .ds-faq-sign::before, .ds-faq-sign::after { content: ''; position: absolute; left: 0; top: 6.5px; width: 16px; height: 3px; background: currentColor; transition: transform 200ms ease; } .ds-faq-sign::after { transform: rotate(90deg); } .ds-faq[open] .ds-faq-sign::after { transform: rotate(0deg); } .ds-faq p { margin: 0; padding: 0 24px 24px; font-size: 17px; line-height: 1.45; }"
+    },
+    {
+      "name": "Product Panel",
+      "kind": "card",
+      "refersTo": "product-panel",
+      "description": "A small piece of real interface, in white, shown on the page.",
+      "html": "<div class=\"ds-panel\"><div class=\"ds-panel-title\"><span>Download</span></div><div class=\"ds-panel-item\" data-picked=\"true\"><span>Picture</span><small>PNG</small></div><div class=\"ds-panel-item\"><span>Slowly turning</span><small>GIF</small></div></div>",
+      "css": ".ds-panel { display: grid; gap: 10px; width: 320px; padding: 16px; border-radius: 18px; background: #fff; color: #141412; font: 400 14px/1.45 'Hanken Grotesk Variable', system-ui, sans-serif; } .ds-panel-title { font-size: 16px; font-weight: 500; } .ds-panel-item { display: flex; justify-content: space-between; padding: 10px 8px; border-radius: 8px; } .ds-panel-item[data-picked='true'] { background: #f0f0f1; } .ds-panel-item small { color: #5a5a5e; font-size: 13px; }"
+    },
+    {
+      "name": "Floating Form",
+      "kind": "custom",
+      "refersTo": "floating-form",
+      "description": "The already-open form, and the one shadow on the public face.",
+      "html": "<form class=\"ds-form\" onsubmit=\"return false\"><h3>Save this flower</h3><button class=\"ds-form-pill\">Open it in the console</button></form>",
+      "css": ".ds-form { display: grid; gap: 16px; width: 360px; padding: 24px; border-radius: 22px; background: #fff; color: #141412; box-shadow: 0 24px 60px rgba(20, 20, 18, 0.22); font-family: 'Hanken Grotesk Variable', system-ui, sans-serif; } .ds-form h3 { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; } .ds-form-pill { min-height: 52px; border: 0; border-radius: 999px; background: #141412; color: #fff; font: inherit; font-size: 16px; font-weight: 500; cursor: pointer; transition: background-color 160ms ease; } .ds-form-pill:hover { background: #33332f; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Exhibit",
+    "overview": "Petal Pixel is a pale, almost silent room with one living thing in it. The ground, the plinths and the ink stay neutral so that the flower is the only object with a colour of its own. Type is very large and very plain, set in one family, and speaks in a few short sentences at the scale of a wall label read from across the room. Controls are black pills and soft-cornered white cards, so the working product reads as an object on display rather than a screenshot of one.\n\nThe world is tonal. Depth comes from stepping between the grey plinths, a white working surface and full-bleed Night, not from shadows or outlines. The one colour on the page is not a brand colour. It is borrowed from the flower most recently grown, so the page changes with each name and belongs to that name.\n\nThe world has two rooms sharing one material. The public face (home page and sign-in pages) is the full expression. The console keeps the same neutrals, family and ink through its own compact token set; it is denser and carries a dark theme and a fixed amber.",
+    "keyCharacteristics": [
+      "Pale neutral ground with near-black ink and pure white working surfaces.",
+      "One accent, taken at runtime from the last grown flower.",
+      "Hanken Grotesk only on the public face, weights 400 and 500.",
+      "Black pills for every action; large soft corners on every container.",
+      "Flat tonal steps, with a single shadow in the whole public face.",
+      "Real generator renders, never stock, illustration or model-made imagery."
+    ],
+    "rules": [
+      {
+        "name": "The Last Flower Rule",
+        "body": "The public accent is never chosen. It comes from the palette of the flower last grown, and every use goes through the variable so a new name repaints all of them at once.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paired Ink Rule",
+        "body": "Anything set on the accent uses On Accent. Never fix black or white text on an accent ground, because the accent may be plum on the next name.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ground Not Ink Rule",
+        "body": "On the public face the accent is only ever a background. No flower palette guarantees legible text on Gallery Ground, so accent never colours words.",
+        "section": "colors"
+      },
+      {
+        "name": "The Medium Ceiling Rule",
+        "body": "The public face uses 400 and 500 and nothing heavier. Scale carries the hierarchy, not weight.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tighter When Larger Rule",
+        "body": "Tracking closes as size grows: -0.005em at body, -0.03em at title, -0.04em at headline and display.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Shadow Rule",
+        "body": "On the public face a soft shadow means an object that has lifted off the page. Cards, tiles and pills stay flat.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do route every accent through the accent and on-accent variables so the next name repaints them together.",
+      "Do use only real generator output for flowers, with a provenance sidecar beside every shipped raster in `public/flowers/`.",
+      "Do step between Gallery Ground, Plinth, Plinth Deep and Paper White to separate surfaces before reaching for anything else.",
+      "Do keep each heading to one short sentence at Headline scale.",
+      "Do label anything unreleased as coming, with a disabled treatment, as the Mint panel does."
+    ],
+    "donts": [
+      "Don't use weights above 500 on the public face.",
+      "Don't colour text with the accent on the public face.",
+      "Don't fix an accent hue in a public component, or fix text colour on an accent ground.",
+      "Don't add a second CSS shadow to the public face, or shadow a card, tile or pill.",
+      "Don't use a square, rectangular or outlined action on the public face; every action is a pill.",
+      "Don't add a dark theme to the public face, or a monospace face to it, including for hashes, which stay in Hanken Grotesk with tabular figures.",
+      "Don't invent customers, numbers or testimonials as decoration; the flower is the proof.",
+      "Don't give a flower a canvas background or tone mapping; it stands on the page's own ground."
+    ]
+  }
+}
