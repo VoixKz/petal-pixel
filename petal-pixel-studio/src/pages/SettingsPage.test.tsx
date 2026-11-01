@@ -5,22 +5,13 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import SettingsPage from "./SettingsPage";
 import { getPref } from "@/lib/userPrefs";
 
-// The rebuilt page reads useAuth() and calls supabase.auth.resetPasswordForEmail.
-// The real supabase client throws at import time without env vars, and AuthProvider
-// needs a full auth stack — so mock both to render the page in isolation.
+// The rebuilt page reads useAuth().
+// AuthProvider needs a full auth stack, so mock it to render the page in isolation.
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
-    user: { email: "a@b.co", email_confirmed_at: null },
+    user: { email: "a@b.co", emailVerified: false },
     signOut: vi.fn(),
   }),
-}));
-
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      resetPasswordForEmail: vi.fn().mockResolvedValue({ error: null }),
-    },
-  },
 }));
 
 function renderPage() {

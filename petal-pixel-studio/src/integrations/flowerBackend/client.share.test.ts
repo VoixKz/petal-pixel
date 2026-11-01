@@ -94,7 +94,7 @@ describe('postFlowerPreview', () => {
     const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
     await expect(postFlowerPreview('flw_x', blob)).resolves.toBe(true);
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('image/png');
   });

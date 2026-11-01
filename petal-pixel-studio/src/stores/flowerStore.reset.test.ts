@@ -5,12 +5,10 @@ vi.mock("@/integrations/flowerBackend/client", () => ({
 }));
 
 const authGetUser = vi.fn();
-const fromMock = vi.fn();
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: { getUser: (...a: unknown[]) => authGetUser(...a) },
-    from: (...a: unknown[]) => fromMock(...a),
-  },
+const listMock = vi.fn();
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: (...a: unknown[]) => authGetUser(...a),
+  listGarden: (...a: unknown[]) => listMock(...a),
 }));
 
 import { useFlowerStore, type SavedFlower } from "@/stores/flowerStore";
@@ -65,39 +63,24 @@ describe("flowerStore reset + cache hygiene", () => {
   });
 
   it("loadFromBackend sets ownerUserId to the authenticated user", async () => {
-    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    fromMock.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: [], error: null }),
-        }),
-      }),
-    });
+    authGetUser.mockResolvedValue("u1");
+    listMock.mockResolvedValue([]);
     await useFlowerStore.getState().loadFromBackend();
     expect(useFlowerStore.getState().ownerUserId).toBe("u1");
   });
 
   it("loadFromBackend sets ownerUserId even when rows are returned", async () => {
-    authGetUser.mockResolvedValue({ data: { user: { id: "u2" } } });
-    fromMock.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({
-            data: [{
-              flower_id: "f1",
-              saved_name: "Bloom",
-              generation_word: "rose",
-              params: { ...useFlowerStore.getState().params },
-              created_at: "2026-01-01T00:00:00Z",
-              is_minted: false,
-              tx_hash: null,
-              token_uri: null,
-            }],
-            error: null,
-          }),
-        }),
-      }),
-    });
+    authGetUser.mockResolvedValue("u2");
+    listMock.mockResolvedValue([{
+      flowerId: "f1",
+      savedName: "Bloom",
+      generationWord: "rose",
+      params: { ...useFlowerStore.getState().params },
+      createdAt: "2026-01-01T00:00:00Z",
+      isMinted: false,
+      txHash: "",
+      tokenUri: "",
+    }]);
     await useFlowerStore.getState().loadFromBackend();
     expect(useFlowerStore.getState().ownerUserId).toBe("u2");
     expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);
@@ -169,14 +152,8 @@ describe("flowerStore reset + cache hygiene", () => {
   // protection, which is the actual risk being guarded against).
   it("loadFromBackend KEEPS cached savedFlowers on error when the cache belongs to the SAME user", async () => {
     useFlowerStore.setState({ ownerUserId: "u1" });
-    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    fromMock.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: null, error: { message: "db down" } }),
-        }),
-      }),
-    });
+    authGetUser.mockResolvedValue("u1");
+    listMock.mockRejectedValue(new Error("db down"));
     await useFlowerStore.getState().loadFromBackend();
     expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);
     expect(useFlowerStore.getState().ownerUserId).toBe("u1");
@@ -184,14 +161,8 @@ describe("flowerStore reset + cache hygiene", () => {
 
   it("loadFromBackend CLEARS cached savedFlowers on error when the cache belongs to a DIFFERENT user", async () => {
     useFlowerStore.setState({ ownerUserId: "someone-else" });
-    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    fromMock.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          order: () => Promise.resolve({ data: null, error: { message: "db down" } }),
-        }),
-      }),
-    });
+    authGetUser.mockResolvedValue("u1");
+    listMock.mockRejectedValue(new Error("db down"));
     await useFlowerStore.getState().loadFromBackend();
     expect(useFlowerStore.getState().savedFlowers).toEqual([]);
     expect(useFlowerStore.getState().ownerUserId).toBe("u1");
@@ -199,8 +170,8 @@ describe("flowerStore reset + cache hygiene", () => {
 
   it("loadFromBackend KEEPS cached savedFlowers when the query throws for the SAME user", async () => {
     useFlowerStore.setState({ ownerUserId: "u1" });
-    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    fromMock.mockImplementation(() => {
+    authGetUser.mockResolvedValue("u1");
+    listMock.mockImplementation(() => {
       throw new Error("network");
     });
     await useFlowerStore.getState().loadFromBackend();
@@ -209,8 +180,8 @@ describe("flowerStore reset + cache hygiene", () => {
 
   it("loadFromBackend CLEARS cached savedFlowers when the query throws for a DIFFERENT user", async () => {
     useFlowerStore.setState({ ownerUserId: "someone-else" });
-    authGetUser.mockResolvedValue({ data: { user: { id: "u1" } } });
-    fromMock.mockImplementation(() => {
+    authGetUser.mockResolvedValue("u1");
+    listMock.mockImplementation(() => {
       throw new Error("network");
     });
     await useFlowerStore.getState().loadFromBackend();

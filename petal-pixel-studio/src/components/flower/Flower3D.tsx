@@ -5,6 +5,7 @@ import type { FlowerParams } from "@/stores/flowerStore";
 import type { Palette } from "@/math/palette";
 import { isV2 } from "@/math/flowerVersion";
 import {
+  type V2Params,
   buildV2Geometry,
   createClassicFlowerGeometry,
   createParametricBloomGeometry,
@@ -112,7 +113,7 @@ export function Flower3D({ params, onBoundsChange }: Flower3DProps) {
 
   const geometry = useMemo(() => {
     if (isV2(params)) {
-      return buildV2Geometry(params);
+      return buildV2Geometry(params as V2Params);
     }
     if (params.flowerType === "rose") {
       return createRoseFlowerGeometry(params.roseParams);

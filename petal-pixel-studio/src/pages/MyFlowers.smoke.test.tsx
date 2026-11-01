@@ -4,16 +4,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
 import MyFlowers from './MyFlowers';
 
-// MyFlowers imports flowerStore, which imports supabase + the gRPC client at
+// MyFlowers imports flowerStore, which imports the garden API + the gRPC client at
 // module load — stub both so this test file doesn't need network/auth.
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
-    from: vi.fn(() => ({
-      update: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-      delete: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-    })),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: vi.fn(async () => null),
+  listGarden: vi.fn(async () => []),
+  upsertGardenFlower: vi.fn(async () => undefined),
+  updateGardenFlower: vi.fn(async () => undefined),
+  deleteGardenFlower: vi.fn(async () => undefined),
 }));
 vi.mock('@/integrations/flowerBackend/client', () => ({
   createFlowerViaGrpc: vi.fn(),

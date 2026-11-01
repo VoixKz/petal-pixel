@@ -21,7 +21,7 @@ export interface FlowerThumbProps {
   className?: string;
   /** Classes for the `<img>` itself. */
   imgClassName?: string;
-  /** Override the MinIO base (tests only) — defaults to flowerImageBaseUrl. */
+  /** Override the S3 base (tests only) — defaults to flowerImageBaseUrl. */
   base?: string;
   /** Rendered above the image inside the band: hover overlays, Minted/Favorite
    *  badges, etc. — kept generic so every card style can supply its own. */
@@ -31,7 +31,7 @@ export interface FlowerThumbProps {
 /**
  * Shared flower-card preview band: `previewGradient(params)` is the
  * always-present background (so a v1 flower with no uploaded PNG still shows
- * its colorA/colorB band), with the real MinIO preview PNG layered on top via
+ * its colorA/colorB band), with the real preview PNG layered on top via
  * `flowerImageUrl`. Self-hides on load failure (missing/404 preview, backend
  * offline) via `onError` so it never shows a broken-image icon — the gradient
  * underneath just shows through.

@@ -1,7 +1,7 @@
 // Pure, dependency-light mappers for the logged-out share landing.
 //
 // The share page fetches a flower over plain HTTP (no gRPC transport, no
-// Supabase session) and must turn the persisted Go `flower.Params` JSON
+// session) and must turn the persisted Go `flower.Params` JSON
 // (snake_case) into the frontend `FlowerParams` shape that FlowerCanvas /
 // Flower3D render. This mirrors flowerStore.generateFromWord's v1/v2 split but
 // reads snake_case HTTP JSON directly (NOT the proto camelCase path, which needs

@@ -18,7 +18,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
-const VerifyOtp = lazy(() => import("./pages/VerifyOtp"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ShareFlower = lazy(() => import("./pages/ShareFlower"));
 
@@ -53,7 +53,7 @@ const router = createBrowserRouter([
     children: [
       { path: "/login", element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },
       { path: "/signup", element: <Suspense fallback={<PageLoader />}><Signup /></Suspense> },
-      { path: "/verify", element: <Suspense fallback={<PageLoader />}><VerifyOtp /></Suspense> },
+      { path: "/auth/callback", element: <Suspense fallback={<PageLoader />}><AuthCallback /></Suspense> },
       // Public, logged-out flower landing — sibling of ProtectedRoute so it is
       // reachable WITHOUT a session (crawlers + shared links).
       { path: "/share/:flowerId", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><ShareFlower /></Suspense></PageErrorBoundary> },

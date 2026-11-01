@@ -1,15 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// ── Mock Supabase BEFORE importing the store (matches flowerStore.test.ts) ──
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: "user-123" } } })) },
-    from: vi.fn(() => ({
-      upsert: vi.fn(async () => ({ error: null })),
-      update: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-      delete: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-    })),
-  },
+// ── Mock the garden API BEFORE importing the store (matches flowerStore.test.ts) ──
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: vi.fn(async () => "user-123"),
+  listGarden: vi.fn(async () => []),
+  upsertGardenFlower: vi.fn(async () => undefined),
+  updateGardenFlower: vi.fn(async () => undefined),
+  deleteGardenFlower: vi.fn(async () => undefined),
 }));
 
 // gRPC client is mocked; each test sets its return value.

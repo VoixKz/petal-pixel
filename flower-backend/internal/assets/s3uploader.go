@@ -27,7 +27,7 @@ type S3Uploader struct {
 }
 
 type S3Config struct {
-	Endpoint        string // e.g. https://<ref>.storage.supabase.co/storage/v1/s3 or MinIO URL
+	Endpoint        string // e.g. https://<ref>.storage.supabase.co/storage/v1/s3 or local S3 URL
 	Region          string
 	AccessKeyID     string
 	SecretAccessKey string
@@ -80,8 +80,15 @@ func (u *S3Uploader) EnsureBucket(ctx context.Context) error {
 	return err
 }
 
-func (u *S3Uploader) PutJSON(ctx context.Context, key string, data []byte) (string, error) {
-	return u.PutBytes(ctx, key, "application/json", bytes.NewReader(data))
+// AllowPublicRead lets anyone fetch an object by its exact key. Wallets load NFT
+// files with no credentials, while writing and listing stay private.
+func (u *S3Uploader) AllowPublicRead(ctx context.Context) error {
+	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, u.bucket)
+	_, err := u.client.PutBucketPolicy(ctx, &s3.PutBucketPolicyInput{
+		Bucket: aws.String(u.bucket),
+		Policy: aws.String(policy),
+	})
+	return err
 }
 
 func (u *S3Uploader) PutBytes(ctx context.Context, key, contentType string, r io.Reader) (string, error) {
@@ -98,11 +105,41 @@ func (u *S3Uploader) PutBytes(ctx context.Context, key, contentType string, r io
 	return u.publicURL(key)
 }
 
-// PublicURL computes the public URL for key without touching S3 — used to
-// reference an object (e.g. a previously-uploaded image) that Exists already
-// confirmed is present, without re-uploading it.
-func (u *S3Uploader) PublicURL(key string) (string, error) {
-	return u.publicURL(strings.TrimLeft(key, "/"))
+// PutOnce stores an object that must never change. Its key comes from its
+// content, so a taken key means the same bytes are already there.
+func (u *S3Uploader) PutOnce(ctx context.Context, key, contentType string, data []byte) (string, error) {
+	key = strings.TrimLeft(key, "/")
+	_, err := u.client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(u.bucket),
+		Key:         aws.String(key),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
+		IfNoneMatch: aws.String("*"),
+	})
+	if err != nil && !isPreconditionFailed(err) {
+		return "", err
+	}
+	return u.publicURL(key)
+}
+
+// Get reads an object. A missing object is reported through found, not err.
+func (u *S3Uploader) Get(ctx context.Context, key string) (data []byte, found bool, err error) {
+	out, err := u.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(u.bucket),
+		Key:    aws.String(strings.TrimLeft(key, "/")),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer out.Body.Close()
+	data, err = io.ReadAll(out.Body)
+	if err != nil {
+		return nil, false, err
+	}
+	return data, true, nil
 }
 
 func (u *S3Uploader) publicURL(key string) (string, error) {
@@ -155,3 +192,13 @@ func isNotFound(err error) bool {
 	return false
 }
 
+func isPreconditionFailed(err error) bool {
+	var respErr *smithyhttp.ResponseError
+	return errors.As(err, &respErr) && respErr.HTTPStatusCode() == 412
+}
+
+// PreviewKey is where a flower's replaceable share picture lives. It is kept
+// apart from the nft/ keys, which never change once written.
+func PreviewKey(flowerID string) string {
+	return "previews/" + flowerID + ".png"
+}

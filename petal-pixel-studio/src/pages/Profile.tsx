@@ -4,7 +4,7 @@ import { Mail, Shield, CheckCircle, Gem } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { supabase } from '@/integrations/supabase/client';
+import { updateMeViaGrpc } from '@/integrations/flowerBackend/client';
 import { generativeAvatarDataUri } from '@/lib/generativeAvatar';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 
 export default function Profile() {
   const { user, profile, refreshProfile } = useAuth();
-  const isVerified = user?.email_confirmed_at != null;
+  const isVerified = user?.emailVerified === true;
 
   const savedFlowers = useFlowerStore((s) => s.savedFlowers);
   const ownedNfts = useMemo(
@@ -47,14 +47,15 @@ export default function Profile() {
     setSaving(true);
     const nextName = name.trim();
     const nextAvatar = avatarUrl.trim();
-    const { error } = await supabase
-      .from('profiles')
-      .update({ display_name: nextName || null, avatar_url: nextAvatar || null })
-      .eq('user_id', user.id);
-    setSaving(false);
-    if (error) {
-      toast.error('Could not save profile', { description: error.message });
+    try {
+      await updateMeViaGrpc({ displayName: nextName, avatarUrl: nextAvatar });
+    } catch (error) {
+      toast.error('Could not save profile', {
+        description: error instanceof Error ? error.message : undefined,
+      });
       return;
+    } finally {
+      setSaving(false);
     }
     // Reflect the saved values locally for an instant page update, then refresh
     // the context profile so the sidebar footer + header avatar update live too.
@@ -83,8 +84,8 @@ export default function Profile() {
             </h2>
             <p className="text-sm text-muted-foreground">
               Member since{' '}
-              {user?.created_at
-                ? new Date(user.created_at).toLocaleDateString('en-US', {
+              {profile?.created_at
+                ? new Date(profile.created_at).toLocaleDateString('en-US', {
                     month: 'short',
                     year: 'numeric',
                   })

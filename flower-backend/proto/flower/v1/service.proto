@@ -14,7 +14,81 @@ service FlowerService {
   rpc PrepareMint(PrepareMintRequest) returns (PrepareMintResponse);
   // Confirms a submitted mint transaction for the specified flower.
   rpc ConfirmMint(ConfirmMintRequest) returns (ConfirmMintResponse);
+
+  // Returns the signed-in user, creating the account on first use.
+  rpc GetMe(GetMeRequest) returns (GetMeResponse);
+  // Changes the signed-in user's profile.
+  rpc UpdateMe(UpdateMeRequest) returns (UpdateMeResponse);
+
+  // Lists the signed-in user's saved flowers, newest first.
+  rpc ListGarden(ListGardenRequest) returns (ListGardenResponse);
+  // Saves a flower to the signed-in user's garden, replacing any earlier save.
+  rpc UpsertGardenFlower(UpsertGardenFlowerRequest) returns (UpsertGardenFlowerResponse);
+  // Changes the given fields of a saved flower.
+  rpc UpdateGardenFlower(UpdateGardenFlowerRequest) returns (UpdateGardenFlowerResponse);
+  // Removes a flower from the signed-in user's garden.
+  rpc DeleteGardenFlower(DeleteGardenFlowerRequest) returns (DeleteGardenFlowerResponse);
 }
+
+message GetMeRequest {}
+
+message GetMeResponse {
+  string user_id = 1;
+  string email = 2;
+  string display_name = 3;
+  string avatar_url = 4;
+  string created_at = 5;
+}
+
+message UpdateMeRequest {
+  optional string display_name = 1;
+  optional string avatar_url = 2;
+}
+
+message UpdateMeResponse {}
+
+message SavedFlower {
+  string flower_id = 1;
+  string saved_name = 2;
+  string generation_word = 3;
+  // The studio's own params object, stored as JSON.
+  string params_json = 4;
+  string created_at = 5;
+  // Read from the mints table. Clients cannot set these.
+  bool is_minted = 6;
+  string tx_hash = 7;
+  string token_uri = 8;
+}
+
+message ListGardenRequest {}
+
+message ListGardenResponse {
+  repeated SavedFlower flowers = 1;
+}
+
+message UpsertGardenFlowerRequest {
+  string flower_id = 1;
+  string saved_name = 2;
+  string generation_word = 3;
+  string params_json = 4;
+}
+
+message UpsertGardenFlowerResponse {}
+
+message UpdateGardenFlowerRequest {
+  string flower_id = 1;
+  optional string saved_name = 2;
+  optional string generation_word = 3;
+  optional string params_json = 4;
+}
+
+message UpdateGardenFlowerResponse {}
+
+message DeleteGardenFlowerRequest {
+  string flower_id = 1;
+}
+
+message DeleteGardenFlowerResponse {}
 
 message FlowerParams {
   // Generator versions so you can change algorithms safely.
@@ -200,12 +274,18 @@ message PrepareMintResponse {
   string contract_address = 3;
   string token_uri = 4;
 
-  // For a simple mint(to, tokenURI) function, returning typed args is often easiest.
+  // Recipient and token URI of the voucher below.
   string mint_to = 5;
   string mint_token_uri = 6;
 
   // Optional: ABI-encoded calldata (filled in later).
   bytes mint_calldata = 7;
+
+  // Signed permission for FlowerNFT.mint, valid until voucher_deadline.
+  string voucher_flower_id = 8;  // 0x-prefixed bytes32
+  string voucher_price_wei = 9;  // decimal string: a uint256 does not fit a JS number
+  uint64 voucher_deadline = 10;  // unix seconds
+  string voucher_signature = 11; // 0x-prefixed r || s || v
 }
 
 message ConfirmMintRequest {

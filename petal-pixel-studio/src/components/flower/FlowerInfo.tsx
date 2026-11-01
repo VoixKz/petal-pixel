@@ -16,10 +16,10 @@ function deriveDisplayPetalCount(params: ReturnType<typeof useFlowerStore.getSta
   const mapping = mapPetalCount(params.flowerType);
   if (!mapping) return '—'; // e.g. rose has no petal-count slider
   if (mapping.param === 'classic') {
-    return String(Math.round((params.classicParams as Record<string, number>)[mapping.key] ?? params.petalCount));
+    return String(Math.round((params.classicParams as unknown as Record<string, number>)[mapping.key] ?? params.petalCount));
   }
   if (mapping.param === 'bloom') {
-    const val = (params.bloomParams as Record<string, number>)[mapping.key] ?? params.petalCount;
+    const val = (params.bloomParams as unknown as Record<string, number>)[mapping.key] ?? params.petalCount;
     return val.toFixed(2);
   }
   return String(Math.round(params.petalCount));

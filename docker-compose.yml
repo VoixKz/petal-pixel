@@ -2,16 +2,23 @@ name: petal-pixel
 
 volumes:
   pgdata:
-  minio-data:
+  s3-data:
   contract-data:
+  anvil-data:
+  keycloak-data:
+  go-mod-cache:
 
 services:
   anvil:
     image: ghcr.io/foundry-rs/foundry:stable
+    user: root
     entrypoint: ["/bin/sh", "-c"]
-    command: ["anvil --chain-id 1337 --host 0.0.0.0"]
+    # --state keeps the chain across restarts, so minted rows in Postgres stay true.
+    command: ["anvil --chain-id 1337 --host 0.0.0.0 --state /data/anvil.json --state-interval 5"]
     ports:
       - "8545:8545"
+    volumes:
+      - anvil-data:/data
     healthcheck:
       test: ["CMD", "cast", "block-number", "--rpc-url", "http://127.0.0.1:8545"]
       interval: 2s
@@ -50,34 +57,44 @@ services:
       timeout: 5s
       retries: 30
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    user: root
+    command: ["start-dev", "--import-realm"]
     environment:
-      MINIO_ROOT_USER: flower
-      MINIO_ROOT_PASSWORD: flowersecret
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tokens carry this issuer. The backend reaches Keycloak at keycloak:8080.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
     ports:
-      - "9000:9000"   # S3 API — must be host-published: browsers fetch token URIs from it
-      - "9001:9001"   # web console (user: flower / flowersecret)
+      - "8180:8080"
     volumes:
-      - minio-data:/data
+      - ./tools/keycloak/petal-pixel-realm.json:/opt/keycloak/data/import/petal-pixel-realm.json:ro
+      - keycloak-data:/opt/keycloak/data/h2
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+    restart: unless-stopped
 
-  minio-init:
-    image: minio/mc:latest
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        until mc alias set local http://minio:9000 flower flowersecret 2>/dev/null; do
-          echo "minio-init: waiting for minio..."; sleep 1;
-        done
-        mc mb -p local/flower
-        mc anonymous set download local/flower
-        echo "minio-init: bucket 'flower' ready (anonymous download enabled)"
-    depends_on:
-      minio:
-        condition: service_started
-    restart: "no"
+  s3:
+    # Local S3 server: objects are plain files in the volume. Port 9000 must be
+    # published because browsers open token URIs from it.
+    image: versity/versitygw:v1.10.0
+    command: ["--access", "flower", "--secret", "flowersecret", "--port", ":9000", "posix", "/data"]
+    ports:
+      - "9000:9000"
+    volumes:
+      - s3-data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9000"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
 
   backend:
     build: ./flower-backend
@@ -88,24 +105,33 @@ services:
       DB_DSN: postgresql://flower:flower@postgres:5432/flower?sslmode=disable
       DB_AUTO_MIGRATE: "true"
       CHAIN_ID: "1337"
+      RPC_URL: http://anvil:8545
+      OIDC_ISSUER: http://localhost:8180/realms/petal-pixel
+      OIDC_JWKS_URL: http://keycloak:8080/realms/petal-pixel/protocol/openid-connect/certs
+      OIDC_AUDIENCE: petal-pixel
+      # Anvil account 1. The key is public, so this is for the local chain only.
+      VOUCHER_SIGNER_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
       GRPC_WEB_ALLOWED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
-      S3_ENDPOINT: http://minio:9000
+      S3_ENDPOINT: http://s3:9000
       S3_REGION: us-east-1
       S3_ACCESS_KEY: flower
       S3_SECRET_KEY: flowersecret
       S3_BUCKET: flower
-      # Browser-facing URL for token URIs — must be the host-published MinIO port.
+      # Browser-facing URL for token URIs — must be the host-published S3 port.
       S3_PUBLIC_BASE_URL: http://localhost:9000/flower
       S3_FORCE_PATH_STYLE: "true"
+      S3_PUBLIC_READ: "true"
     volumes:
       - contract-data:/shared:ro
     depends_on:
       postgres:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      s3:
+        condition: service_healthy
       deploy:
         condition: service_completed_successfully
+      keycloak:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -117,8 +143,8 @@ services:
       VITE_FLOWER_BACKEND_URL: http://localhost:50051
       VITE_CHAIN_ID: "1337"
       VITE_RPC_URL: http://127.0.0.1:8545
-      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-https://dozlnqogfzlufpkmkwxn.supabase.co}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-sb_publishable_placeholder_restore_supabase_project_first}
+      VITE_OIDC_AUTHORITY: http://localhost:8180/realms/petal-pixel
+      VITE_OIDC_CLIENT_ID: petal-pixel
       # File-watching on Windows Docker bind mounts needs polling; opt in with CHOKIDAR_USEPOLLING=1 in .env
       CHOKIDAR_USEPOLLING: ${CHOKIDAR_USEPOLLING:-}
     volumes:
@@ -142,4 +168,37 @@ services:
         echo "codegen: Go -> gen/go and TS -> ../petal-pixel-studio/src/gen regenerated"
     volumes:
       - .:/workspace
+    restart: "no"
+
+  backend-test:
+    image: golang:1.25-alpine
+    profiles: ["tools"]
+    working_dir: /workspace
+    command: ["go", "test", "./..."]
+    environment:
+      CGO_ENABLED: "0"
+      TEST_DB_DSN: postgresql://flower:flower@postgres:5432/flower?sslmode=disable
+      TEST_S3_ENDPOINT: http://s3:9000
+      TEST_S3_ACCESS_KEY: flower
+      TEST_S3_SECRET_KEY: flowersecret
+    volumes:
+      - ./flower-backend:/workspace
+      - go-mod-cache:/go/pkg/mod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+    restart: "no"
+
+  contract-test:
+    image: ghcr.io/foundry-rs/foundry:stable
+    profiles: ["tools"]
+    user: root
+    working_dir: /work/flower-backend
+    entrypoint: ["forge"]
+    command: ["test"]
+    volumes:
+      - ./flower-backend:/work/flower-backend
+      - ./lib:/work/lib
     restart: "no"

@@ -21,7 +21,7 @@
 Petal Pixel is a full-stack Web3 application where users:
 
 1. **Generate** a unique procedural flower by entering a name or phrase (used as a seed) and tweaking visual parameters via real-time sliders. The v2 generator (`algo_version: "v2"`) emits a full render-ready parameter set with hybrid palettes and nine flower families — including the new `sunflower`, `rhodonea`, and `superformula` 3D forms — while already-saved v1 flowers keep rendering unchanged.
-2. **Save** the flower to their account; all data is persisted in Supabase so it appears on every device they log in from.
+2. **Save** the flower to their account; all data is persisted in Postgres so it appears on every device they log in from.
 3. **Mint** it as an ERC-721 NFT on a local Ethereum network (Anvil), receiving a transaction hash and token URI.
 
 The project was built to exercise the full integration path: browser UI ↔ gRPC service ↔ cloud database ↔ smart contract.
@@ -41,29 +41,32 @@ flowchart TD
     end
 
     subgraph infra [Infrastructure]
-        Supabase["Supabase\n(Auth + user_flowers sync)"]
+        Keycloak["Keycloak\nOIDC sign-in\n(port 8180)"]
         Postgres["Postgres\nlocal container\n(port 5432 internal)"]
         Anvil["Anvil\nlocal EVM node\n(port 8545)"]
-        MinIO["MinIO S3\n(port 9000)"]
+        S3["S3 storage\n(versitygw, port 9000)"]
     end
 
     UI -- "gRPC-Web (ConnectRPC)" --> gRPC
-    UI -- "Supabase JS\n(auth + flower data)" --> Supabase
+    UI -- "OIDC with PKCE\n(sign-in)" --> Keycloak
+    gRPC -- "JWKS\n(verify tokens)" --> Keycloak
     UI -- "ethers + MetaMask\n(mint tx)" --> Anvil
     gRPC -- "pgx / Goose" --> Postgres
-    gRPC -- "S3 SDK (metadata)" --> MinIO
+    gRPC -- "S3 SDK (NFT files)" --> S3
+    gRPC -- "RPC (read mint receipts)" --> Anvil
     Anvil -. "FlowerNFT.sol\n(ERC-721)" .-> Anvil
 ```
 
 ### Data flow: Save a flower
 1. User adjusts sliders → React calls `CreateFlower` via gRPC-Web.
 2. Go server generates deterministic params, writes a row to `flowers` (local Postgres container).
-3. Frontend also writes a `user_flowers` row directly via Supabase JS (includes full `params` JSON for cross-device sync).
+3. On save, `UpsertGardenFlower` writes a `saved_flowers` row for the signed-in user (includes the full `params` JSON for cross-device sync).
 
 ### Data flow: Mint
-1. Frontend calls `PrepareMint` gRPC method with the flower's UUID.
-2. Go server builds NFT metadata, uploads it to MinIO (S3), and returns `contract_address` + `token_uri` to the frontend.
-3. Browser (ethers + MetaMask) sends the `mint()` transaction directly to Anvil — the Go backend never talks to the chain.
+1. Frontend calls `PrepareMint` with the flower's ID and the wallet address. The call needs a signed-in user.
+2. Go server refuses a flower that is already minted, stores the image and metadata under content-hash keys that never change, and returns a signed EIP-712 voucher.
+3. Browser (ethers + MetaMask) sends `mint(voucher, signature)` to Anvil. The contract checks the signature and allows one mint per flower.
+4. Frontend calls `ConfirmMint` with the transaction hash. Go server reads the receipt from the chain and stores the owner from the contract's `Minted` event.
 4. Frontend calls `ConfirmMint` with the resulting tx hash; the backend records it to `mints` and the data is persisted to `user_flowers`.
 
 ---
@@ -85,7 +88,7 @@ flowchart TD
 | Theming | next-themes (dark / light) |
 | Forms | react-hook-form + Zod |
 | Backend transport | ConnectRPC (`@connectrpc/connect-web`) over gRPC-Web |
-| Auth + DB | Supabase JS v2 |
+| Auth | OIDC with PKCE (`oidc-client-ts`) |
 | Testing | Vitest + Testing Library + Playwright |
 
 ### Backend — `flower-backend/`
@@ -95,7 +98,9 @@ flowchart TD
 | Language | Go 1.25 |
 | API protocol | gRPC (google.golang.org/grpc) + gRPC-Web (improbable-eng) |
 | Schema | Protocol Buffers v3, generated via Buf CLI |
-| Database driver | pgx v5 (simple protocol mode for PgBouncer / Supabase Pooler) |
+| Database driver | pgx v5 |
+| Sign-in | OIDC token verification (`go-oidc`), Keycloak locally |
+| Chain access | go-ethereum: EIP-712 vouchers, mint receipts |
 | Migrations | Goose v3 (auto-runs on startup) |
 | Asset storage | AWS S3 SDK v2 (optional, for NFT image upload) |
 | Blockchain client | None — the browser (MetaMask + ethers) sends chain transactions directly |
@@ -146,11 +151,11 @@ petal-pixel/
 └── petal-pixel-studio/           # React / Vite frontend
     ├── src/
     │   ├── pages/                # CreateFlower, MyFlowers, NftCollection …
-    │   ├── stores/flowerStore.ts # Zustand store (Supabase as source of truth)
-    │   ├── integrations/         # Supabase client + types; gRPC client
+    │   ├── stores/flowerStore.ts # Zustand store (backend as source of truth)
+    │   ├── integrations/         # OIDC sign-in, gRPC client, garden API
     │   ├── math/                 # Procedural flower geometry (pure TS)
     │   └── components/           # UI components (shadcn + custom)
-    └── supabase/migrations/      # SQL applied to the Supabase project
+    └── tests/                    # Playwright end-to-end tests
 ```
 
 ---
@@ -163,7 +168,6 @@ Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 git clone https://github.com/VoixKz/petal-pixel
 cd petal-pixel
 git submodule update --init --recursive   # OpenZeppelin contracts (required by the deploy step)
-cp .env.example .env                      # then paste your Supabase publishable key (see below)
 docker compose up -d --build
 ```
 
@@ -172,33 +176,39 @@ That single command starts everything:
 | Service    | URL                          | What it is                                        |
 |------------|------------------------------|---------------------------------------------------|
 | frontend   | http://localhost:8080        | Vite dev server (hot reload via bind mount)       |
-| backend    | http://localhost:50051       | Go gRPC / gRPC-web API (`/healthz`, `/api/flowers`) |
+| backend    | http://localhost:50051       | Go gRPC / gRPC-web API (`/healthz`, `/api/flowers/<id>`) |
+| keycloak   | http://localhost:8180        | Local sign-in (OIDC). Admin console: admin / admin |
 | anvil      | http://127.0.0.1:8545        | Local Ethereum node, chain id **1337**            |
-| deploy     | (one-shot)                   | Deploys `FlowerNFT.sol`, hands the address to the backend |
-| postgres   | (internal)                   | Backend DB (`flowers`, `mints`) — goose migrations run automatically |
-| minio      | http://localhost:9000 (console :9001) | S3-compatible storage for NFT metadata (bucket `flower`) |
+| deploy     | (one-shot)                   | Deploys `FlowerNFT.sol` once, hands the address to the backend |
+| postgres   | (internal)                   | Backend DB (`users`, `saved_flowers`, `flowers`, `mints`) — goose migrations run automatically |
+| s3         | http://localhost:9000        | S3-compatible storage for NFT files (bucket `flower`) |
 
-Stop everything with `docker compose down`. The Anvil chain is in-memory, so every `docker compose down`/`up` cycle resets it and re-runs the deploy automatically. Add `-v` to additionally wipe Postgres and MinIO data (removes the named volumes). Note: after a chain reset, any previously recorded mints reference token IDs that no longer exist on the fresh chain — this is a known dev-stack caveat.
+Stop everything with `docker compose down`. Data survives in named volumes, including the Anvil chain. `docker compose down -v` resets everything.
 
 After changing frontend dependencies (`package.json`), run `docker compose up -d --build -V frontend` so the rebuilt image's `node_modules` replaces the stale anonymous volume.
 
-### Supabase (auth + cross-device sync)
+### Accounts
 
-Login/signup and the "My Flowers" cloud sync use the hosted Supabase project.
-Set it up once:
+Sign-in runs on the local Keycloak container, so nothing needs configuring. Create an account on the sign-up page, or use a test account: `anna@example.test` or `ben@example.test`, password `local-test-password`. These credentials and the local signing keys are public and for this stack only.
 
-1. Restore the Supabase project (free-tier projects pause when idle) in the [dashboard](https://supabase.com/dashboard).
-2. Copy the publishable (anon) key from **Project Settings → API Keys** into `.env` (`VITE_SUPABASE_PUBLISHABLE_KEY`).
-3. `docker compose up -d frontend` to restart the frontend with the new key.
+The `flower-backend` code only depends on `auth.Verifier`, and the frontend on standard OIDC, so a hosted provider can replace Keycloak through configuration.
 
-Without a live Supabase project the app still runs, but login is unavailable, so flowers only persist in the browser's localStorage.
+### Tests
+
+```bash
+docker compose run --rm backend-test     # Go, against real Postgres
+docker compose run --rm contract-test    # Foundry
+cd petal-pixel-studio && npm test && npm run typecheck
+PLAYWRIGHT_CHANNEL=chrome npm run test:e2e   # needs the stack running
+bash tools/docker/smoke-mint.sh              # API and chain checks, needs the stack running
+```
 
 ### Minting
 
 Minting happens **in your browser**: MetaMask signs the transaction and sends it
 to Anvil directly. Add the local network to MetaMask when prompted (chain id 1337,
 RPC http://127.0.0.1:8545) and import an Anvil dev account to have funds. The Go
-backend only prepares the NFT metadata (uploaded to MinIO) and records mint
+backend only prepares the NFT metadata (uploaded to S3 storage) and records mint
 confirmations — it never talks to the chain itself.
 
 ---
@@ -215,8 +225,8 @@ required toolchain. The generated stubs (`flower-backend/gen/go` and
 `petal-pixel-studio/src/gen`) are committed to git; because the image tag is
 pinned, regenerating from an unchanged `.proto` produces a zero diff.
 
-### Supabase as single source of truth
-All flower data (including the full `params` JSON) is written to `user_flowers` in Supabase on every save. `loadFromBackend` in `flowerStore.ts` queries Supabase directly on app mount, so the flower gallery is identical on every device and browser the user signs in from. `localStorage` is used only as a fallback cache.
+### The server decides, the chain confirms
+Saved flowers live in `saved_flowers`, scoped to the signed-in user by the token rather than by anything in the request. Mint state is read from the `mints` table, and a mint only counts once its `Minted` event has been read back from the chain, so no client can claim one.
 
 ### Hardened CRUD
 - Duplicate-save prevention: `editingFlowerId` is set immediately after the first save, making all subsequent saves updates rather than inserts.
@@ -233,7 +243,8 @@ The smart contract is compiled and deployed with Foundry. `tools/docker/deploy.s
 
 - **`.env` files are never committed.** Both `flower-backend/.env` and `petal-pixel-studio/.env` are in `.gitignore`. Only `.env.example` files are versioned.
 - **Anvil is a local-only testnet.** Private keys printed by Anvil are well-known test keys with no real value. Never use them on mainnet.
-- **Supabase RLS** is enabled on the `user_flowers` table — users can only read and write their own flower records.
+- **Every private call needs a valid token.** `FlowerService` methods are private unless listed as open, so a new RPC starts closed, and each garden query is scoped to the token's user.
+- **NFT files never change.** They are stored under content-hash keys with write-once uploads.
 
 ---
 

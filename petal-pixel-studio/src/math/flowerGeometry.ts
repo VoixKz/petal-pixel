@@ -120,7 +120,7 @@ export function toV2Params(backend: BackendFlowerParams): V2Params {
   // Guard: a FlowerParams created without a shape set can surface `shape` as
   // undefined (rather than `{ case: undefined }`) depending on the codegen; the
   // nullish default keeps the switch from throwing on `.case`.
-  const shape = backend.shape ?? ({ case: undefined } as const);
+  const shape: BackendFlowerParams["shape"] = backend.shape ?? { case: undefined };
   switch (shape.case) {
     case "classic":
       out.classicParams = { ...shape.value, palette };

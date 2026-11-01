@@ -18,6 +18,15 @@ if [ ! -f ../lib/openzeppelin-contracts/foundry.toml ]; then
   exit 1
 fi
 
+# The chain survives restarts, and a second deploy would orphan every minted token.
+if [ -f /shared/contract.env ]; then
+  . /shared/contract.env
+  if [ -n "${NFT_CONTRACT_ADDRESS:-}" ] && [ "$(cast code "$NFT_CONTRACT_ADDRESS" --rpc-url "$RPC_URL")" != "0x" ]; then
+    echo "deploy: FlowerNFT already deployed at $NFT_CONTRACT_ADDRESS"
+    exit 0
+  fi
+fi
+
 forge script script/Deploy.s.sol:Deploy \
   --rpc-url "$RPC_URL" \
   --broadcast \

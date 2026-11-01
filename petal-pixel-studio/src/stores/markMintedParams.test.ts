@@ -3,13 +3,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const getUserMock = vi.fn();
 const updateMock = vi.fn();
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: { getUser: () => getUserMock() },
-    from: () => ({
-      update: (...args: unknown[]) => updateMock(...args),
-    }),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: () => getUserMock(),
+  updateGardenFlower: (...args: unknown[]) => updateMock(...args),
 }));
 
 vi.mock("@/integrations/flowerBackend/client", () => ({
@@ -34,13 +30,6 @@ function seedFlower(overrides: Partial<SavedFlower> = {}): SavedFlower {
   };
 }
 
-// .eq().eq() chain resolving to a Supabase-style { error } object
-function chainResolving(error: unknown) {
-  const eq2 = vi.fn().mockResolvedValue({ error });
-  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-  return { eq: eq1 };
-}
-
 describe("markMintedByBackendFlowerId mint-result params", () => {
   beforeEach(() => {
     getUserMock.mockReset();
@@ -49,8 +38,8 @@ describe("markMintedByBackendFlowerId mint-result params", () => {
   });
 
   it("writes mintTokenId + mintContractAddress into the saved flower's params", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving(null));
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockResolvedValue(undefined);
 
     const ok = await useFlowerStore.getState().markMintedByBackendFlowerId(
       "flower-1",
@@ -66,15 +55,16 @@ describe("markMintedByBackendFlowerId mint-result params", () => {
     expect(flower.params.mintContractAddress).toBe(CONTRACT);
   });
 
-  it("persists the updated params through the Supabase update payload", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving(null));
+  it("persists the updated params through the server update", async () => {
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockResolvedValue(undefined);
 
     await useFlowerStore.getState().markMintedByBackendFlowerId(
       "flower-1", "0xhash", undefined, { tokenId: 7, contractAddress: CONTRACT },
     );
 
-    const payload = updateMock.mock.calls[0][0] as {
+    expect(updateMock.mock.calls[0][0]).toBe("flower-1");
+    const payload = updateMock.mock.calls[0][1] as {
       params?: { mintTokenId?: number; mintContractAddress?: string };
     };
     expect(payload.params?.mintTokenId).toBe(7);
@@ -82,8 +72,8 @@ describe("markMintedByBackendFlowerId mint-result params", () => {
   });
 
   it("tolerates a missing tokenId (contract address alone still persisted)", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving(null));
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockResolvedValue(undefined);
 
     await useFlowerStore.getState().markMintedByBackendFlowerId(
       "flower-1", "0xhash", undefined, { contractAddress: CONTRACT },
@@ -94,14 +84,13 @@ describe("markMintedByBackendFlowerId mint-result params", () => {
     expect(flower.params.mintContractAddress).toBe(CONTRACT);
   });
 
-  it("omits the params column and leaves params untouched when no mint info is passed", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving(null));
+  it("sends nothing and leaves params untouched when no mint info is passed", async () => {
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockResolvedValue(undefined);
 
     await useFlowerStore.getState().markMintedByBackendFlowerId("flower-1", "0xhash");
 
-    const payload = updateMock.mock.calls[0][0] as Record<string, unknown>;
-    expect("params" in payload).toBe(false);
+    expect(updateMock).not.toHaveBeenCalled();
     expect(useFlowerStore.getState().savedFlowers[0].params.mintTokenId).toBeUndefined();
   });
 });

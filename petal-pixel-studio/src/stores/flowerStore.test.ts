@@ -1,27 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// ── Mock the Supabase client BEFORE importing the store ──────────────────────
+// ── Mock the garden API BEFORE importing the store ──────────────────────
 // upsertResult is mutated per-test to simulate success vs. error.
 const upsertResult: { error: { message: string } | null } = { error: null };
-const upsertMock = vi.fn(async () => upsertResult);
+const upsertMock = vi.fn(async (..._args: unknown[]) => {
+  if (upsertResult.error) throw new Error(upsertResult.error.message);
+});
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      getUser: vi.fn(async () => ({ data: { user: { id: "user-123" } } })),
-    },
-    from: vi.fn(() => ({
-      // create path -> supabaseUpsertFlower -> .from('user_flowers').upsert(...)
-      upsert: upsertMock,
-      // edit path helpers (unused here, present so chaining never throws)
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
-      })),
-      delete: vi.fn(() => ({
-        eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
-      })),
-    })),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: vi.fn(async () => "user-123"),
+  upsertGardenFlower: (...args: unknown[]) => upsertMock(...args),
+  updateGardenFlower: vi.fn(async () => undefined),
+  deleteGardenFlower: vi.fn(async () => undefined),
+  listGarden: vi.fn(async () => []),
 }));
 
 // Store imports this at module load; stub so the real gRPC client isn't pulled in.
@@ -31,7 +22,7 @@ vi.mock("@/integrations/flowerBackend/client", () => ({
 
 import { useFlowerStore } from "./flowerStore";
 
-describe("saveFlower Supabase error propagation (create path)", () => {
+describe("saveFlower server error propagation (create path)", () => {
   beforeEach(() => {
     upsertResult.error = null;
     upsertMock.mockClear();
@@ -45,7 +36,7 @@ describe("saveFlower Supabase error propagation (create path)", () => {
     });
   });
 
-  it("rejects when the Supabase upsert returns an error", async () => {
+  it("rejects when the server upsert returns an error", async () => {
     upsertResult.error = { message: "duplicate key value" };
 
     await expect(useFlowerStore.getState().saveFlower()).rejects.toThrow(
@@ -57,7 +48,7 @@ describe("saveFlower Supabase error propagation (create path)", () => {
     expect(useFlowerStore.getState().savedFlowers[0].id).toBe("flower-abc");
   });
 
-  it("resolves 'created' when the Supabase upsert succeeds for a new flower", async () => {
+  it("resolves 'created' when the server upsert succeeds for a new flower", async () => {
     // Changed by Cluster A: saveFlower now returns 'created' | 'updated' | 'aborted'
     // so CreateFlower can pick the right toast message instead of always
     // assuming a create-path save added a brand-new flower.

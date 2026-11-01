@@ -5,161 +5,121 @@ import {
     useState,
     ReactNode,
 } from "react";
-import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import type { User as OidcUser } from "oidc-client-ts";
+import {
+    redirectToSignIn,
+    redirectToSignUp,
+    signOutOfProvider,
+    userManager,
+} from "@/integrations/auth/oidc";
+import { getMeViaGrpc } from "@/integrations/flowerBackend/client";
 import { useFlowerStore } from "@/stores/flowerStore";
-import { useNavigate } from "react-router-dom";
+
+interface AuthUser {
+    id: string;
+    email: string | null;
+    emailVerified: boolean;
+}
 
 interface Profile {
     id: string;
-    user_id: string;
     display_name: string | null;
     avatar_url: string | null;
     email: string | null;
+    created_at: string | null;
 }
 
 interface AuthContextType {
-    session: Session | null;
-    user: User | null;
+    session: OidcUser | null;
+    user: AuthUser | null;
     profile: Profile | null;
     loading: boolean;
-    signUp: (
-        email: string,
-        password: string,
-    ) => Promise<{ error: Error | null }>;
-    signIn: (
-        email: string,
-        password: string,
-    ) => Promise<{ error: Error | null }>;
-    signInWithOAuth: (
-        provider: "google" | "apple",
-    ) => Promise<{ error: Error | null }>;
+    signIn: (returnTo: string) => Promise<void>;
+    signUp: (returnTo: string) => Promise<void>;
     signOut: () => Promise<void>;
-    verifyOtp: (
-        email: string,
-        token: string,
-    ) => Promise<{ error: Error | null }>;
-    resendOtp: (email: string) => Promise<{ error: Error | null }>;
     refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function toAuthUser(session: OidcUser): AuthUser {
+    return {
+        id: session.profile.sub,
+        email: session.profile.email ?? null,
+        emailVerified: session.profile.email_verified === true,
+    };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [session, setSession] = useState<Session | null>(null);
-    const [user, setUser] = useState<User | null>(null);
+    const [session, setSession] = useState<OidcUser | null>(null);
     const [profile, setProfile] = useState<Profile | null>(null);
     const [loading, setLoading] = useState(true);
-
-    const fetchProfile = async (userId: string) => {
-        const { data } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("user_id", userId)
-            .single();
-        setProfile(data);
-    };
+    const user = session ? toAuthUser(session) : null;
 
     // Re-pull the current user's profile so context consumers (sidebar footer,
     // header avatar) reflect an edit made on the Profile page immediately.
     const refreshProfile = async () => {
-        if (user) await fetchProfile(user.id);
+        try {
+            const me = await getMeViaGrpc();
+            setProfile({
+                id: me.userId,
+                display_name: me.displayName || null,
+                avatar_url: me.avatarUrl || null,
+                email: me.email || null,
+                created_at: me.createdAt || null,
+            });
+        } catch (err) {
+            console.error("Could not load profile:", err);
+        }
     };
 
     useEffect(() => {
-        // Set up auth listener FIRST
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
+        const applySession = (next: OidcUser | null) => {
+            const live = next && !next.expired ? next : null;
+            setSession(live);
+            if (live) {
                 // Cross-user rehydration guard: if the persisted cache belongs to a
                 // different user (tab-reuse, different-account login), wipe it before
                 // any component renders the stale savedFlowers.
                 const { ownerUserId } = useFlowerStore.getState();
-                if (ownerUserId && ownerUserId !== session.user.id) {
+                if (ownerUserId && ownerUserId !== live.profile.sub) {
                     useFlowerStore.getState().resetFlowerStore();
                 }
-                // Use setTimeout to avoid Supabase deadlock
-                setTimeout(() => fetchProfile(session.user.id), 0);
+                void refreshProfile();
             } else {
                 setProfile(null);
-                // On session expiry, cross-tab logout, or explicit sign-out:
-                // clear persisted cache so the next user starts clean.
-                if (event === 'SIGNED_OUT') {
-                    useFlowerStore.getState().resetFlowerStore();
-                }
             }
             setLoading(false);
-        });
+        };
 
-        // THEN check existing session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            if (session?.user) {
-                fetchProfile(session.user.id);
-            }
-            setLoading(false);
-        });
+        const onUnloaded = () => {
+            // Session expiry or sign-out in another tab: clear the persisted
+            // cache so the next user starts clean.
+            applySession(null);
+            useFlowerStore.getState().resetFlowerStore();
+        };
 
-        return () => subscription.unsubscribe();
+        userManager.events.addUserLoaded(applySession);
+        userManager.events.addUserUnloaded(onUnloaded);
+
+        const restore = async () => {
+            const stored = await userManager.getUser();
+            if (stored?.expired && stored.refresh_token) return userManager.signinSilent();
+            return stored;
+        };
+        restore().then(applySession).catch(() => applySession(null));
+
+        return () => {
+            userManager.events.removeUserLoaded(applySession);
+            userManager.events.removeUserUnloaded(onUnloaded);
+        };
     }, []);
 
-    const signUp = async (email: string, password: string) => {
-        const { error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { emailRedirectTo: window.location.origin },
-        });
-        return { error: error ? new Error(error.message) : null };
-    };
-
-    const signIn = async (email: string, password: string) => {
-        const { error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-        });
-        return { error: error ? new Error(error.message) : null };
-    };
-
-    const signInWithOAuth = async (provider: "google" | "apple") => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider,
-            options: {
-                redirectTo: window.location.origin,
-            },
-        });
-        return { error: error ? new Error(error.message) : null };
-    };
-
     const signOut = async () => {
-        try {
-            await supabase.auth.signOut();
-        } finally {
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            useFlowerStore.getState().resetFlowerStore();
-        }
-    };
-
-    const verifyOtp = async (email: string, token: string) => {
-        const { error } = await supabase.auth.verifyOtp({
-            email,
-            token,
-            type: "email",
-        });
-        return { error: error ? new Error(error.message) : null };
-    };
-
-    const resendOtp = async (email: string) => {
-        const { error } = await supabase.auth.resend({
-            type: "signup",
-            email,
-        });
-        return { error: error ? new Error(error.message) : null };
+        setSession(null);
+        setProfile(null);
+        useFlowerStore.getState().resetFlowerStore();
+        await signOutOfProvider();
     };
 
     return (
@@ -169,12 +129,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 user,
                 profile,
                 loading,
-                signUp,
-                signIn,
-                signInWithOAuth,
+                signIn: redirectToSignIn,
+                signUp: redirectToSignUp,
                 signOut,
-                verifyOtp,
-                resendOtp,
                 refreshProfile,
             }}
         >

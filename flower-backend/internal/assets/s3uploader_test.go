@@ -3,6 +3,7 @@ package assets
 import (
 	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,16 +90,6 @@ func TestPutBytesSetsContentType(t *testing.T) {
 	}
 }
 
-func TestPutJSONDelegatesWithJSONContentType(t *testing.T) {
-	u, ctOf := newFakeS3(t)
-	if _, err := u.PutJSON(context.Background(), "metadata/f_abc123.json", []byte(`{"a":1}`)); err != nil {
-		t.Fatalf("PutJSON: %v", err)
-	}
-	if got := ctOf("/assets/metadata/f_abc123.json"); got != "application/json" {
-		t.Errorf("Content-Type = %q, want application/json", got)
-	}
-}
-
 // Finding 2: PrepareMint needs Exists to decide whether a re-prepare without
 // a fresh image_png can reuse a previously-uploaded image instead of
 // silently stripping it from the metadata. These tests guard the two halves
@@ -131,18 +122,111 @@ func TestExistsReturnsFalseForMissingKey(t *testing.T) {
 	}
 }
 
-func TestPublicURLMatchesPutBytesURL(t *testing.T) {
-	u, _, _ := newFakeS3WithObjects(t, nil)
+// newStrictFakeS3 honours If-None-Match and serves GET, so a test can prove an
+// existing object keeps its first bytes.
+func newStrictFakeS3(t *testing.T) (*S3Uploader, map[string][]byte) {
+	t.Helper()
+	var mu sync.Mutex
+	objects := map[string][]byte{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+			body, ok := objects[r.URL.Path]
+			if !ok {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusNotFound)
+				_, _ = w.Write([]byte(`<Error><Code>NoSuchKey</Code><Message>missing</Message></Error>`))
+				return
+			}
+			_, _ = w.Write(body)
+		case http.MethodPut:
+			if _, exists := objects[r.URL.Path]; exists && r.Header.Get("If-None-Match") == "*" {
+				w.Header().Set("Content-Type", "application/xml")
+				w.WriteHeader(http.StatusPreconditionFailed)
+				_, _ = w.Write([]byte(`<Error><Code>PreconditionFailed</Code><Message>exists</Message></Error>`))
+				return
+			}
+			body, _ := io.ReadAll(r.Body)
+			objects[r.URL.Path] = body
+			w.Header().Set("ETag", `"test-etag"`)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	u, err := NewS3Uploader(context.Background(), S3Config{
+		Endpoint:        srv.URL,
+		AccessKeyID:     "test",
+		SecretAccessKey: "test",
+		Bucket:          "assets",
+		PublicBaseURL:   "http://files/assets",
+		ForcePathStyle:  true,
+	})
+	if err != nil {
+		t.Fatalf("new uploader: %v", err)
+	}
+	return u, objects
+}
+
+func TestPutOnceWritesNewObject(t *testing.T) {
+	u, objects := newStrictFakeS3(t)
+
+	got, err := u.PutOnce(context.Background(), "nft/abc.png", "image/png", []byte("first"))
+
+	if err != nil {
+		t.Fatalf("PutOnce: %v", err)
+	}
+	if got != "http://files/assets/nft/abc.png" {
+		t.Errorf("url = %q", got)
+	}
+	if string(objects["/assets/nft/abc.png"]) != "first" {
+		t.Errorf("stored = %q", objects["/assets/nft/abc.png"])
+	}
+}
+
+// A second write of a content-addressed key is not an error: the bytes match by
+// construction, and the caller still needs the URL.
+func TestPutOnceKeepsExistingObject(t *testing.T) {
+	u, objects := newStrictFakeS3(t)
 	ctx := context.Background()
-	uploaded, err := u.PutBytes(ctx, "images/flower-2.png", "image/png", bytes.NewReader([]byte{0x89, 'P', 'N', 'G'}))
-	if err != nil {
-		t.Fatalf("PutBytes: %v", err)
+	if _, err := u.PutOnce(ctx, "nft/abc.png", "image/png", []byte("first")); err != nil {
+		t.Fatalf("first PutOnce: %v", err)
 	}
-	got, err := u.PublicURL("images/flower-2.png")
+
+	got, err := u.PutOnce(ctx, "nft/abc.png", "image/png", []byte("second"))
+
 	if err != nil {
-		t.Fatalf("PublicURL: %v", err)
+		t.Fatalf("second PutOnce: %v", err)
 	}
-	if got != uploaded {
-		t.Errorf("PublicURL = %q, want it to match the URL PutBytes returned (%q)", got, uploaded)
+	if got != "http://files/assets/nft/abc.png" {
+		t.Errorf("url = %q", got)
+	}
+	if string(objects["/assets/nft/abc.png"]) != "first" {
+		t.Errorf("existing object changed to %q", objects["/assets/nft/abc.png"])
+	}
+}
+
+func TestGetReturnsStoredBytes(t *testing.T) {
+	u, _ := newStrictFakeS3(t)
+	ctx := context.Background()
+	if _, err := u.PutOnce(ctx, "previews/a.png", "image/png", []byte("pixels")); err != nil {
+		t.Fatalf("PutOnce: %v", err)
+	}
+
+	got, found, err := u.Get(ctx, "previews/a.png")
+
+	if err != nil || !found || string(got) != "pixels" {
+		t.Errorf("Get = %q, %v, %v", got, found, err)
+	}
+}
+
+func TestGetReportsMissingObject(t *testing.T) {
+	u, _ := newStrictFakeS3(t)
+
+	got, found, err := u.Get(context.Background(), "previews/none.png")
+
+	if err != nil || found || got != nil {
+		t.Errorf("Get = %q, %v, %v, want nothing and no error", got, found, err)
 	}
 }

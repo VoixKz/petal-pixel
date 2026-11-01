@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net"
 	"net/http"
 	"net/url"
@@ -18,12 +19,17 @@ import (
 	"time"
 
 	"flower-backend/internal/assets"
+	"flower-backend/internal/auth"
+	"flower-backend/internal/chain"
 	"flower-backend/internal/db"
+	"flower-backend/internal/ratelimit"
 	"flower-backend/internal/share"
+	"flower-backend/internal/voucher"
 
 	grpcapi "flower-backend/internal/api/grpc"
 
 	flowerv1 "flower-backend/gen/go/flower/v1"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/improbable-eng/grpc-web/go/grpcweb"
 	"github.com/joho/godotenv"
 	"golang.org/x/net/http2"
@@ -105,6 +111,12 @@ func main() {
 			slog.Error("s3 ensure bucket failed", "err", err, "bucket", s3Bucket)
 			os.Exit(1)
 		}
+		if os.Getenv("S3_PUBLIC_READ") == "true" {
+			if err := upl.AllowPublicRead(context.Background()); err != nil {
+				slog.Error("s3 public read failed", "err", err, "bucket", s3Bucket)
+				os.Exit(1)
+			}
+		}
 		slog.Info("s3 configured", "bucket", s3Bucket)
 	}
 
@@ -114,9 +126,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	s := grpc.NewServer(grpc.UnaryInterceptor(recoveryUnaryInterceptor))
+	verifier := verifierFromEnv()
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		recoveryUnaryInterceptor,
+		ratelimit.UnaryInterceptor(ratelimit.New(createFlowerPerMinute, createFlowerBurst), flowerv1.FlowerService_CreateFlower_FullMethodName),
+		auth.UnaryInterceptor(verifier, isOpenMethod),
+	))
+	previewLimiter := ratelimit.New(previewPerMinute, previewBurst)
 
-	flowerv1.RegisterFlowerServiceServer(s, grpcapi.NewFlowerServer(store, upl, chainID, contractAddress))
+	flowerv1.RegisterFlowerServiceServer(s, grpcapi.NewFlowerServer(store, upl, chainID, contractAddress, voucherSignerFromEnv(chainID, contractAddress), mintPriceFromEnv(), chainReaderFromEnv(contractAddress)))
 
 	hs := health.NewServer()
 	hs.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
@@ -125,12 +143,7 @@ func main() {
 	reflection.Register(s)
 
 	allowedOrigins := parseCSVEnv("GRPC_WEB_ALLOWED_ORIGINS")
-	wrapped := grpcweb.WrapServer(
-		s,
-		grpcweb.WithOriginFunc(func(origin string) bool {
-			return grpcWebOriginAllowed(origin, allowedOrigins)
-		}),
-	)
+	wrapped := newGrpcWebServer(s, allowedOrigins)
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
@@ -144,30 +157,6 @@ func main() {
 			return
 		}
 
-		if r.URL.Path == "/api/flowers" {
-			setAPICORSHeaders(w, r)
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			if store == nil {
-				http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
-				return
-			}
-			list, err := store.ListFlowers(r.Context())
-			if err != nil {
-				slog.Error("list flowers failed", "err", err)
-				http.Error(w, `{"error":"internal"}`, http.StatusInternalServerError)
-				return
-			}
-			writeFlowersJSON(w, list)
-			return
-		}
-
 		// Per-flower share HTML for social scrapers (Open Graph / Twitter).
 		if strings.HasPrefix(r.URL.Path, "/share/") {
 			handleShare(w, r, store, upl, s3PublicBaseURL, frontendURL)
@@ -175,12 +164,11 @@ func main() {
 		}
 
 		// Singular per-flower routes: public read-only JSON (GET) and preview
-		// image upload (POST .../preview). Placed AFTER the exact "/api/flowers"
-		// list check so the plural list route is never shadowed.
+		// image upload (POST .../preview).
 		if strings.HasPrefix(r.URL.Path, "/api/flowers/") {
 			id := flowerIDFromPath(r.URL.Path, "/api/flowers/")
 			if strings.HasSuffix(r.URL.Path, "/preview") {
-				handleUploadPreview(w, r, store, upl, id)
+				handleUploadPreview(w, r, store, upl, id, verifier, previewLimiter)
 				return
 			}
 			handlePublicFlower(w, r, store, id)
@@ -240,6 +228,112 @@ func gracefulStop(s *grpc.Server, timeout time.Duration) {
 		slog.Warn("graceful stop timed out; forcing stop")
 		s.Stop()
 	}
+}
+
+func newGrpcWebServer(s *grpc.Server, allowedOrigins []string) *grpcweb.WrappedGrpcServer {
+	return grpcweb.WrapServer(
+		s,
+		grpcweb.WithOriginFunc(func(origin string) bool {
+			return grpcWebOriginAllowed(origin, allowedOrigins)
+		}),
+	)
+}
+
+const (
+	createFlowerPerMinute = 120
+	createFlowerBurst     = 30
+	previewPerMinute      = 30
+	previewBurst          = 10
+)
+
+// isOpenMethod lists the calls that work without signing in. Anything else in
+// FlowerService needs a token, including RPCs added later.
+func isOpenMethod(method string) bool {
+	switch method {
+	case flowerv1.FlowerService_CreateFlower_FullMethodName, flowerv1.FlowerService_GetFlower_FullMethodName:
+		return true
+	}
+	return !strings.HasPrefix(method, "/flower.v1.FlowerService/")
+}
+
+// verifierFromEnv returns nil when sign-in is not configured, and private calls
+// then fail instead of running unauthenticated.
+func verifierFromEnv() auth.Verifier {
+	issuer, jwksURL, audience := os.Getenv("OIDC_ISSUER"), os.Getenv("OIDC_JWKS_URL"), os.Getenv("OIDC_AUDIENCE")
+	if issuer == "" || jwksURL == "" || audience == "" {
+		slog.Warn("sign-in disabled: OIDC_ISSUER, OIDC_JWKS_URL or OIDC_AUDIENCE not set")
+		return nil
+	}
+	return auth.NewOIDCVerifier(context.Background(), issuer, jwksURL, audience)
+}
+
+type previewOwners interface {
+	HasSavedFlower(ctx context.Context, subject, flowerID string) (bool, error)
+}
+
+// previewAccess returns the HTTP status for a preview upload: only someone who
+// saved the flower may change the picture on its share page.
+func previewAccess(ctx context.Context, authorization string, v auth.Verifier, owners previewOwners, flowerID string) int {
+	if v == nil {
+		return http.StatusServiceUnavailable
+	}
+	token := auth.BearerToken(authorization)
+	if token == "" {
+		return http.StatusUnauthorized
+	}
+	claims, err := v.Verify(ctx, token)
+	if err != nil {
+		return http.StatusUnauthorized
+	}
+	owned, err := owners.HasSavedFlower(ctx, claims.Subject, flowerID)
+	if err != nil {
+		return http.StatusInternalServerError
+	}
+	if !owned {
+		return http.StatusForbidden
+	}
+	return http.StatusOK
+}
+
+// voucherSignerFromEnv returns nil when minting is not configured, and
+// PrepareMint reports that instead of signing vouchers for an unknown contract.
+func voucherSignerFromEnv(chainID uint64, contractAddress string) voucher.Signer {
+	key := os.Getenv("VOUCHER_SIGNER_KEY")
+	if key == "" || !common.IsHexAddress(contractAddress) {
+		slog.Warn("minting disabled: VOUCHER_SIGNER_KEY or NFT_CONTRACT_ADDRESS not set")
+		return nil
+	}
+	signer, err := voucher.NewLocalSigner(key, voucher.Domain{ChainID: chainID, Contract: common.HexToAddress(contractAddress)})
+	if err != nil {
+		slog.Error("invalid VOUCHER_SIGNER_KEY", "err", err)
+		os.Exit(1)
+	}
+	return signer
+}
+
+// chainReaderFromEnv returns nil when no RPC is set, and ConfirmMint then
+// refuses to confirm anything rather than trusting an unchecked hash.
+func chainReaderFromEnv(contractAddress string) *chain.Reader {
+	rpcURL := os.Getenv("RPC_URL")
+	if rpcURL == "" || !common.IsHexAddress(contractAddress) {
+		slog.Warn("mint confirmation disabled: RPC_URL or NFT_CONTRACT_ADDRESS not set")
+		return nil
+	}
+	reader, err := chain.NewReader(context.Background(), rpcURL, common.HexToAddress(contractAddress))
+	if err != nil {
+		slog.Error("invalid RPC_URL", "err", err)
+		os.Exit(1)
+	}
+	return reader
+}
+
+func mintPriceFromEnv() *big.Int {
+	price, ok := new(big.Int).SetString(env("MINT_PRICE_WEI", "0"), 10)
+	if !ok || price.Sign() < 0 {
+		slog.Error("invalid MINT_PRICE_WEI")
+		os.Exit(1)
+	}
+	return price
 }
 
 func env(key, def string) string {
@@ -313,7 +407,7 @@ func isPNG(b []byte) bool {
 // isValidFlowerID reports whether id has the exact canonical flower-id format.
 // This is the interim mitigation against path-traversal / arbitrary-S3-key
 // injection: Go percent-decodes r.URL.Path, so an unvalidated id can smuggle
-// "/" and "." into the "images/<id>.png" key. Rejecting anything that is not
+// "/" and "." into the "previews/<id>.png" key. Rejecting anything that is not
 // ^flw_[0-9a-f]{16}$ removes that surface before any key is constructed.
 func isValidFlowerID(id string) bool {
 	return flowerIDPattern.MatchString(id)
@@ -379,10 +473,10 @@ func handleShare(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, u
 	imageURL := fallbackImage
 	imageExists := false
 	if upl != nil {
-		imageKey := "images/" + id + ".png"
+		imageKey := assets.PreviewKey(id)
 		if ok, exErr := upl.Exists(r.Context(), imageKey); exErr == nil && ok {
 			imageExists = true
-			imageURL = strings.TrimRight(s3PublicBaseURL, "/") + "/images/" + id + ".png"
+			imageURL = strings.TrimRight(s3PublicBaseURL, "/") + "/" + imageKey
 		} else if exErr != nil {
 			slog.Warn("share image exists check failed", "err", exErr, "flower_id", id)
 		}
@@ -461,7 +555,7 @@ func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.S
 }
 
 // handleUploadPreview accepts an image/png body (bounded to 2 MiB, mirroring the
-// mint path) and uploads it to images/<id>.png, returning {"image_url":…}.
+// mint path) and uploads it to previews/<id>.png, returning {"image_url":…}.
 //
 // SECURITY (remaining gap): this endpoint is still unauthenticated by the
 // backend's existing design, so any caller who knows a valid flower id can
@@ -470,7 +564,7 @@ func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.S
 // path-traversal / arbitrary-key writes and bounds the blast radius to real
 // ids); a proper ownership gate — or a server-issued signed upload token — must
 // be added when auth is introduced.
-func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, id string) {
+func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, id string, verifier auth.Verifier, limiter *ratelimit.Limiter) {
 	setPreviewCORSHeaders(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -494,6 +588,14 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.
 	// flowers, limiting the overwrite blast radius.
 	if store == nil {
 		http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if !limiter.Allow(ratelimit.ClientIP(r.RemoteAddr)) {
+		http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
+		return
+	}
+	if code := previewAccess(r.Context(), r.Header.Get("Authorization"), verifier, store, id); code != http.StatusOK {
+		http.Error(w, `{"error":"not allowed"}`, code)
 		return
 	}
 	if _, err := store.GetFlower(r.Context(), id); err != nil {
@@ -527,7 +629,7 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.
 		http.Error(w, `{"error":"not a png"}`, http.StatusBadRequest)
 		return
 	}
-	imageKey := "images/" + id + ".png"
+	imageKey := assets.PreviewKey(id)
 	imageURL, err := upl.PutBytes(r.Context(), imageKey, "image/png", bytes.NewReader(data))
 	if err != nil {
 		slog.Error("preview upload failed", "err", err, "flower_id", id)
@@ -537,38 +639,6 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.
 	b, err := json.Marshal(struct {
 		ImageURL string `json:"image_url"`
 	}{imageURL})
-	if err != nil {
-		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(b)
-}
-
-func writeFlowersJSON(w http.ResponseWriter, list []grpcapi.FlowerListRow) {
-	type flowerJSON struct {
-		FlowerID   string          `json:"flower_id"`
-		PersonName string          `json:"person_name"`
-		Params     json.RawMessage `json:"params"`
-		MintStatus string          `json:"mint_status"`
-		TxHash     string          `json:"tx_hash"`
-		TokenURI   string          `json:"token_uri"`
-	}
-	items := make([]flowerJSON, 0, len(list))
-	for _, r := range list {
-		items = append(items, flowerJSON{
-			FlowerID:   r.FlowerID,
-			PersonName: r.PersonName,
-			Params:     json.RawMessage(r.ParamsJSON),
-			MintStatus: r.MintStatus,
-			TxHash:     r.TxHash,
-			TokenURI:   r.TokenURI,
-		})
-	}
-	type response struct {
-		Flowers []flowerJSON `json:"flowers"`
-	}
-	b, err := json.Marshal(response{Flowers: items})
 	if err != nil {
 		http.Error(w, `{"error":"encode failed"}`, http.StatusInternalServerError)
 		return

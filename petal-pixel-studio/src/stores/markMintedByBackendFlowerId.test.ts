@@ -3,13 +3,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const getUserMock = vi.fn();
 const updateMock = vi.fn();
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: { getUser: () => getUserMock() },
-    from: () => ({
-      update: (...args: unknown[]) => updateMock(...args),
-    }),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: () => getUserMock(),
+  updateGardenFlower: (...args: unknown[]) => updateMock(...args),
 }));
 
 vi.mock("@/integrations/flowerBackend/client", () => ({
@@ -33,13 +29,6 @@ function seedFlower(overrides: Partial<SavedFlower> = {}): SavedFlower {
   };
 }
 
-// .eq().eq() chain resolving to a Supabase-style { error } object
-function chainResolving(error: unknown) {
-  const eq2 = vi.fn().mockResolvedValue({ error });
-  const eq1 = vi.fn().mockReturnValue({ eq: eq2 });
-  return { eq: eq1 };
-}
-
 describe("markMintedByBackendFlowerId", () => {
   beforeEach(() => {
     getUserMock.mockReset();
@@ -47,13 +36,13 @@ describe("markMintedByBackendFlowerId", () => {
     useFlowerStore.setState({ savedFlowers: [seedFlower()] });
   });
 
-  it("returns false when the Supabase update errors, but still applies the optimistic local update", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving({ message: "network down" }));
+  it("returns false when the server update errors, but still applies the optimistic local update", async () => {
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockRejectedValue(new Error("network down"));
 
     const ok = await useFlowerStore
       .getState()
-      .markMintedByBackendFlowerId("flower-1", "0xdead", "ipfs://uri");
+      .markMintedByBackendFlowerId("flower-1", "0xdead", "ipfs://uri", { tokenId: 7 });
 
     expect(ok).toBe(false);
     const flower = useFlowerStore.getState().savedFlowers[0];
@@ -61,9 +50,9 @@ describe("markMintedByBackendFlowerId", () => {
     expect(flower.txHash).toBe("0xdead");
   });
 
-  it("returns true when the Supabase update succeeds", async () => {
-    getUserMock.mockResolvedValue({ data: { user: { id: "user-1" } } });
-    updateMock.mockReturnValue(chainResolving(null));
+  it("returns true when the server update succeeds", async () => {
+    getUserMock.mockResolvedValue("user-1");
+    updateMock.mockResolvedValue(undefined);
 
     const ok = await useFlowerStore
       .getState()
@@ -76,7 +65,7 @@ describe("markMintedByBackendFlowerId", () => {
   });
 
   it("returns true (no-op sync) when there is no signed-in user", async () => {
-    getUserMock.mockResolvedValue({ data: { user: null } });
+    getUserMock.mockResolvedValue(null);
 
     const ok = await useFlowerStore
       .getState()

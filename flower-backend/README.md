@@ -67,7 +67,7 @@ Create a Storage bucket in the Supabase dashboard, enable **S3 protocol** access
 
 Use a **public** bucket (or public path policy) so NFT `token_uri` URLs resolve without signed cookies.
 
-The `docker-compose.yml` file is intentionally empty of services; add MinIO locally only if you want offline S3.
+The `docker-compose.yml` file is intentionally empty of services; add an S3 server locally only if you want offline S3.
 
 ### 4. Run server
 

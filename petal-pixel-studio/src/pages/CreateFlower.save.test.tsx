@@ -2,17 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { toast } from 'sonner';
 
 // ── Mock heavy dependencies BEFORE importing CreateFlower ─────────────────────
-// The page imports flowerStore which imports the Supabase client and the gRPC
+// The page imports flowerStore which imports the garden API and the gRPC
 // client at module load time. Stub both so the test environment doesn't throw.
-vi.mock('@/integrations/supabase/client', () => ({
-  supabase: {
-    auth: { getUser: vi.fn(async () => ({ data: { user: { id: 'user-123' } } })) },
-    from: vi.fn(() => ({
-      upsert: vi.fn(async () => ({ error: null })),
-      update: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-      delete: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })) })),
-    })),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: vi.fn(async () => "user-123"),
+  listGarden: vi.fn(async () => []),
+  upsertGardenFlower: vi.fn(async () => undefined),
+  updateGardenFlower: vi.fn(async () => undefined),
+  deleteGardenFlower: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/integrations/flowerBackend/client', () => ({

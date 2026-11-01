@@ -47,8 +47,10 @@ import {
   shouldWarnRegenerate,
   isCheckingBackend,
   hasUnsavedWork,
+  mintErrorMessage,
   type HealthStatus,
 } from './createFlowerGuards';
+import { MINT_ABI, buildMintCall } from '@/lib/mintVoucher';
 import { mapPetalCount } from '@/components/flower/sliderMapping';
 import {
   Sheet,
@@ -210,7 +212,7 @@ function MathPanel({ onClose }: { onClose: () => void }) {
   // Derive effective petal count from the ACTIVE technique params (sliders rewired in Task 14).
   const countMap = mapPetalCount(params.flowerType);
   const effectivePetalCount = countMap
-    ? (params[countMap.param === 'classic' ? 'classicParams' : 'bloomParams'] as Record<string, number>)[countMap.key] ?? params.petalCount
+    ? (params[countMap.param === 'classic' ? 'classicParams' : 'bloomParams'] as unknown as Record<string, number>)[countMap.key] ?? params.petalCount
     : params.petalCount;
 
   const genericData = Array.from({ length: 120 }, (_, i) => {
@@ -444,7 +446,7 @@ function MintSuccessDialog({
   );
 }
 
-// Runs the Supabase-backed save and reports the outcome via toast.
+// Runs the server-backed save and reports the outcome via toast.
 // saveFlower now reports which case occurred (Clusters A & D):
 //  - 'created': a genuinely new flower was added -> use createdMessage.
 //  - 'updated': either the edit path succeeded, or the create path collided
@@ -976,10 +978,10 @@ export default function CreateFlower() {
         throw new Error('Backend returned empty NFT contract address. Set NFT_CONTRACT_ADDRESS in backend env.');
       }
 
-      const mintAbi = ['function mint(address to, string tokenURI) returns (uint256)'];
-      const contract = new Contract(prepared.contractAddress, mintAbi, signer);
+      const contract = new Contract(prepared.contractAddress, MINT_ABI, signer);
 
-      const tx = await contract.mint(prepared.mintTo || signerAddress, prepared.mintTokenUri || prepared.tokenUri);
+      const { voucher, signature, value } = buildMintCall(prepared);
+      const tx = await contract.mint(voucher, signature, { value });
       toast.info(`Mint tx sent: ${tx.hash}`);
 
       // Finding 3: don't set mintTxHash (which drives the emerald "success"
@@ -1018,11 +1020,7 @@ export default function CreateFlower() {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Mint failed';
-      if (message.toLowerCase().includes('not_found') || message.toLowerCase().includes('not found')) {
-        toast.error('Flower not found in backend — click Generate again to re-sync it, then try minting.');
-      } else {
-        toast.error(message);
-      }
+      toast.error(mintErrorMessage(message));
     } finally {
       setIsMinting(false);
     }

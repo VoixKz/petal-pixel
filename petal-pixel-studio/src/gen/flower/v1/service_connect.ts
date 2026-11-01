@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { ConfirmMintRequest, ConfirmMintResponse, CreateFlowerRequest, CreateFlowerResponse, GetFlowerRequest, GetFlowerResponse, PrepareMintRequest, PrepareMintResponse } from "./service_pb.js";
+import { ConfirmMintRequest, ConfirmMintResponse, CreateFlowerRequest, CreateFlowerResponse, DeleteGardenFlowerRequest, DeleteGardenFlowerResponse, GetFlowerRequest, GetFlowerResponse, GetMeRequest, GetMeResponse, ListGardenRequest, ListGardenResponse, PrepareMintRequest, PrepareMintResponse, UpdateGardenFlowerRequest, UpdateGardenFlowerResponse, UpdateMeRequest, UpdateMeResponse, UpsertGardenFlowerRequest, UpsertGardenFlowerResponse } from "./service_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -56,6 +56,72 @@ export const FlowerService = {
       name: "ConfirmMint",
       I: ConfirmMintRequest,
       O: ConfirmMintResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Returns the signed-in user, creating the account on first use.
+     *
+     * @generated from rpc flower.v1.FlowerService.GetMe
+     */
+    getMe: {
+      name: "GetMe",
+      I: GetMeRequest,
+      O: GetMeResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Changes the signed-in user's profile.
+     *
+     * @generated from rpc flower.v1.FlowerService.UpdateMe
+     */
+    updateMe: {
+      name: "UpdateMe",
+      I: UpdateMeRequest,
+      O: UpdateMeResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Lists the signed-in user's saved flowers, newest first.
+     *
+     * @generated from rpc flower.v1.FlowerService.ListGarden
+     */
+    listGarden: {
+      name: "ListGarden",
+      I: ListGardenRequest,
+      O: ListGardenResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Saves a flower to the signed-in user's garden, replacing any earlier save.
+     *
+     * @generated from rpc flower.v1.FlowerService.UpsertGardenFlower
+     */
+    upsertGardenFlower: {
+      name: "UpsertGardenFlower",
+      I: UpsertGardenFlowerRequest,
+      O: UpsertGardenFlowerResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Changes the given fields of a saved flower.
+     *
+     * @generated from rpc flower.v1.FlowerService.UpdateGardenFlower
+     */
+    updateGardenFlower: {
+      name: "UpdateGardenFlower",
+      I: UpdateGardenFlowerRequest,
+      O: UpdateGardenFlowerResponse,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * Removes a flower from the signed-in user's garden.
+     *
+     * @generated from rpc flower.v1.FlowerService.DeleteGardenFlower
+     */
+    deleteGardenFlower: {
+      name: "DeleteGardenFlower",
+      I: DeleteGardenFlowerRequest,
+      O: DeleteGardenFlowerResponse,
       kind: MethodKind.Unary,
     },
   }

@@ -3,19 +3,38 @@ package grpcapi
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"io"
+	"math/big"
 	"strings"
+	"time"
 
 	flowerv1 "flower-backend/gen/go/flower/v1"
 	"flower-backend/internal/assets"
+	"flower-backend/internal/chain"
 	"flower-backend/internal/flower"
 	"flower-backend/internal/nft"
+	"flower-backend/internal/voucher"
 
+	"github.com/ethereum/go-ethereum/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // maxImagePngBytes bounds the optional mint snapshot (2 MiB).
 const maxImagePngBytes = 2 << 20
+
+// nftKey names a file by its content, so a token's URI can never point at
+// different bytes later.
+func nftKey(data []byte, extension string) string {
+	sum := sha256.Sum256(data)
+	return "nft/" + hex.EncodeToString(sum[:]) + "." + extension
+}
+
+// voucherLifetime leaves time for the wallet popup without keeping stale offers alive.
+const voucherLifetime = 30 * time.Minute
 
 func validateImagePng(png []byte) error {
 	if len(png) > maxImagePngBytes {
@@ -27,9 +46,25 @@ func validateImagePng(png []byte) error {
 type FlowerServer struct {
 	flowerv1.UnimplementedFlowerServiceServer
 
-	store *Store
-	upl   *assets.S3Uploader
-	chain chainConfig
+	store       *Store
+	upl         nftFiles
+	chain       chainConfig
+	signer      voucher.Signer
+	mintPrice   *big.Int
+	chainReader mintReader
+}
+
+// mintReader is what ConfirmMint needs from the blockchain.
+type mintReader interface {
+	MintFromTx(ctx context.Context, txHash string) (chain.Mint, error)
+}
+
+// nftFiles is what minting needs from object storage. *assets.S3Uploader
+// implements it; tests pass a fake to prove what was or was not written.
+type nftFiles interface {
+	PutBytes(ctx context.Context, key, contentType string, r io.Reader) (string, error)
+	PutOnce(ctx context.Context, key, contentType string, data []byte) (string, error)
+	Get(ctx context.Context, key string) (data []byte, found bool, err error)
 }
 
 type chainConfig struct {
@@ -37,12 +72,21 @@ type chainConfig struct {
 	contractAddress string
 }
 
-func NewFlowerServer(store *Store, upl *assets.S3Uploader, chainID uint64, contractAddress string) *FlowerServer {
-	return &FlowerServer{
-		store: store,
-		upl:   upl,
-		chain: chainConfig{chainID: chainID, contractAddress: contractAddress},
+func NewFlowerServer(store *Store, upl *assets.S3Uploader, chainID uint64, contractAddress string, signer voucher.Signer, mintPrice *big.Int, reader *chain.Reader) *FlowerServer {
+	srv := &FlowerServer{
+		store:     store,
+		chain:     chainConfig{chainID: chainID, contractAddress: contractAddress},
+		signer:    signer,
+		mintPrice: mintPrice,
 	}
+	// A nil pointer stored in an interface would not compare equal to nil.
+	if upl != nil {
+		srv.upl = upl
+	}
+	if reader != nil {
+		srv.chainReader = reader
+	}
+	return srv
 }
 
 func (s *FlowerServer) CreateFlower(ctx context.Context, req *flowerv1.CreateFlowerRequest) (*flowerv1.CreateFlowerResponse, error) {
@@ -101,6 +145,9 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 	if s.upl == nil {
 		return nil, status.Error(codes.FailedPrecondition, "asset storage not configured")
 	}
+	if s.signer == nil {
+		return nil, status.Error(codes.FailedPrecondition, "minting not configured")
+	}
 	flowerID := strings.TrimSpace(req.GetFlowerId())
 	wallet := strings.TrimSpace(req.GetWalletAddress())
 	if flowerID == "" {
@@ -108,6 +155,9 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 	}
 	if wallet == "" {
 		return nil, status.Error(codes.InvalidArgument, "wallet_address is required")
+	}
+	if !common.IsHexAddress(wallet) {
+		return nil, status.Error(codes.InvalidArgument, "wallet_address is not a valid address")
 	}
 	if err := validateImagePng(req.GetImagePng()); err != nil {
 		return nil, err
@@ -118,22 +168,34 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		return nil, err
 	}
 
-	imageKey := "images/" + flowerID + ".png"
-	imageURL := ""
-	if png := req.GetImagePng(); len(png) > 0 {
-		imageURL, err = s.upl.PutBytes(ctx, imageKey, "image/png", bytes.NewReader(png))
-		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to upload image")
+	// Checked before any upload, so a refused buyer leaves nothing in storage.
+	minted, err := s.store.IsMinted(ctx, flowerID)
+	if err != nil {
+		return nil, err
+	}
+	if minted {
+		return nil, status.Error(codes.AlreadyExists, "flower is already minted")
+	}
+
+	// A retry may have no fresh capture, so fall back to the saved preview:
+	// the voucher must not lose the picture.
+	imagePNG := req.GetImagePng()
+	if len(imagePNG) > 0 {
+		if _, err := s.upl.PutBytes(ctx, assets.PreviewKey(flowerID), "image/png", bytes.NewReader(imagePNG)); err != nil {
+			return nil, status.Error(codes.Internal, "failed to upload preview")
 		}
 	} else {
-		// Finding 2: a re-prepare with no image (the normal retry path when
-		// captureFlowerPng returns null client-side) must not silently strip
-		// the picture from an already-minted token's metadata. If an image
-		// was uploaded on a previous PrepareMint call, reuse its public URL
-		// instead of leaving imageURL empty.
-		imageURL, err = resolveImageURL(ctx, s.upl, imageKey)
+		imagePNG, _, err = s.upl.Get(ctx, assets.PreviewKey(flowerID))
 		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to check for existing image")
+			return nil, status.Error(codes.Internal, "failed to read preview")
+		}
+	}
+
+	imageURL := ""
+	if len(imagePNG) > 0 {
+		imageURL, err = s.upl.PutOnce(ctx, nftKey(imagePNG, "png"), "image/png", imagePNG)
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to upload image")
 		}
 	}
 
@@ -142,11 +204,21 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		return nil, status.Error(codes.Internal, "failed to build metadata")
 	}
 
-	// Store at a stable key so re-preparing returns same URL (unless you version it).
-	key := "metadata/" + flowerID + ".json"
-	tokenURI, err := s.upl.PutJSON(ctx, key, metadataJSON)
+	tokenURI, err := s.upl.PutOnce(ctx, nftKey(metadataJSON, "json"), "application/json", metadataJSON)
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to upload metadata")
+	}
+
+	v := voucher.Voucher{
+		FlowerID: voucher.FlowerKey(flowerID),
+		To:       common.HexToAddress(wallet),
+		TokenURI: tokenURI,
+		Price:    s.mintPrice,
+		Deadline: uint64(time.Now().Add(voucherLifetime).Unix()),
+	}
+	signature, err := s.signer.Sign(ctx, v)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to sign voucher")
 	}
 
 	// Persist mint-prep (status machine fleshed out later). PrepareMint is the
@@ -167,36 +239,11 @@ func (s *FlowerServer) PrepareMint(ctx context.Context, req *flowerv1.PrepareMin
 		MintTo:          wallet,
 		MintTokenUri:    tokenURI,
 		// mint_calldata left empty for now (frontend can call contract with args).
+		VoucherFlowerId:  "0x" + hex.EncodeToString(v.FlowerID[:]),
+		VoucherPriceWei:  v.Price.String(),
+		VoucherDeadline:  v.Deadline,
+		VoucherSignature: "0x" + hex.EncodeToString(signature),
 	}, nil
-}
-
-// imageExister is the narrow seam PrepareMint needs from *assets.S3Uploader
-// to decide whether to reuse a previously-uploaded image. Extracted as an
-// interface so resolveImageURL's decision logic (Finding 2) can be
-// unit-tested with a fake, without needing a live/mock S3 endpoint.
-type imageExister interface {
-	Exists(ctx context.Context, key string) (bool, error)
-	PublicURL(key string) (string, error)
-}
-
-// resolveImageURL decides what image URL (if any) a re-prepared mint's
-// metadata should reference when the caller did not supply a fresh
-// image_png. Finding 2: PrepareMint writes metadata to a stable key
-// (metadata/<flowerID>.json), so a re-prepare with no image — the normal
-// retry path when the frontend's captureFlowerPng() returns null — used to
-// silently overwrite the good metadata with the image field omitted,
-// stripping the picture from an already-minted token's tokenURI. If the
-// image from a previous PrepareMint call still exists at imageKey, its
-// public URL is reused instead of leaving the metadata imageless.
-func resolveImageURL(ctx context.Context, upl imageExister, imageKey string) (string, error) {
-	exists, err := upl.Exists(ctx, imageKey)
-	if err != nil {
-		return "", err
-	}
-	if !exists {
-		return "", nil
-	}
-	return upl.PublicURL(imageKey)
 }
 
 // buildMintMetadata resolves f's PersonName (falling back to "unknown" for
@@ -224,7 +271,24 @@ func (s *FlowerServer) ConfirmMint(ctx context.Context, req *flowerv1.ConfirmMin
 	if txHash == "" {
 		return nil, status.Error(codes.InvalidArgument, "tx_hash is required")
 	}
-	if err := s.store.ConfirmMint(ctx, flowerID, txHash); err != nil {
+	if s.chainReader == nil {
+		return nil, status.Error(codes.FailedPrecondition, "chain not configured")
+	}
+
+	// The chain decides: a hash from the client proves nothing until the
+	// contract's Minted event for this flower is read back from it.
+	mint, err := s.chainReader.MintFromTx(ctx, txHash)
+	switch {
+	case errors.Is(err, chain.ErrBadHash), errors.Is(err, chain.ErrNoMint):
+		return nil, status.Error(codes.InvalidArgument, "transaction did not mint this flower")
+	case err != nil:
+		return nil, status.Error(codes.Unavailable, "could not read the transaction from the chain")
+	}
+	if mint.FlowerID != voucher.FlowerKey(flowerID) {
+		return nil, status.Error(codes.InvalidArgument, "transaction did not mint this flower")
+	}
+
+	if err := s.store.ConfirmMint(ctx, flowerID, txHash, mint.Owner.Hex(), mint.TokenID.String()); err != nil {
 		return nil, err
 	}
 	return &flowerv1.ConfirmMintResponse{FlowerId: flowerID, TxHash: txHash}, nil

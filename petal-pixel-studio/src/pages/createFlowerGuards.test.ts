@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { shouldWarnRegenerate, isCheckingBackend, hasUnsavedWork } from "./createFlowerGuards";
+import { mintErrorMessage, shouldWarnRegenerate, isCheckingBackend, hasUnsavedWork } from "./createFlowerGuards";
 import type { HealthStatus } from "./createFlowerGuards";
 
 describe("shouldWarnRegenerate", () => {
@@ -74,5 +74,35 @@ describe("hasUnsavedWork (Cluster B1)", () => {
     expect(hasUnsavedWork(true, false, false, "flower-abc", ["flower-abc"])).toBe(false);
     expect(hasUnsavedWork(true, true, false, "flower-abc", ["flower-abc"])).toBe(true);
     expect(hasUnsavedWork(true, false, true, "flower-abc", ["flower-abc"])).toBe(true);
+  });
+});
+
+describe("mintErrorMessage", () => {
+  it("tells the user a minted flower cannot be minted again", () => {
+    expect(mintErrorMessage("[already_exists] flower is already minted")).toBe(
+      "This flower is already minted. Try a different name.",
+    );
+  });
+
+  it("asks the user to regenerate when the backend lost the flower", () => {
+    expect(mintErrorMessage("[not_found] flower not found")).toBe(
+      "Flower not found in backend — click Generate again to re-sync it, then try minting.",
+    );
+  });
+
+  it("recognises the contract's already-minted revert", () => {
+    expect(mintErrorMessage('execution reverted: AlreadyMinted()')).toBe(
+      "This flower is already minted. Try a different name.",
+    );
+  });
+
+  it("asks the user to retry when the voucher expired", () => {
+    expect(mintErrorMessage('execution reverted: VoucherExpired()')).toBe(
+      "This mint offer expired. Click Mint to get a new one.",
+    );
+  });
+
+  it("passes other errors through unchanged", () => {
+    expect(mintErrorMessage("user rejected action")).toBe("user rejected action");
   });
 });

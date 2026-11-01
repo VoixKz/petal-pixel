@@ -19,10 +19,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FlowerService_CreateFlower_FullMethodName = "/flower.v1.FlowerService/CreateFlower"
-	FlowerService_GetFlower_FullMethodName    = "/flower.v1.FlowerService/GetFlower"
-	FlowerService_PrepareMint_FullMethodName  = "/flower.v1.FlowerService/PrepareMint"
-	FlowerService_ConfirmMint_FullMethodName  = "/flower.v1.FlowerService/ConfirmMint"
+	FlowerService_CreateFlower_FullMethodName       = "/flower.v1.FlowerService/CreateFlower"
+	FlowerService_GetFlower_FullMethodName          = "/flower.v1.FlowerService/GetFlower"
+	FlowerService_PrepareMint_FullMethodName        = "/flower.v1.FlowerService/PrepareMint"
+	FlowerService_ConfirmMint_FullMethodName        = "/flower.v1.FlowerService/ConfirmMint"
+	FlowerService_GetMe_FullMethodName              = "/flower.v1.FlowerService/GetMe"
+	FlowerService_UpdateMe_FullMethodName           = "/flower.v1.FlowerService/UpdateMe"
+	FlowerService_ListGarden_FullMethodName         = "/flower.v1.FlowerService/ListGarden"
+	FlowerService_UpsertGardenFlower_FullMethodName = "/flower.v1.FlowerService/UpsertGardenFlower"
+	FlowerService_UpdateGardenFlower_FullMethodName = "/flower.v1.FlowerService/UpdateGardenFlower"
+	FlowerService_DeleteGardenFlower_FullMethodName = "/flower.v1.FlowerService/DeleteGardenFlower"
 )
 
 // FlowerServiceClient is the client API for FlowerService service.
@@ -39,6 +45,18 @@ type FlowerServiceClient interface {
 	PrepareMint(ctx context.Context, in *PrepareMintRequest, opts ...grpc.CallOption) (*PrepareMintResponse, error)
 	// Confirms a submitted mint transaction for the specified flower.
 	ConfirmMint(ctx context.Context, in *ConfirmMintRequest, opts ...grpc.CallOption) (*ConfirmMintResponse, error)
+	// Returns the signed-in user, creating the account on first use.
+	GetMe(ctx context.Context, in *GetMeRequest, opts ...grpc.CallOption) (*GetMeResponse, error)
+	// Changes the signed-in user's profile.
+	UpdateMe(ctx context.Context, in *UpdateMeRequest, opts ...grpc.CallOption) (*UpdateMeResponse, error)
+	// Lists the signed-in user's saved flowers, newest first.
+	ListGarden(ctx context.Context, in *ListGardenRequest, opts ...grpc.CallOption) (*ListGardenResponse, error)
+	// Saves a flower to the signed-in user's garden, replacing any earlier save.
+	UpsertGardenFlower(ctx context.Context, in *UpsertGardenFlowerRequest, opts ...grpc.CallOption) (*UpsertGardenFlowerResponse, error)
+	// Changes the given fields of a saved flower.
+	UpdateGardenFlower(ctx context.Context, in *UpdateGardenFlowerRequest, opts ...grpc.CallOption) (*UpdateGardenFlowerResponse, error)
+	// Removes a flower from the signed-in user's garden.
+	DeleteGardenFlower(ctx context.Context, in *DeleteGardenFlowerRequest, opts ...grpc.CallOption) (*DeleteGardenFlowerResponse, error)
 }
 
 type flowerServiceClient struct {
@@ -89,6 +107,66 @@ func (c *flowerServiceClient) ConfirmMint(ctx context.Context, in *ConfirmMintRe
 	return out, nil
 }
 
+func (c *flowerServiceClient) GetMe(ctx context.Context, in *GetMeRequest, opts ...grpc.CallOption) (*GetMeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMeResponse)
+	err := c.cc.Invoke(ctx, FlowerService_GetMe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowerServiceClient) UpdateMe(ctx context.Context, in *UpdateMeRequest, opts ...grpc.CallOption) (*UpdateMeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateMeResponse)
+	err := c.cc.Invoke(ctx, FlowerService_UpdateMe_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowerServiceClient) ListGarden(ctx context.Context, in *ListGardenRequest, opts ...grpc.CallOption) (*ListGardenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGardenResponse)
+	err := c.cc.Invoke(ctx, FlowerService_ListGarden_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowerServiceClient) UpsertGardenFlower(ctx context.Context, in *UpsertGardenFlowerRequest, opts ...grpc.CallOption) (*UpsertGardenFlowerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpsertGardenFlowerResponse)
+	err := c.cc.Invoke(ctx, FlowerService_UpsertGardenFlower_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowerServiceClient) UpdateGardenFlower(ctx context.Context, in *UpdateGardenFlowerRequest, opts ...grpc.CallOption) (*UpdateGardenFlowerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateGardenFlowerResponse)
+	err := c.cc.Invoke(ctx, FlowerService_UpdateGardenFlower_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *flowerServiceClient) DeleteGardenFlower(ctx context.Context, in *DeleteGardenFlowerRequest, opts ...grpc.CallOption) (*DeleteGardenFlowerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteGardenFlowerResponse)
+	err := c.cc.Invoke(ctx, FlowerService_DeleteGardenFlower_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FlowerServiceServer is the server API for FlowerService service.
 // All implementations must embed UnimplementedFlowerServiceServer
 // for forward compatibility.
@@ -103,6 +181,18 @@ type FlowerServiceServer interface {
 	PrepareMint(context.Context, *PrepareMintRequest) (*PrepareMintResponse, error)
 	// Confirms a submitted mint transaction for the specified flower.
 	ConfirmMint(context.Context, *ConfirmMintRequest) (*ConfirmMintResponse, error)
+	// Returns the signed-in user, creating the account on first use.
+	GetMe(context.Context, *GetMeRequest) (*GetMeResponse, error)
+	// Changes the signed-in user's profile.
+	UpdateMe(context.Context, *UpdateMeRequest) (*UpdateMeResponse, error)
+	// Lists the signed-in user's saved flowers, newest first.
+	ListGarden(context.Context, *ListGardenRequest) (*ListGardenResponse, error)
+	// Saves a flower to the signed-in user's garden, replacing any earlier save.
+	UpsertGardenFlower(context.Context, *UpsertGardenFlowerRequest) (*UpsertGardenFlowerResponse, error)
+	// Changes the given fields of a saved flower.
+	UpdateGardenFlower(context.Context, *UpdateGardenFlowerRequest) (*UpdateGardenFlowerResponse, error)
+	// Removes a flower from the signed-in user's garden.
+	DeleteGardenFlower(context.Context, *DeleteGardenFlowerRequest) (*DeleteGardenFlowerResponse, error)
 	mustEmbedUnimplementedFlowerServiceServer()
 }
 
@@ -124,6 +214,24 @@ func (UnimplementedFlowerServiceServer) PrepareMint(context.Context, *PrepareMin
 }
 func (UnimplementedFlowerServiceServer) ConfirmMint(context.Context, *ConfirmMintRequest) (*ConfirmMintResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConfirmMint not implemented")
+}
+func (UnimplementedFlowerServiceServer) GetMe(context.Context, *GetMeRequest) (*GetMeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMe not implemented")
+}
+func (UnimplementedFlowerServiceServer) UpdateMe(context.Context, *UpdateMeRequest) (*UpdateMeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateMe not implemented")
+}
+func (UnimplementedFlowerServiceServer) ListGarden(context.Context, *ListGardenRequest) (*ListGardenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGarden not implemented")
+}
+func (UnimplementedFlowerServiceServer) UpsertGardenFlower(context.Context, *UpsertGardenFlowerRequest) (*UpsertGardenFlowerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpsertGardenFlower not implemented")
+}
+func (UnimplementedFlowerServiceServer) UpdateGardenFlower(context.Context, *UpdateGardenFlowerRequest) (*UpdateGardenFlowerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateGardenFlower not implemented")
+}
+func (UnimplementedFlowerServiceServer) DeleteGardenFlower(context.Context, *DeleteGardenFlowerRequest) (*DeleteGardenFlowerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteGardenFlower not implemented")
 }
 func (UnimplementedFlowerServiceServer) mustEmbedUnimplementedFlowerServiceServer() {}
 func (UnimplementedFlowerServiceServer) testEmbeddedByValue()                       {}
@@ -218,6 +326,114 @@ func _FlowerService_ConfirmMint_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FlowerService_GetMe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetMeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).GetMe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_GetMe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).GetMe(ctx, req.(*GetMeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowerService_UpdateMe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateMeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).UpdateMe(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_UpdateMe_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).UpdateMe(ctx, req.(*UpdateMeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowerService_ListGarden_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGardenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).ListGarden(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_ListGarden_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).ListGarden(ctx, req.(*ListGardenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowerService_UpsertGardenFlower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertGardenFlowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).UpsertGardenFlower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_UpsertGardenFlower_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).UpsertGardenFlower(ctx, req.(*UpsertGardenFlowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowerService_UpdateGardenFlower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateGardenFlowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).UpdateGardenFlower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_UpdateGardenFlower_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).UpdateGardenFlower(ctx, req.(*UpdateGardenFlowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FlowerService_DeleteGardenFlower_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteGardenFlowerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FlowerServiceServer).DeleteGardenFlower(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FlowerService_DeleteGardenFlower_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FlowerServiceServer).DeleteGardenFlower(ctx, req.(*DeleteGardenFlowerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FlowerService_ServiceDesc is the grpc.ServiceDesc for FlowerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -240,6 +456,30 @@ var FlowerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ConfirmMint",
 			Handler:    _FlowerService_ConfirmMint_Handler,
+		},
+		{
+			MethodName: "GetMe",
+			Handler:    _FlowerService_GetMe_Handler,
+		},
+		{
+			MethodName: "UpdateMe",
+			Handler:    _FlowerService_UpdateMe_Handler,
+		},
+		{
+			MethodName: "ListGarden",
+			Handler:    _FlowerService_ListGarden_Handler,
+		},
+		{
+			MethodName: "UpsertGardenFlower",
+			Handler:    _FlowerService_UpsertGardenFlower_Handler,
+		},
+		{
+			MethodName: "UpdateGardenFlower",
+			Handler:    _FlowerService_UpdateGardenFlower_Handler,
+		},
+		{
+			MethodName: "DeleteGardenFlower",
+			Handler:    _FlowerService_DeleteGardenFlower_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

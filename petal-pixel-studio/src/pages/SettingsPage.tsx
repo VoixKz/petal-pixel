@@ -13,7 +13,7 @@ import { useTheme } from 'next-themes';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { accountSecurityUrl } from '@/integrations/auth/oidc';
 import {
   getPrefs,
   setPref,
@@ -32,7 +32,7 @@ export default function SettingsPage() {
 
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const isVerified = user?.email_confirmed_at != null;
+  const isVerified = user?.emailVerified === true;
 
   // Notification prefs are device-local. Seed React state from storage once,
   // then keep UI and storage in lockstep: each toggle writes and reads back the
@@ -40,22 +40,6 @@ export default function SettingsPage() {
   const [prefs, setPrefs] = useState<UserPrefs>(getPrefs);
   const toggle = (key: UserPrefKey, value: boolean) => {
     setPrefs(setPref(key, value));
-  };
-
-  const handleChangePassword = async () => {
-    const email = user?.email;
-    if (!email) {
-      toast.error('No email on file for this account.');
-      return;
-    }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login`,
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('Password reset link sent — check your email.');
-    }
   };
 
   const handleSignOut = async () => {
@@ -227,13 +211,11 @@ export default function SettingsPage() {
           <Separator />
 
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button
-              variant="outline"
-              className="h-10 sm:flex-1"
-              onClick={() => void handleChangePassword()}
-            >
-              <KeyRound className="w-4 h-4" />
-              Change password
+            <Button asChild variant="outline" className="h-10 sm:flex-1">
+              <a href={accountSecurityUrl} target="_blank" rel="noreferrer">
+                <KeyRound className="w-4 h-4" />
+                Change password
+              </a>
             </Button>
             <Button
               variant="outline"

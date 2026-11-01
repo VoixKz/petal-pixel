@@ -11,45 +11,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// FlowerListRow holds a flower row joined with its optional mint record.
-type FlowerListRow struct {
-	FlowerID   string
-	PersonName string
-	ParamsJSON []byte
-	MintStatus string // "" | "prepared" | "confirmed"
-	TxHash     string
-	TokenURI   string
-}
-
-func (s *Store) ListFlowers(ctx context.Context) ([]FlowerListRow, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT f.flower_id, f.person_name, f.params,
-		       COALESCE(m.status, '')    AS mint_status,
-		       COALESCE(m.tx_hash, '')   AS tx_hash,
-		       COALESCE(m.token_uri, '') AS token_uri
-		FROM flowers f
-		LEFT JOIN mints m ON f.flower_id = m.flower_id
-		ORDER BY f.created_at DESC
-	`)
-	if err != nil {
-		return nil, status.Error(codes.Internal, "db list failed")
-	}
-	defer rows.Close()
-
-	var result []FlowerListRow
-	for rows.Next() {
-		var r FlowerListRow
-		if err := rows.Scan(&r.FlowerID, &r.PersonName, &r.ParamsJSON, &r.MintStatus, &r.TxHash, &r.TokenURI); err != nil {
-			return nil, status.Error(codes.Internal, "db scan failed")
-		}
-		result = append(result, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, status.Error(codes.Internal, "db rows error")
-	}
-	return result, nil
-}
-
 type Store struct {
 	db *sql.DB
 }
@@ -76,12 +37,7 @@ func (s *Store) UpsertFlower(ctx context.Context, flowerID, personName string, p
 	_, err = s.db.ExecContext(ctx, `
 insert into flowers (flower_id, person_name, seed, algo_version, schema_version, params)
 values ($1, $2, $3, $4, $5, $6)
-on conflict (flower_id) do update set
-  person_name = excluded.person_name,
-  seed = excluded.seed,
-  algo_version = excluded.algo_version,
-  schema_version = excluded.schema_version,
-  params = excluded.params
+on conflict (flower_id) do nothing
 `, flowerID, personName, int64(p.Seed), p.AlgoVersion, p.SchemaVersion, string(b))
 	if err != nil {
 		return status.Errorf(codes.Internal, "db write failed: %v", err)
@@ -106,8 +62,17 @@ func (s *Store) GetFlower(ctx context.Context, flowerID string) (*FlowerRow, err
 	return &row, nil
 }
 
+func (s *Store) IsMinted(ctx context.Context, flowerID string) (bool, error) {
+	var minted bool
+	err := s.db.QueryRowContext(ctx, `select exists (select 1 from mints where flower_id = $1 and status = 'confirmed')`, flowerID).Scan(&minted)
+	if err != nil {
+		return false, status.Error(codes.Internal, "db read failed")
+	}
+	return minted, nil
+}
+
 func (s *Store) UpsertMintPrepared(ctx context.Context, flowerID, walletAddress, tokenURI string, chainID uint64, contractAddress string) error {
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 insert into mints (flower_id, wallet_address, status, token_uri, chain_id, contract_address, updated_at)
 values ($1, $2, 'prepared', $3, $4, $5, now())
 on conflict (flower_id) do update set
@@ -117,26 +82,40 @@ on conflict (flower_id) do update set
   chain_id = excluded.chain_id,
   contract_address = excluded.contract_address,
   updated_at = now()
+where mints.status <> 'confirmed'
 `, flowerID, walletAddress, tokenURI, int64(chainID), contractAddress)
-	if err != nil {
-		return status.Error(codes.Internal, "db write failed")
-	}
-	return nil
-}
-
-func (s *Store) ConfirmMint(ctx context.Context, flowerID, txHash string) error {
-	res, err := s.db.ExecContext(ctx, `
-update mints
-set status = 'confirmed', tx_hash = $2, updated_at = now()
-where flower_id = $1
-`, flowerID, txHash)
 	if err != nil {
 		return status.Error(codes.Internal, "db write failed")
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return status.Error(codes.NotFound, "mint not found for flower")
+		return status.Error(codes.AlreadyExists, "flower is already minted")
 	}
 	return nil
+}
+
+func (s *Store) ConfirmMint(ctx context.Context, flowerID, txHash, owner, tokenID string) error {
+	res, err := s.db.ExecContext(ctx, `
+update mints
+set status = 'confirmed', tx_hash = $2, owner_address = $3, token_id = $4, updated_at = now()
+where flower_id = $1 and (status <> 'confirmed' or tx_hash = $2)
+`, flowerID, txHash, owner, tokenID)
+	if err != nil {
+		return status.Error(codes.Internal, "db write failed")
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		return nil
+	}
+
+	var exists bool
+	err = s.db.QueryRowContext(ctx, `select exists (select 1 from mints where flower_id = $1)`, flowerID).Scan(&exists)
+	if err != nil {
+		return status.Error(codes.Internal, "db read failed")
+	}
+	if exists {
+		return status.Error(codes.AlreadyExists, "flower is already minted")
+	}
+	return status.Error(codes.NotFound, "mint not found for flower")
 }
 

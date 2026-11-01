@@ -19,7 +19,13 @@ import {
 import type { Palette } from "@/math/palette";
 import { toTechniqueParams, toV2Params } from "@/math/flowerGeometry";
 import { createFlowerViaGrpc } from "@/integrations/flowerBackend/client";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  deleteGardenFlower,
+  getSignedInUserId,
+  listGarden,
+  updateGardenFlower,
+  upsertGardenFlower,
+} from "@/integrations/garden/api";
 import { V2_COLOR_A, V2_COLOR_B } from "@/lib/v2Colors";
 
 export interface FlowerParams {
@@ -62,7 +68,7 @@ export interface FlowerParams {
   mintContractAddress?: string;
 
   // Favorites: mirrored into params jsonb (same precedent as mintTokenId) so the
-  // flag is durable through the authoritative Supabase reload, not just local
+  // flag is durable through the authoritative server reload, not just local
   // state / localStorage. See toggleFavorite + loadFromBackend's mapper.
   isFavorite?: boolean;
 }
@@ -123,7 +129,7 @@ interface FlowerStore {
    * Soft-delete with a grace window that SURVIVES navigation. The flower is
    * hidden immediately via pendingDeleteIds but stays in savedFlowers until the
    * grace elapses, at which point the real deleteFlower runs (hard delete +
-   * Supabase). The timer lives at MODULE scope, so leaving /my-flowers mid-window
+   * the server). The timer lives at MODULE scope, so leaving /my-flowers mid-window
    * neither commits the delete early nor abandons it, and the globally-mounted
    * Sonner toast's Undo can cancel it from any page.
    */
@@ -225,43 +231,6 @@ const defaultParams: FlowerParams = {
   rotationSpeed: 0.5,
   stemEnabled: false,
 };
-
-// ─── Supabase helpers ──────────────────────────────────────────────────────────
-
-async function supabaseUpsertFlower(
-  userId: string,
-  flowerId: string,
-  title: string,
-  generationWord: string,
-  params: FlowerParams,
-) {
-  const { error } = await supabase.from('user_flowers').upsert(
-    {
-      user_id: userId,
-      flower_id: flowerId,
-      saved_name: title,
-      generation_word: generationWord,
-      params: params as unknown as import('@/integrations/supabase/types').Json,
-    },
-    { onConflict: 'user_id,flower_id' },
-  );
-  if (error) throw new Error(error.message);
-}
-
-async function supabaseUpdateFlower(
-  userId: string,
-  flowerId: string,
-  fields: { saved_name?: string; generation_word?: string; params?: FlowerParams },
-) {
-  const { error } = await supabase.from('user_flowers')
-    .update({
-      ...fields,
-      ...(fields.params ? { params: fields.params as unknown as import('@/integrations/supabase/types').Json } : {}),
-    })
-    .eq('user_id', userId)
-    .eq('flower_id', flowerId);
-  if (error) throw new Error(error.message);
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -460,28 +429,26 @@ export const useFlowerStore = create<FlowerStore>()(
       set({ savedFlowers: updated });
       bumpSavedFlowersMutationCounter();
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        set({ ownerUserId: user.id });
+      const userId = await getSignedInUserId();
+      if (userId) {
+        set({ ownerUserId: userId });
         if (regenerated && newBackendId) {
           // Flower was re-generated with a new word → new backend ID
-          await supabaseUpsertFlower(
-            user.id,
-            newBackendId,
-            title,
-            generationWord || existing.generationWord || "unknown",
-            persistedParams,
-          );
+          await upsertGardenFlower({
+            flowerId: newBackendId,
+            savedName: title,
+            generationWord: generationWord || existing.generationWord || "unknown",
+            params: persistedParams,
+          });
           if (oldBackendId) {
-            await supabase.from('user_flowers')
-              .delete()
-              .eq('user_id', user.id)
-              .eq('flower_id', oldBackendId);
+            await deleteGardenFlower(oldBackendId).catch((err) => {
+              console.error('saveFlower: could not remove the old flower', err);
+            });
           }
         } else if (newBackendId) {
-          await supabaseUpdateFlower(user.id, newBackendId, {
-            saved_name: title,
-            generation_word: generationWord || existing.generationWord,
+          await updateGardenFlower(newBackendId, {
+            savedName: title,
+            generationWord: generationWord || existing.generationWord,
             params: persistedParams,
           });
         }
@@ -525,10 +492,15 @@ export const useFlowerStore = create<FlowerStore>()(
       set({ savedFlowers: updated, editingFlowerId: newId, title: resolvedTitle });
       bumpSavedFlowersMutationCounter();
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        set({ ownerUserId: user.id });
-        await supabaseUpsertFlower(user.id, newId, resolvedTitle, generationWord || existing.generationWord || "unknown", params);
+      const userId = await getSignedInUserId();
+      if (userId) {
+        set({ ownerUserId: userId });
+        await upsertGardenFlower({
+          flowerId: newId,
+          savedName: resolvedTitle,
+          generationWord: generationWord || existing.generationWord || "unknown",
+          params: params,
+        });
       }
       return 'updated';
     }
@@ -546,10 +518,15 @@ export const useFlowerStore = create<FlowerStore>()(
     set({ savedFlowers: [...savedFlowers, newFlower], editingFlowerId: newId });
     bumpSavedFlowersMutationCounter();
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      set({ ownerUserId: user.id });
-      await supabaseUpsertFlower(user.id, newId, title, generationWord || "unknown", params);
+    const userId = await getSignedInUserId();
+    if (userId) {
+      set({ ownerUserId: userId });
+      await upsertGardenFlower({
+        flowerId: newId,
+        savedName: title,
+        generationWord: generationWord || "unknown",
+        params,
+      });
     }
     return 'created';
   },
@@ -565,9 +542,8 @@ export const useFlowerStore = create<FlowerStore>()(
     const flower = savedFlowers.find(f => f.id === id);
     const flowerId = flower?.backendFlowerId;
     if (flowerId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabaseUpdateFlower(user.id, flowerId, { saved_name: newTitle });
+      if (await getSignedInUserId()) {
+        await updateGardenFlower(flowerId, { savedName: newTitle });
       }
     }
   },
@@ -580,12 +556,10 @@ export const useFlowerStore = create<FlowerStore>()(
 
     const flowerId = flower?.backendFlowerId;
     if (flowerId) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('user_flowers')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('flower_id', flowerId);
+      if (await getSignedInUserId()) {
+        await deleteGardenFlower(flowerId).catch((err) => {
+          console.error('deleteFlower sync error:', err);
+        });
       }
     }
   },
@@ -603,7 +577,7 @@ export const useFlowerStore = create<FlowerStore>()(
     const timer = setTimeout(() => {
       pendingDeleteTimers.delete(id);
       set((s) => ({ pendingDeleteIds: s.pendingDeleteIds.filter((x) => x !== id) }));
-      // Hard delete (removes from savedFlowers + Supabase). Fires at module
+      // Hard delete (removes from savedFlowers + the server). Fires at module
       // scope, so it completes even if /my-flowers has since unmounted.
       void get().deleteFlower(id);
     }, DELETE_GRACE_MS);
@@ -654,15 +628,14 @@ export const useFlowerStore = create<FlowerStore>()(
     set({ savedFlowers: updated });
     bumpSavedFlowersMutationCounter();
 
-    // Best-effort Supabase sync (mirrors the params jsonb). No-op when the
+    // Best-effort server sync (mirrors the params jsonb). No-op when the
     // flower has no backend id or the user is signed out; failures are swallowed
     // since the local optimistic update already reflects the intent.
     const flowerId = target.backendFlowerId;
     if (!flowerId) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+    if (await getSignedInUserId()) {
       const params = updated.find((f) => f.id === id)?.params;
-      if (params) await supabaseUpdateFlower(user.id, flowerId, { params });
+      if (params) await updateGardenFlower(flowerId, { params });
     }
   },
 
@@ -675,7 +648,7 @@ export const useFlowerStore = create<FlowerStore>()(
       // generated/saved), fold the mint fields into `params` too. Otherwise
       // `params` never learns about the mint, and a subsequent edit+Update
       // (saveFlower's edit path does `params: { ...params }`, a full
-      // replace) would overwrite savedFlowers[i].params — and Supabase —
+      // replace) would overwrite savedFlowers[i].params — and the server —
       // with a copy that lacks mintTokenId/mintContractAddress, silently
       // erasing them.
       const isLiveParams =
@@ -706,29 +679,17 @@ export const useFlowerStore = create<FlowerStore>()(
     });
     bumpSavedFlowersMutationCounter();
 
-    // Persist to Supabase; report failure to the caller instead of swallowing it.
+    // Persist to the server; report failure to the caller instead of swallowing it.
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return true; // nothing to sync (not signed in)
+      if (!(await getSignedInUserId())) return true; // nothing to sync (not signed in)
 
+      // The server reads is_minted, tx_hash and token_uri from its mints table,
+      // so only the studio's own params need saving here.
       const updatedParams = get().savedFlowers.find(
         (f) => f.backendFlowerId === backendFlowerId,
       )?.params;
-
-      const { error } = await supabase.from('user_flowers')
-        .update({
-          is_minted: true,
-          tx_hash: txHash ?? null,
-          token_uri: tokenUri ?? null,
-          ...(mint && updatedParams
-            ? { params: updatedParams as unknown as import('@/integrations/supabase/types').Json }
-            : {}),
-        })
-        .eq('user_id', user.id)
-        .eq('flower_id', backendFlowerId);
-      if (error) {
-        console.error('markMintedByBackendFlowerId sync error:', error);
-        return false;
+      if (mint && updatedParams) {
+        await updateGardenFlower(backendFlowerId, { params: updatedParams });
       }
       return true;
     } catch (err) {
@@ -737,8 +698,8 @@ export const useFlowerStore = create<FlowerStore>()(
     }
   },
 
-  // ── Load from Supabase (single source of truth) ───────────────────────────
-  // Does NOT require the Go backend to be running — all data is in Supabase.
+  // ── Load from the server (single source of truth) ───────────────────────────
+  // Needs the Go backend: all data is in its Postgres.
   loadFromBackend: async () => {
     // Cluster E1: capture the mutation counter before the fetch starts. If a
     // local mutation (save/update/delete/mint/reset) happens while this fetch
@@ -749,21 +710,17 @@ export const useFlowerStore = create<FlowerStore>()(
     const isStale = () => savedFlowersMutationCounter !== tokenAtStart;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = await getSignedInUserId();
+      if (!userId) return;
 
-      const { data: rows, error } = await supabase
-        .from('user_flowers')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (isStale()) {
-        console.debug('loadFromBackend: discarding stale result (local mutation happened while in flight)');
-        return;
-      }
-
-      if (error) {
+      let rows: Awaited<ReturnType<typeof listGarden>>;
+      try {
+        rows = await listGarden();
+      } catch (error) {
+        if (isStale()) {
+          console.debug('loadFromBackend: discarding stale result (local mutation happened while in flight)');
+          return;
+        }
         console.error('loadFromBackend error:', error);
         // Cluster E2: only clear the cache when it belongs to a DIFFERENT
         // user (cross-user leak protection). For the SAME user, a transient
@@ -771,35 +728,35 @@ export const useFlowerStore = create<FlowerStore>()(
         // keep it for availability. Either way, stamp ownerUserId so the
         // cross-user guard stays armed if the very first load fails.
         const { ownerUserId: cachedOwnerId } = get();
-        if (cachedOwnerId && cachedOwnerId !== user.id) {
-          set({ savedFlowers: [], ownerUserId: user.id });
+        if (cachedOwnerId && cachedOwnerId !== userId) {
+          set({ savedFlowers: [], ownerUserId: userId });
         } else {
-          set({ ownerUserId: user.id });
+          set({ ownerUserId: userId });
         }
         return;
       }
 
-      if (!rows?.length) {
-        set({ savedFlowers: [], ownerUserId: user.id });
+      if (isStale()) {
+        console.debug('loadFromBackend: discarding stale result (local mutation happened while in flight)');
         return;
       }
 
       const mapped: SavedFlower[] = rows
         .filter(row => row.params != null)
         .map(row => ({
-          id: row.flower_id,
-          backendFlowerId: row.flower_id,
-          title: row.saved_name || 'Untitled Flower',
-          generationWord: row.generation_word || '',
-          params: row.params as unknown as FlowerParams,
-          createdAt: new Date(row.created_at).toISOString().split('T')[0],
-          isMinted: row.is_minted ?? false,
-          txHash: row.tx_hash ?? undefined,
-          tokenUri: row.token_uri ?? undefined,
-          isFavorite: (row.params as unknown as FlowerParams)?.isFavorite ?? false,
+          id: row.flowerId,
+          backendFlowerId: row.flowerId,
+          title: row.savedName || 'Untitled Flower',
+          generationWord: row.generationWord || '',
+          params: row.params as FlowerParams,
+          createdAt: new Date(row.createdAt).toISOString().split('T')[0],
+          isMinted: row.isMinted,
+          txHash: row.txHash || undefined,
+          tokenUri: row.tokenUri || undefined,
+          isFavorite: (row.params as FlowerParams)?.isFavorite ?? false,
         }));
 
-      set({ savedFlowers: mapped, ownerUserId: user.id });
+      set({ savedFlowers: mapped, ownerUserId: userId });
     } catch (err) {
       console.error('loadFromBackend failed:', err);
       if (isStale()) {
@@ -807,16 +764,16 @@ export const useFlowerStore = create<FlowerStore>()(
         return;
       }
       // Cluster E2: same conditional-clearing rule as the error branch above.
-      // We may not have resolved `user` here (auth.getUser() itself could be
+      // We may not have resolved the user here (getSignedInUserId itself could be
       // what threw), so fall back to clearing only when we can't confirm the
       // cache still belongs to the current session.
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const userId = await getSignedInUserId();
         const { ownerUserId: cachedOwnerId } = get();
-        if (user && cachedOwnerId && cachedOwnerId !== user.id) {
-          set({ savedFlowers: [], ownerUserId: user.id });
-        } else if (user) {
-          set({ ownerUserId: user.id });
+        if (userId && cachedOwnerId && cachedOwnerId !== userId) {
+          set({ savedFlowers: [], ownerUserId: userId });
+        } else if (userId) {
+          set({ ownerUserId: userId });
         }
         // If we can't even confirm the user here, leave the cache untouched —
         // it's still the best guess we have and no cross-user risk is provable.
@@ -861,7 +818,7 @@ export const useFlowerStore = create<FlowerStore>()(
   {
     name: 'petal-pixel-flowers',
     // Keep savedFlowers and ownerUserId in localStorage as a fast-load cache.
-    // loadFromBackend always overwrites it with the authoritative Supabase data.
+    // loadFromBackend always overwrites it with the authoritative server data.
     // ownerUserId is persisted so cross-user tab-reuse can be detected on next login.
     partialize: (s) => ({ savedFlowers: s.savedFlowers, ownerUserId: s.ownerUserId }),
   }

@@ -1,4 +1,4 @@
-import { createClient } from "@connectrpc/connect";
+import { createClient, type Interceptor } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
 import { FlowerService } from "@/gen/flower/v1/service_pb";
@@ -6,17 +6,28 @@ import {
   ConfirmMintRequestSchema,
   CreateFlowerRequestSchema,
   GetFlowerRequestSchema,
+  GetMeRequestSchema,
   PrepareMintRequestSchema,
+  UpdateMeRequestSchema,
 } from "@/gen/flower/v1/service_pb";
+import { getAccessToken } from "@/integrations/auth/oidc";
 
 export const flowerBackendBaseUrl = import.meta.env.VITE_FLOWER_BACKEND_URL || "http://localhost:50051";
+
+const sendAccessToken: Interceptor = (next) => async (req) => {
+  const token = await getAccessToken();
+  if (token) req.header.set("Authorization", `Bearer ${token}`);
+  return next(req);
+};
 
 const transport = createGrpcWebTransport({
   baseUrl: flowerBackendBaseUrl,
   useBinaryFormat: true,
+  interceptors: [sendAccessToken],
 });
 
-const client = createClient(FlowerService, transport);
+export const flowerClient = createClient(FlowerService, transport);
+const client = flowerClient;
 
 export async function createFlowerViaGrpc(personName: string) {
   return client.createFlower(create(CreateFlowerRequestSchema, { personName }));
@@ -42,6 +53,14 @@ export async function prepareMintViaGrpc(
 
 export async function confirmMintViaGrpc(flowerId: string, txHash: string) {
   return client.confirmMint(create(ConfirmMintRequestSchema, { flowerId, txHash }));
+}
+
+export async function getMeViaGrpc() {
+  return client.getMe(create(GetMeRequestSchema, {}));
+}
+
+export async function updateMeViaGrpc(fields: { displayName: string; avatarUrl: string }) {
+  return client.updateMe(create(UpdateMeRequestSchema, fields));
 }
 
 /**
@@ -93,16 +112,9 @@ export interface FlowerListItem {
   token_uri: string;
 }
 
-export async function fetchFlowersList(): Promise<FlowerListItem[]> {
-  const res = await fetch(`${flowerBackendBaseUrl}/api/flowers`);
-  if (!res.ok) throw new Error(`fetchFlowersList failed: ${res.status}`);
-  const data = await res.json() as { flowers: FlowerListItem[] };
-  return data.flowers ?? [];
-}
-
 /**
  * Fetch a single flower by id from the public HTTP endpoint. Used by the
- * logged-out share landing (no gRPC transport, no Supabase session). Accepts
+ * logged-out share landing (no gRPC transport, no session). Accepts
  * both a bare flower object and a `{ flower: … }` envelope so it tolerates
  * either backend shape. Throws `Error('not_found')` on 404 so callers can show
  * a dedicated not-found state.
@@ -130,9 +142,14 @@ export async function fetchFlowerById(flowerId: string): Promise<FlowerListItem>
  */
 export async function postFlowerPreview(flowerId: string, png: Blob): Promise<boolean> {
   try {
+    const token = await getAccessToken();
     const res = await fetch(
       `${flowerBackendBaseUrl}/api/flowers/${encodeURIComponent(flowerId)}/preview`,
-      { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: png },
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/png', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: png,
+      },
     );
     return res.ok;
   } catch {

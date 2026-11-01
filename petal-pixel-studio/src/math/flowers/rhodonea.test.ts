@@ -115,7 +115,7 @@ describe("createRhodoneaGeometry", () => {
   it("keeps all vertices within a bounded box around the origin", () => {
     const g = createRhodoneaGeometry(BASE, PALETTE);
     g.computeBoundingBox();
-    const box = g.getBoundingBox ? g.boundingBox! : g.boundingBox!;
+    const box = g.boundingBox!;
     // radius=260, heightProfile=60, thickness=9 -> nothing should exceed a
     // generous |coord| bound of radius*2.
     const bound = BASE.radius * 2;

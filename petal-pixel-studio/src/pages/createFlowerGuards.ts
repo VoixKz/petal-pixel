@@ -28,6 +28,21 @@ export function isCheckingBackend(status: HealthStatus): boolean {
   return status === 'checking';
 }
 
+/** Turns a failed mint's error text into what the user should do next. */
+export function mintErrorMessage(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes('already_exists') || lower.includes('already minted') || lower.includes('alreadyminted')) {
+    return 'This flower is already minted. Try a different name.';
+  }
+  if (lower.includes('voucherexpired')) {
+    return 'This mint offer expired. Click Mint to get a new one.';
+  }
+  if (lower.includes('not_found') || lower.includes('not found')) {
+    return 'Flower not found in backend — click Generate again to re-sync it, then try minting.';
+  }
+  return message;
+}
+
 /**
  * Cluster B1: create-mode unsaved-work detector.
  *

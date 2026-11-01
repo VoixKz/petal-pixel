@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// ── Mock the Supabase client BEFORE importing the store ──────────────────────
+// ── Mock the garden API BEFORE importing the store ──────────────────────
 const upsertResult: { error: { message: string } | null } = { error: null };
-const upsertMock = vi.fn(async () => upsertResult);
-const deleteEqMock = vi.fn(async () => ({ error: null }));
-const updateEqMock = vi.fn(async () => ({ error: null }));
-// Wraps .update(payload) itself so tests can inspect what was persisted,
-// independent of the from()-per-call closure below. The terminal resolver
-// tests already assert on (updateEqMock) is unchanged.
-const updateMock = vi.fn(() => ({ eq: vi.fn(() => ({ eq: updateEqMock })) }));
+const upsertMock = vi.fn(async (..._args: unknown[]) => {
+  if (upsertResult.error) throw new Error(upsertResult.error.message);
+});
+const deleteEqMock = vi.fn(async (..._args: unknown[]) => undefined);
+const updateEqMock = vi.fn(async (..._args: unknown[]) => undefined);
+// Lets tests inspect what was persisted (id, then fields).
+const updateMock = vi.fn(async (...args: unknown[]) => updateEqMock(...args));
 
 let authUserId: string | null = "user-123";
 
@@ -18,28 +18,31 @@ let selectError: { message: string } | null = null;
 // When set, order() returns this pending promise instead of resolving immediately,
 // letting a test control exactly when the "fetch" resolves.
 let pendingOrderPromise: Promise<unknown> | null = null;
+// When set, listGarden throws instead of returning an error result.
+let listThrows = false;
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: {
-    auth: {
-      getUser: vi.fn(async () => ({ data: { user: authUserId ? { id: authUserId } : null } })),
-    },
-    from: vi.fn(() => ({
-      upsert: upsertMock,
-      update: updateMock,
-      delete: vi.fn(() => ({
-        eq: vi.fn(() => ({ eq: deleteEqMock })),
-      })),
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          order: vi.fn(() => {
-            if (pendingOrderPromise) return pendingOrderPromise;
-            return Promise.resolve({ data: selectRows, error: selectError });
-          }),
-        })),
-      })),
-    })),
-  },
+vi.mock("@/integrations/garden/api", () => ({
+  getSignedInUserId: vi.fn(async () => authUserId),
+  upsertGardenFlower: (...args: unknown[]) => upsertMock(...args),
+  updateGardenFlower: (...args: unknown[]) => updateMock(...args),
+  deleteGardenFlower: (...args: unknown[]) => deleteEqMock(...args),
+  listGarden: vi.fn(async () => {
+    if (listThrows) throw new Error("network");
+    const { data, error } = pendingOrderPromise
+      ? ((await pendingOrderPromise) as { data: Array<Record<string, unknown>> | null; error: { message: string } | null })
+      : { data: selectRows, error: selectError };
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      flowerId: row.flower_id,
+      savedName: row.saved_name,
+      generationWord: row.generation_word,
+      params: row.params,
+      createdAt: row.created_at,
+      isMinted: row.is_minted ?? false,
+      txHash: row.tx_hash ?? "",
+      tokenUri: row.token_uri ?? "",
+    }));
+  }),
 }));
 
 vi.mock("@/integrations/flowerBackend/client", () => ({
@@ -291,18 +294,13 @@ describe("Cluster E2: transient loadFromBackend failure — conditional cache cl
       ownerUserId: "user-same",
     });
 
-    // Force the .select(...) chain to throw synchronously via a from() override.
-    const { supabase } = await import("@/integrations/supabase/client");
-    const originalFrom = supabase.from;
-    // @ts-expect-error - test override
-    supabase.from = vi.fn(() => { throw new Error("network"); });
+    listThrows = true;
 
     await useFlowerStore.getState().loadFromBackend();
 
     expect(useFlowerStore.getState().savedFlowers).toHaveLength(1);
 
-    // @ts-expect-error - restore
-    supabase.from = originalFrom;
+    listThrows = false;
   });
 
   it("clears cached savedFlowers when the query throws for a DIFFERENT user", async () => {
@@ -312,17 +310,13 @@ describe("Cluster E2: transient loadFromBackend failure — conditional cache cl
       ownerUserId: "user-old",
     });
 
-    const { supabase } = await import("@/integrations/supabase/client");
-    const originalFrom = supabase.from;
-    // @ts-expect-error - test override
-    supabase.from = vi.fn(() => { throw new Error("network"); });
+    listThrows = true;
 
     await useFlowerStore.getState().loadFromBackend();
 
     expect(useFlowerStore.getState().savedFlowers).toEqual([]);
 
-    // @ts-expect-error - restore
-    supabase.from = originalFrom;
+    listThrows = false;
   });
 });
 
@@ -390,10 +384,10 @@ describe("Finding 1 (Critical): post-mint edit must not wipe mintTokenId/mintCon
     expect(afterEdit?.title).toBe("Renamed After Mint");
     expect(afterEdit?.params.petalCount).toBe(9);
 
-    // ... and in the payload persisted to Supabase (the .update({...}) call
-    // itself), so the mint fields survive the round-trip through the DB too.
+    // ... and in the fields persisted to the server, so the mint fields
+    // survive the round-trip through the DB too.
     expect(updateMock).toHaveBeenCalled();
-    const persistedPayload = updateMock.mock.calls.at(-1)?.[0] as {
+    const persistedPayload = updateMock.mock.calls.at(-1)?.[1] as {
       params?: { mintTokenId?: number; mintContractAddress?: string };
     };
     expect(persistedPayload?.params?.mintTokenId).toBe(42);
