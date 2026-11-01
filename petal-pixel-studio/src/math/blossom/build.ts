@@ -315,7 +315,7 @@ export function buildBlossom(seed: string, species: Species = speciesFor(seed)):
       curl: 0.5,
       tipCurl: 0.5,
       rim: 0,
-      cup: 0.06,
+      cup: 0.12,
       phase: 0,
       notch: 0,
       waist: 0.8,

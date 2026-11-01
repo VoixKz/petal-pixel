@@ -15,6 +15,21 @@ const SUN = new THREE.Vector3(3, 7, 4).normalize();
 const AIR_BRIGHTNESS = 0.3;
 
 const SPHERE = new THREE.SphereGeometry(1, 24, 16);
+/** Where the stem swells to carry the flower: a smooth cup, turned on a lathe. */
+const RECEPTACLE = new THREE.LatheGeometry(
+  [
+    [0.016, -0.24],
+    [0.019, -0.17],
+    [0.028, -0.12],
+    [0.05, -0.07],
+    [0.078, -0.03],
+    [0.09, 0.005],
+    [0.075, 0.035],
+    [0.03, 0.05],
+    [0, 0.052],
+  ].map(([x, y]) => new THREE.Vector2(x, y)),
+  20,
+);
 const THORN = new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
 
 /** The stem glows faintly near the flower at night, from the light falling down it. */
@@ -33,6 +48,19 @@ function stemMaterial(glow: { value: number }, lamp: { value: THREE.Color }): TH
       );
   };
   material.customProgramCacheKey = () => "blossom-stem";
+  return material;
+}
+
+/** Lit by the lamp it sits around, so the heart of the flower is never a dark hole. */
+function nearLampMaterial(colour: string, roughness: number, glow: { value: number }, lamp: { value: THREE.Color }): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({ color: colour, roughness });
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, { uGlow: glow, uLamp: lamp });
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uGlow;\nuniform vec3 uLamp;")
+      .replace("#include <emissivemap_fragment>", "totalEmissiveRadiance += uGlow * uLamp * diffuseColor.rgb * 1.5;");
+  };
+  material.customProgramCacheKey = () => "blossom-near-lamp";
   return material;
 }
 
@@ -109,8 +137,8 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
       leaf: leafMaterial(leafUniforms, blossom.species.gloss),
       leafDepth: leafDepthMaterial(leafUniforms),
       stem: stemMaterial(glow, shared.uLamp),
-      pod: new THREE.MeshStandardMaterial({ color: blossom.species.pod?.colour ?? blossom.species.green[1], roughness: 0.8 }),
-      hip: new THREE.MeshStandardMaterial({ color: blossom.species.green[1], roughness: 0.6 }),
+      pod: nearLampMaterial(blossom.species.pod?.colour ?? blossom.species.green[1], 0.8, glow, shared.uLamp),
+      hip: nearLampMaterial(blossom.species.stem.top, 0.6, glow, shared.uLamp),
       thorn: new THREE.MeshStandardMaterial({ color: "#7c4a34", roughness: 0.5 }),
     }),
     [flowerUniforms, leafUniforms, blossom, glow, shared],
@@ -175,7 +203,7 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
         <instancedMesh ref={thorns} args={[THORN, materials.thorn, blossom.thorns.length]} frustumCulled={false} castShadow />
       )}
       <group ref={head}>
-        <mesh geometry={SPHERE} material={materials.hip} scale={blossom.species.sepals > 0 ? [0.1, 0.09, 0.1] : [0.06, 0.05, 0.06]} castShadow />
+        <mesh geometry={RECEPTACLE} material={materials.hip} scale={blossom.species.sepals > 0 ? 1 : 0.68} castShadow />
         {scan && (
           <Suspense fallback={null}>
             <ScanHead source={scan} life={life} glow={glow} lamp={shared.uLamp.value} onReady={onScanReady} />
@@ -193,6 +221,7 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
           customDepthMaterial={materials.flowerDepth}
           frustumCulled={false}
           castShadow
+          receiveShadow
         />
         <Lantern seed={seed} glow={glow} colour={light} open={opened} />
       </group>

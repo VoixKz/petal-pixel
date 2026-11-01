@@ -198,9 +198,28 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
         petal *= 1.0 + 0.14 * smoothstep(0.7, 1.0, abs(vGrid.x)) * smoothstep(0.1, 0.5, v);
         // No light reaches the base of a petal or the deep of the flower. Shade there
         // sinks into the petal's own colour, so pale flowers stay clean instead of grey.
+        if (vKind == ${KIND.sepal}) petal *= 1.0 + 0.16 * (1.0 - smoothstep(0.0, 0.14, abs(vGrid.x)));
         float tucked = vKind == ${KIND.sepal} ? 1.0 : mix(1.0, smoothstep(0.0, 0.66, v) * mix(1.0, 0.45, vDepth * (1.0 - v * 0.6)), vOpen);
         vec3 deep = max(vBase * vBase * 0.8, vec3(0.04)) + vBase * 0.1;
         diffuseColor.rgb = petal * mix(deep, vec3(1.0), tucked);
+        `,
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        /* glsl */ `
+        // Fine ribs and long soft folds, which give the light something to catch. The ribs
+        // fade once they get smaller than a pixel, or they would only shimmer.
+        float ribWidth = 14.0 + 40.0 * v;
+        float ribs = sin(vGrid.x * ribWidth + 2.0 * sin(vGrid.x * 7.0)) * (1.0 - smoothstep(0.35, 1.2, fwidth(vGrid.x) * ribWidth));
+        float folds = sin(vGrid.x * 3.6 + vTone * 6.28 + v * 3.0) * smoothstep(0.08, 0.6, v);
+        float relief = (ribs * 0.0012 + folds * 0.0065) * (vKind == ${KIND.stamen} ? 0.0 : 1.0);
+        vec3 acrossView = dFdx(-vViewPosition);
+        vec3 upView = dFdy(-vViewPosition);
+        vec3 r1 = cross(upView, normal);
+        vec3 r2 = cross(normal, acrossView);
+        float area = dot(acrossView, r1) * faceDirection;
+        vec3 slope = sign(area) * (dFdx(relief) * r1 + dFdy(relief) * r2);
+        normal = normalize(abs(area) * normal - slope);
         `,
       )
       .replace(
@@ -213,15 +232,21 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
         vec3 sun = normalize((viewMatrix * vec4(uSun, 0.0)).xyz);
         float behind = pow(clamp(0.5 - 0.5 * dot(normal, sun), 0.0, 1.0), 1.6);
         totalEmissiveRadiance += (1.0 - uGlow) * bounced * behind * (0.75 + 0.25 * v) * 0.22;
-        // Night light: a lamp sits in the heart of the flower. Petals square-on to it take
-        // the most light, which keeps the shape readable. What reaches the eye has passed
-        // through the petal, so it comes out as the petal's own colour at full strength.
+        // Night light: a lamp sits in the heart of the flower. The face turned to it is bright
+        // and pale; a face we see from outside shows light that came through the petal, deeper
+        // in colour. Either way a surface dims as it turns away from the eye, like a paper
+        // lantern, and that falloff is what makes a glowing petal look round and not flat.
         float near = exp(-vCore * 1.5);
-        float skin = vKind == ${KIND.sepal} ? 0.4 : 0.78 + 0.22 * (1.0 - abs(vGrid.x)) + 0.06 * vein;
-        float square = 0.5 + 0.5 * abs(dot(normal, normalize(vToLamp)));
-        float lit = near * 1.55 * square;
-        vec3 through = pow(petal, vec3(2.0));
+        float skin = vKind == ${KIND.sepal} ? 0.34 : 0.78 + 0.22 * (1.0 - abs(vGrid.x)) + 0.06 * vein;
+        float toward = dot(normal, normalize(vToLamp));
+        float lampSide = smoothstep(-0.3, 0.6, toward);
+        float rounded = mix(0.42, 1.0, pow(abs(dot(normal, normalize(vViewPosition))), 0.8));
+        float lit = near * mix(1.0, 1.8, lampSide) * (0.56 + 0.44 * abs(toward)) * rounded;
+        vec3 through = pow(petal, vec3(mix(2.7, 1.7, lampSide)));
         through /= max(max(through.r, max(through.g, through.b)), 0.001);
+        // Seen from outside, the sides of a petal lie over its neighbour: two layers pass less
+        // light, as they do on a lampshade, and that is what shows the petals of a closed bud.
+        lit *= 1.0 - 0.42 * smoothstep(0.5, 1.0, abs(vGrid.x)) * (1.0 - lampSide);
         float hot = vKind == ${KIND.stamen} ? 0.12 : 0.7;
         totalEmissiveRadiance += uGlow * uLamp * skin * (through * (lit + 0.05) + near * near * near * near * hot);
         `,

@@ -139,6 +139,13 @@ function Soil({ glow, lamp }: { glow: { value: number }; lamp: string }) {
   );
 }
 
+/**
+ * The sun is split in two: the part that casts shadows and the part that doesn't. Petals
+ * are translucent, so a petal's shadow on the next one should deepen it, never turn it grey.
+ */
+const SUN_THROUGH_SHADOW = 1.05;
+const SUN_PAST_SHADOW = 1.35;
+
 /** How long a frame may take, in ms, before the stage drops to its next level of detail. */
 const FRAME_LIMITS = [30, 70];
 /** A plant must never starve the page: at the lowest level it draws at most this often. */
@@ -222,6 +229,7 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
   const mapSize = useThree((s) => (s.size.width < 900 ? 1024 : 2048));
   const sky = useRef<THREE.HemisphereLight>(null);
   const sun = useRef<THREE.DirectionalLight>(null);
+  const softSun = useRef<THREE.DirectionalLight>(null);
   const fill = useRef<THREE.DirectionalLight>(null);
   const effect = useRef<{ intensity: number }>(null);
   const colours = useMemo(
@@ -241,7 +249,8 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
     const day = 1 - night;
     colours.now.copy(colours.day).lerp(colours.night, night);
     if (sky.current) sky.current.intensity = 0.62 * day + 0.03;
-    if (sun.current) sun.current.intensity = 2.4 * day;
+    if (sun.current) sun.current.intensity = SUN_THROUGH_SHADOW * day;
+    if (softSun.current) softSun.current.intensity = SUN_PAST_SHADOW * day;
     if (fill.current) fill.current.intensity = 0.7 * day;
     if (effect.current) effect.current.intensity = 0.34 * night;
   });
@@ -253,16 +262,17 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
         ref={sun}
         castShadow={level < FRAME_LIMITS.length}
         position={[3, 7, 4]}
-        intensity={2.4}
+        intensity={SUN_THROUGH_SHADOW}
         shadow-mapSize={[mapSize, mapSize]}
         shadow-radius={5}
-        shadow-bias={-0.0008}
-        shadow-normalBias={0.03}
+        shadow-bias={-0.0016}
+        shadow-normalBias={0.07}
         shadow-camera-left={-3}
         shadow-camera-right={3}
         shadow-camera-top={5}
         shadow-camera-bottom={-1}
       />
+      <directionalLight ref={softSun} position={[3, 7, 4]} intensity={SUN_PAST_SHADOW} />
       <directionalLight ref={fill} position={[-4, 2, -3]} intensity={0.7} color="#dfe8ff" />
       <Environment resolution={128} frames={1}>
         <Lightformer form="rect" intensity={2.2} color="#ffffff" position={[0, 4, -3]} scale={[8, 4, 1]} />
