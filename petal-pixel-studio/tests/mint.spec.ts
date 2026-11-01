@@ -12,8 +12,11 @@ import {
   useWallet,
 } from "./helpers";
 
+// CI renders WebGL on the CPU, so capturing the flower takes about 30 seconds
+// before the mint even reaches the backend.
+const MINT_TIMEOUT = 120_000;
+
 test("name to flower to NFT in the wallet, and a second buyer is refused", async ({ browser }) => {
-  // CI renders WebGL on the CPU, and minting captures the flower more than once.
   test.setTimeout(240_000);
   const name = uniqueName("Minted");
 
@@ -26,7 +29,7 @@ test("name to flower to NFT in the wallet, and a second buyer is refused", async
 
   await anna.getByRole("button", { name: "Mint NFT" }).click();
 
-  await expect(anna.getByText("NFT minted and confirmed in backend")).toBeVisible({ timeout: 120_000 });
+  await expect(anna.getByText("NFT minted and confirmed in backend")).toBeVisible({ timeout: MINT_TIMEOUT });
   expect(await ownerOf(tokenId)).toBe(ALICE_WALLET);
 
   await anna.goto("/nfts");
@@ -41,7 +44,9 @@ test("name to flower to NFT in the wallet, and a second buyer is refused", async
 
   await ben.getByRole("button", { name: "Mint NFT" }).click();
 
-  await expect(ben.getByText("This flower is already minted. Try a different name.")).toBeVisible();
+  await expect(ben.getByText("This flower is already minted. Try a different name.")).toBeVisible({
+    timeout: MINT_TIMEOUT,
+  });
   expect(await ownerOf(tokenId)).toBe(ALICE_WALLET);
   expect(await nextTokenId()).toBe(tokenId + 1n);
   await benContext.close();
