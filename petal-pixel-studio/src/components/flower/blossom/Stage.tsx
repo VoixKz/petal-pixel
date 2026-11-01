@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
@@ -139,6 +139,71 @@ function Soil({ glow, lamp }: { glow: { value: number }; lamp: string }) {
   );
 }
 
+/** How long a frame may take, in ms, before the stage drops to its next level of detail. */
+const FRAME_LIMITS = [30, 70];
+/** A plant must never starve the page: at the lowest level it draws at most this often. */
+const SLOWEST_GAP_MS = 240;
+const SETTLING_MS = 600;
+const SAMPLE_MS = 700;
+const SAMPLE_FRAMES = 4;
+
+/** Drawing on the processor, with no graphics card behind it. */
+function hasNoGraphicsCard(gl: THREE.WebGLRenderer): boolean {
+  const context = gl.getContext();
+  const info = context.getExtension("WEBGL_debug_renderer_info");
+  const name = String(info ? context.getParameter(info.UNMASKED_RENDERER_WEBGL) : "");
+  return /swiftshader|llvmpipe|software|basic render/i.test(name);
+}
+
+/**
+ * Watches how long frames really take and lowers the detail until the page stays
+ * responsive: level 1 draws at one pixel per dot and drops the soft edges of the glow,
+ * level 2 drops the glow and shadows too, and draws only a few times a second.
+ */
+function useFrameBudget(): { level: number; gap: number } {
+  const gl = useThree((s) => s.gl);
+  const [level, setLevel] = useState(() => (hasNoGraphicsCard(gl) ? FRAME_LIMITS.length : 0));
+  const gap = useRef(SLOWEST_GAP_MS);
+  const sample = useRef({ settling: SETTLING_MS, spent: 0, frames: [] as number[] });
+
+  useFrame((state, delta) => {
+    if (level >= 1 && gl.getPixelRatio() !== 1) gl.setPixelRatio(1);
+    // A stage drawn on request has no steady frames to measure.
+    if (state.frameloop === "never" || level >= FRAME_LIMITS.length || document.hidden) return;
+    const ms = delta * 1000;
+    const taken = sample.current;
+    if (taken.settling > 0) {
+      taken.settling -= ms;
+      return;
+    }
+    taken.frames.push(ms);
+    taken.spent += ms;
+    if (taken.spent < SAMPLE_MS || taken.frames.length < SAMPLE_FRAMES) return;
+    const typical = [...taken.frames].sort((a, b) => a - b)[taken.frames.length >> 1];
+    sample.current = { settling: SETTLING_MS / 2, spent: 0, frames: [] };
+    const next = FRAME_LIMITS.filter((limit) => typical > limit).length;
+    if (next > level) {
+      gap.current = Math.max(SLOWEST_GAP_MS, typical * 3);
+      setLevel(next);
+    }
+  });
+
+  return { level, gap: gap.current };
+}
+
+/** Takes over drawing and leaves the page most of its time between frames. */
+function SparingFrames({ gap }: { gap: number }) {
+  const last = useRef(0);
+  useFrame(({ gl, scene, camera, frameloop }) => {
+    const now = performance.now();
+    // A stage drawn on request wants its picture now.
+    if (frameloop !== "never" && now - last.current < gap) return;
+    last.current = now;
+    gl.render(scene, camera);
+  }, 1);
+  return null;
+}
+
 export interface StageProps {
   /** 0 is day, 1 the night light. */
   glow: { value: number };
@@ -152,6 +217,7 @@ export interface StageProps {
 /** Lights the plant and swings the whole scene between daylight and the night light. */
 export function Stage({ glow, bloom = false, ground = true, children }: StageProps) {
   const scene = useThree((s) => s.scene);
+  const { level, gap } = useFrameBudget();
   // Phones get a lighter shadow; it is the most expensive part of drawing the plant.
   const mapSize = useThree((s) => (s.size.width < 900 ? 1024 : 2048));
   const sky = useRef<THREE.HemisphereLight>(null);
@@ -185,7 +251,7 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
       <hemisphereLight ref={sky} args={["#ffffff", "#d9cdb8", 0.62]} />
       <directionalLight
         ref={sun}
-        castShadow
+        castShadow={level < FRAME_LIMITS.length}
         position={[3, 7, 4]}
         intensity={2.4}
         shadow-mapSize={[mapSize, mapSize]}
@@ -211,11 +277,12 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
         </group>
       )}
       {children}
-      {bloom && (
-        <EffectComposer multisampling={4}>
+      {bloom && level < FRAME_LIMITS.length && (
+        <EffectComposer key={level} multisampling={level === 0 ? 4 : 0}>
           <Bloom ref={effect as never} mipmapBlur intensity={0} luminanceThreshold={0.62} luminanceSmoothing={0.3} radius={0.7} />
         </EffectComposer>
       )}
+      {level >= FRAME_LIMITS.length && <SparingFrames gap={gap} />}
     </>
   );
 }

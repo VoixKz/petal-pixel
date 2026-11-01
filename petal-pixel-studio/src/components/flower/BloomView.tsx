@@ -125,6 +125,8 @@ function CaptureBridge({ title, seed, life, glow, hold, angle, group }: Pose) {
         angle.current = was.angle;
         if (group.current) group.current.rotation.y = was.yaw;
         repose();
+        // Resizing clears the canvas, and a stage drawing sparingly may not redraw it for a while.
+        gl.render(scene, state.camera);
       }
       return new Promise<Blob | null>((resolve) => picture.toBlob(resolve, 'image/png'));
     });
