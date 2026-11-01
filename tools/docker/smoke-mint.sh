@@ -21,6 +21,9 @@ FAILED=0
 check() { if [ "$2" = "$3" ]; then echo "PASS  $1"; else echo "FAIL  $1: got [$2], want [$3]"; FAILED=1; fi; }
 has() { if printf '%s' "$2" | grep -qi "$3"; then echo "PASS  $1"; else echo "FAIL  $1: wanted [$3] in [$(printf '%s' "$2" | head -c 200)]"; FAILED=1; fi; }
 
+# A first pull prints to stderr, and grpc_as keeps stderr in its answer.
+docker pull -q fullstorydev/grpcurl:latest >/dev/null
+
 TOKEN=$(token anna@example.test)
 BEN_TOKEN=$(token ben@example.test)
 [ -n "$TOKEN" ] && echo "PASS  signed in through Keycloak" || { echo "FAIL  no token"; exit 1; }
@@ -29,6 +32,7 @@ NAME="Smoke $(date +%s)"
 echo "== name: $NAME"
 FLOWER=$(grpc CreateFlower "{\"person_name\":\"$NAME\"}" | field flowerId)
 echo "flower: $FLOWER"
+[ -n "$FLOWER" ] || { echo "FAIL  no flower"; exit 1; }
 
 ANON=$(docker run --rm --network "$NET" fullstorydev/grpcurl:latest -plaintext -d "{\"flower_id\":\"$FLOWER\",\"wallet_address\":\"$ALICE\"}" backend:50051 flower.v1.FlowerService/PrepareMint 2>&1)
 has "minting needs a login" "$ANON" "Unauthenticated"
