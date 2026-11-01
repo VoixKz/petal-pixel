@@ -59,3 +59,6 @@ Thumbs.db
 
 # Claude SDD/audit scratch
 .superpowers/
+
+# ── Impeccable engine (platform binary, fetched by its launcher) ──
+.claude/skills/impeccable/scripts/bin/
