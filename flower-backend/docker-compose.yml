@@ -1,4 +1,0 @@
-# NFT metadata uploads use Supabase Storage (S3-compatible API) by default.
-# Configure S3_* in .env; see .env.example and README.
-# Add a local MinIO service here only if you prefer local object storage for development.
-services: {}

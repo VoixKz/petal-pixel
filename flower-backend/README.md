@@ -12,12 +12,12 @@ Go gRPC backend for procedural flower generation and NFT mint preparation.
 
 ## Tech stack
 
-- Go 1.25+
+- Go 1.25 (run via the `golang:1.25-alpine` Docker image; no host install required)
 - gRPC + Protobuf
 - PostgreSQL (pgx)
 - Goose migrations
 - AWS SDK v2 (S3-compatible uploads)
-- Buf for proto code generation
+- Buf for proto code generation (run via the pinned `bufbuild/buf:1.47.2` Docker image)
 
 ## Repository structure
 
@@ -31,11 +31,14 @@ Go gRPC backend for procedural flower generation and NFT mint preparation.
 
 ## Quick start
 
-### 1. Install dependencies
+### 1. Prerequisites
 
-- Go 1.25+
-- Docker (optional, for local infra)
-- Buf CLI (for protobuf generation)
+- Docker (Compose v2+) — the only required host tool.
+
+No Go, Buf, or protoc toolchain is needed on the host: code generation and
+the Go test suite both run inside pinned Docker images (`bufbuild/buf:1.47.2`
+and `golang:1.25-alpine`). Installing Go locally is optional and only speeds
+up an editor/IDE loop.
 
 ### 2. Configure environment
 
@@ -64,9 +67,17 @@ Create a Storage bucket in the Supabase dashboard, enable **S3 protocol** access
 
 Use a **public** bucket (or public path policy) so NFT `token_uri` URLs resolve without signed cookies.
 
-The `docker-compose.yml` file is intentionally empty of services; add MinIO locally only if you want offline S3.
+The `docker-compose.yml` file is intentionally empty of services; add an S3 server locally only if you want offline S3.
 
 ### 4. Run server
+
+Docker-only (recommended — no host Go needed), from the repo root:
+
+```bash
+docker compose up -d backend
+```
+
+Or, if you have a local Go toolchain installed:
 
 ```bash
 go run ./cmd/server
@@ -76,8 +87,21 @@ Default gRPC address: :50051
 
 ### 5. Run tests
 
+Run the Go test suite via Docker (no host Go needed). Run from the **repo
+root** so `$PWD/flower-backend` resolves; the repo path may contain a space,
+so keep the quotes:
+
 ```bash
-go test ./...
+docker run --rm -v "$PWD/flower-backend":/src -w /src \
+  golang:1.25-alpine go test ./...
+```
+
+Scope to the generator package while iterating, and add a cached module
+volume to speed up repeat runs:
+
+```bash
+docker run --rm -v "$PWD/flower-backend":/src -w /src -v petal-gocache:/go/pkg/mod \
+  golang:1.25-alpine go test ./internal/flower/...
 ```
 
 ## API overview
@@ -95,17 +119,32 @@ Full API details and grpcurl examples: API.md
 
 ## Development commands
 
-Regenerate Go protobuf code:
+Regenerate the protobuf stubs (Go + frontend TS) with the pinned Buf image —
+no host Buf CLI required. From the repo root:
 
 ```bash
-buf generate
+./tools/docker/buf.sh
 ```
 
-Generate frontend stubs:
+`buf.sh` runs both generators (Go stubs → `gen/go`, frontend TS →
+`../petal-pixel-studio/src/gen`). To run a single generator by hand:
 
 ```bash
-buf generate --template buf.gen.frontend.yaml
+# Go stubs -> flower-backend/gen/go
+docker run --rm -v "$PWD":/workspace -w /workspace/flower-backend \
+  bufbuild/buf:1.47.2 generate
+# Frontend TS stubs -> petal-pixel-studio/src/gen
+docker run --rm -v "$PWD":/workspace -w /workspace/flower-backend \
+  bufbuild/buf:1.47.2 generate --template buf.gen.frontend.yaml
 ```
+
+The Buf image tag is pinned to `1.47.2` so an unchanged `.proto` regenerates
+with a zero diff (floating `latest` drifts plugin versions and produces
+spurious changes). The generated stubs
+(`gen/go/flower/v1/*.pb.go` and `petal-pixel-studio/src/gen/flower/v1/*.ts`)
+are committed to git — the backend Docker build copies `gen/go`, and Vite
+imports `src/gen` directly, so both must be regenerated and committed whenever
+`proto/flower/v1/service.proto` changes.
 
 ## Security notes
 

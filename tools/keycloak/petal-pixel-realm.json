@@ -1,0 +1,81 @@
+{
+  "realm": "petal-pixel",
+  "enabled": true,
+  "displayName": "Petal Pixel",
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "verifyEmail": false,
+  "accessTokenLifespan": 900,
+  "clients": [
+    {
+      "clientId": "petal-pixel",
+      "name": "Petal Pixel",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8080/*", "http://127.0.0.1:8080/*"],
+      "webOrigins": ["http://localhost:8080", "http://127.0.0.1:8080"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/*##http://127.0.0.1:8080/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "petal-pixel-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "petal-pixel",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "petal-pixel-local-tests",
+      "name": "Local tests only",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "petal-pixel-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "petal-pixel",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "anna@example.test",
+      "email": "anna@example.test",
+      "emailVerified": true,
+      "firstName": "Anna",
+      "lastName": "Test",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "local-test-password", "temporary": false }]
+    },
+    {
+      "username": "ben@example.test",
+      "email": "ben@example.test",
+      "emailVerified": true,
+      "firstName": "Ben",
+      "lastName": "Test",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "local-test-password", "temporary": false }]
+    }
+  ]
+}

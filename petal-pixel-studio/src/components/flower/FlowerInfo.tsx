@@ -1,29 +1,54 @@
 import { motion } from 'framer-motion';
 import { useFlowerStore } from '@/stores/flowerStore';
+import { mapPetalCount } from '@/components/flower/sliderMapping';
 import { Sparkles } from 'lucide-react';
+
+/**
+ * Derive the displayed petal-count from the ACTIVE technique params so the
+ * stat tracks what the top-level sliders now write (Task 14 rewired sliders to
+ * classicParams/bloomParams instead of params.petalCount).
+ *
+ * - classic → classicParams.pNum  (integer)
+ * - bloom types → bloomParams.petalFreq  (float, shown to 2 dp)
+ * - rose → no slider mapping; show "—" as a sensible fallback
+ */
+function deriveDisplayPetalCount(params: ReturnType<typeof useFlowerStore.getState>['params']): string {
+  const mapping = mapPetalCount(params.flowerType);
+  if (!mapping) return '—'; // e.g. rose has no petal-count slider
+  if (mapping.param === 'classic') {
+    return String(Math.round((params.classicParams as unknown as Record<string, number>)[mapping.key] ?? params.petalCount));
+  }
+  if (mapping.param === 'bloom') {
+    const val = (params.bloomParams as unknown as Record<string, number>)[mapping.key] ?? params.petalCount;
+    return val.toFixed(2);
+  }
+  return String(Math.round(params.petalCount));
+}
 
 export function FlowerInfo() {
   const title = useFlowerStore((s) => s.title);
   const generationWord = useFlowerStore((s) => s.generationWord);
   const params = useFlowerStore((s) => s.params);
 
+  const petalCountDisplay = deriveDisplayPetalCount(params);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="absolute bottom-4 left-4 glass-panel rounded-lg p-3 max-w-[220px] z-10 pointer-events-auto"
+      className="absolute bottom-4 left-4 glass-panel rounded-lg p-3 max-w-[180px] sm:max-w-[220px] z-10 pointer-events-auto"
     >
       <div className="flex items-center gap-2 mb-2 min-w-0">
         <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
         <h3 className="text-xs font-semibold text-foreground truncate">{title}</h3>
       </div>
       {generationWord && (
-        <p className="text-[10px] text-muted-foreground mb-3">
+        <p className="text-xs text-muted-foreground mb-3">
           Word: <span className="text-primary font-mono">{generationWord}</span>
         </p>
       )}
       <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-        <Stat label="Petals" value={Math.round(params.petalCount)} />
+        <Stat label="Petals" value={petalCountDisplay} />
         <Stat label="Curve" value={params.petalSharpness.toFixed(2)} />
         <Stat label="Type" value={params.flowerType} />
         <Stat label="Seed" value={params.seed.length > 8 ? params.seed.slice(0, 8) + '…' : params.seed} />
@@ -35,8 +60,8 @@ export function FlowerInfo() {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[10px] text-muted-foreground">{label}:</span>
-      <span className="text-[10px] font-mono text-foreground">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}:</span>
+      <span className="text-xs font-mono text-foreground">{value}</span>
     </div>
   );
 }

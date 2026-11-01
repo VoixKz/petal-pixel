@@ -1,20 +1,64 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { useBlocker, useLocation } from 'react-router-dom';
+import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
 import { FlowerCanvas } from '@/components/flower/FlowerCanvas';
 import { FlowerControls } from '@/components/flower/FlowerControls';
 import { FlowerInfo } from '@/components/flower/FlowerInfo';
+import { FlowerBadges } from '@/components/flower/FlowerBadges';
+import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { useAuth } from '@/contexts/AuthContext';
+import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown, Share2 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
-import { BrowserProvider, Contract } from 'ethers';
+import type { BrowserProvider } from 'ethers';
 import {
   checkFlowerBackendHealth,
   confirmMintViaGrpc,
   prepareMintViaGrpc,
+  postFlowerPreview,
+  buildShareUrl,
+  flowerBackendBaseUrl,
 } from '@/integrations/flowerBackend/client';
+import { captureFlowerPng, captureFlowerGif } from '@/components/flower/snapshot';
+import { SharePreview } from '@/components/flower/SharePreview';
+import { extractMintedTokenId } from './mintReceipt';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  shouldWarnRegenerate,
+  isCheckingBackend,
+  hasUnsavedWork,
+  mintErrorMessage,
+  type HealthStatus,
+} from './createFlowerGuards';
+import { MINT_ABI, buildMintCall } from '@/lib/mintVoucher';
+import { mapPetalCount } from '@/components/flower/sliderMapping';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
@@ -42,8 +86,6 @@ async function ensureCorrectNetwork(provider: BrowserProvider) {
   }
 }
 
-type HealthStatus = 'idle' | 'checking' | 'ok' | 'error';
-
 declare global {
   interface Window {
     ethereum?: {
@@ -52,13 +94,130 @@ declare global {
   }
 }
 
+// ── Input affordances: variations, recent-name chips, first-visit prefill ────
+// Pure, dependency-light helpers kept INLINE in this file (single-file
+// ownership for this change). NOTHING here calls the backend or mutates the
+// store — determinism is inherited from the single existing generateFromWord
+// path these words feed: same (name, index) → same word → same SHA-256 seed →
+// same flower. The v1 path and v1 saved flowers stay pixel-identical.
+
+// Mirrors the name input's contract (see handleWordInputChange), plus a trim.
+function sanitizeName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 64);
+}
+
+// Fixed salt appended to the base name before it feeds the deterministic
+// generate path. Keep VARIATION_SEP stable so a given name's siblings stay
+// stable across builds. 1-based index for human-readable labels ("#1").
+const VARIATION_SEP = ' #';
+function variationWord(name: string, index: number): string {
+  return `${name.trim()}${VARIATION_SEP}${index + 1}`;
+}
+
+// FNV-1a 32-bit — a tiny deterministic string hash used ONLY to colour the
+// preview swatch. It never touches the backend seed (SHA-256 of the word).
+function fnv1a(str: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+function variationGradient(word: string): string {
+  const h = fnv1a(word);
+  const hueA = h % 360;
+  const hueB = (hueA + 40 + ((h >> 8) % 80)) % 360;
+  return `linear-gradient(135deg, hsl(${hueA} 70% 55%), hsl(${hueB} 68% 48%))`;
+}
+
+interface FlowerVariation { key: string; word: string; gradient: string }
+
+// 3–4 deterministic siblings of the current name; [] for a blank name so the
+// row disappears on cold-start (no noise before the user has typed anything).
+function buildVariations(name: string, count = 4): FlowerVariation[] {
+  const base = name.trim();
+  if (!base) return [];
+  return Array.from({ length: count }, (_, i) => {
+    const word = variationWord(base, i);
+    return { key: String(i), word, gradient: variationGradient(word) };
+  });
+}
+
+// Newest-first, de-duplicated recent generation words from the user's saved
+// flowers; skips blanks and the "unknown" placeholder the store writes when a
+// flower has no captured word.
+function recentGenerationWords(
+  flowers: { generationWord?: string }[],
+  limit = 6,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (let i = flowers.length - 1; i >= 0 && out.length < limit; i--) {
+    const w = flowers[i].generationWord?.trim();
+    if (!w || w === 'unknown' || seen.has(w)) continue;
+    seen.add(w);
+    out.push(w);
+  }
+  return out;
+}
+
+// One-shot entry prefill precedence: an explicit ?name= deep-link always wins
+// and does NOT consume the onboarding gate (a first-time user arriving via a
+// shared link still gets their display-name prefill on a later plain visit).
+// Otherwise, on first visit only, prefill the loaded display name and mark
+// onboarded. A not-yet-loaded display name yields a no-op so a later render
+// (when it loads) can retry.
+function resolveInitialName(opts: {
+  queryName: string | null;
+  displayName: string | null | undefined;
+  hasOnboarded: boolean;
+}): { name: string; markOnboarded: boolean } {
+  const q = opts.queryName ? sanitizeName(opts.queryName) : '';
+  if (q) return { name: q, markOnboarded: false };
+  if (!opts.hasOnboarded) {
+    const dn = opts.displayName ? sanitizeName(opts.displayName) : '';
+    if (dn) return { name: dn, markOnboarded: true };
+  }
+  return { name: '', markOnboarded: false };
+}
+
+// Device-local "has the user seen the Create studio at least once" flag.
+// A one-shot gate for the first-visit name prefill, NOT a Settings toggle, so
+// it lives under its own localStorage key and is try/catch-guarded so a
+// throwing/absent localStorage (SSR, private mode) degrades to "not onboarded".
+const CREATE_ONBOARDED_KEY = 'petal-create-onboarded';
+
+function hasCreateOnboarded(): boolean {
+  try {
+    return localStorage.getItem(CREATE_ONBOARDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markCreateOnboarded(): void {
+  try {
+    localStorage.setItem(CREATE_ONBOARDED_KEY, '1');
+  } catch {
+    /* best-effort; a failed write just means the prefill may repeat */
+  }
+}
+
 function MathPanel({ onClose }: { onClose: () => void }) {
   const params = useFlowerStore((s) => s.params);
   const roseGraphs = params.flowerType === 'rose' ? getRoseFunctionProjections(params.roseParams) : null;
 
+  // Derive effective petal count from the ACTIVE technique params (sliders rewired in Task 14).
+  const countMap = mapPetalCount(params.flowerType);
+  const effectivePetalCount = countMap
+    ? (params[countMap.param === 'classic' ? 'classicParams' : 'bloomParams'] as unknown as Record<string, number>)[countMap.key] ?? params.petalCount
+    : params.petalCount;
+
   const genericData = Array.from({ length: 120 }, (_, i) => {
     const t = (i / 120) * Math.PI * 2;
-    const r = params.petalLength * Math.cos(params.petalCount * t) + params.noiseIntensity * Math.sin(params.frequency * t);
+    const r = params.petalLength * Math.cos(effectivePetalCount * t) + params.noiseIntensity * Math.sin(params.frequency * t);
     return { t: t.toFixed(2), r, x: r * Math.cos(t), y: r * Math.sin(t) };
   });
 
@@ -74,7 +233,7 @@ function MathPanel({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="absolute bottom-0 left-0 right-0 h-56 glass-panel rounded-t-lg z-20 p-4"
+      className="absolute bottom-0 left-0 right-0 h-[70vh] sm:h-56 glass-panel rounded-t-lg z-20 p-4 overflow-hidden"
     >
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
@@ -84,29 +243,29 @@ function MathPanel({ onClose }: { onClose: () => void }) {
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-4 h-[calc(100%-2rem)]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:h-[calc(100%-2rem)] overflow-y-auto">
         <div>
-          <p className="text-[10px] text-muted-foreground mb-1 font-mono">
+          <p className="text-xs text-muted-foreground mb-1 font-mono">
             {roseGraphs ? 'Rose: phi(theta)=180/opening·exp(-theta/(vDensity·180))' : 'Polar: r = L·cos(n·theta) + N·sin(f·theta)'}
           </p>
           <ResponsiveContainer width="100%" height="85%">
             <LineChart data={graphA}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 10 }} />
+              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
         <div>
-          <p className="text-[10px] text-muted-foreground mb-1 font-mono">
+          <p className="text-xs text-muted-foreground mb-1 font-mono">
             {roseGraphs ? 'Rose: petalCut(theta)' : 'Parametric projection: x(t)'}
           </p>
           <ResponsiveContainer width="100%" height="85%">
             <LineChart data={graphB}>
               <XAxis dataKey="t" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 10 }} />
+              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
               <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -131,7 +290,7 @@ function RegenerateWarningDialog({ onConfirm, onCancel }: { onConfirm: () => voi
           <h3 className="text-sm font-semibold text-foreground">Regenerate flower?</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-5">
-          Changing the generation word will create a completely new flower from scratch. The current flower parameters will be replaced.
+          This will regenerate the flower and replace your current parameters, including any unsaved manual changes.
         </p>
         <div className="flex items-center gap-2 justify-end">
           <button
@@ -205,13 +364,127 @@ function UnsavedChangesDialog({
   );
 }
 
+function CopyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2 min-w-0">
+      <span className="text-xs text-muted-foreground font-semibold w-20 shrink-0 uppercase">{label}</span>
+      <span className="text-xs text-foreground font-mono truncate flex-1">{value}</span>
+      <button
+        onClick={() => { void navigator.clipboard.writeText(value); toast.success(`${label} copied`); }}
+        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+        title={`Copy ${label}`}
+      >
+        <Copy className="w-3 h-3" />
+      </button>
+    </div>
+  );
+}
+
+export interface MintResult {
+  tokenId: number | null;
+  contractAddress: string;
+  txHash: string;
+  tokenUri: string;
+}
+
+function MintSuccessDialog({
+  result,
+  personName,
+  onClose,
+  onShare,
+}: {
+  result: MintResult;
+  personName: string;
+  onClose: () => void;
+  onShare: () => void;
+}) {
+  const params = useFlowerStore((s) => s.params);
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <Gem className="w-4 h-4 text-primary" /> NFT minted
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Your flower is on-chain. Use the details below to import it into MetaMask.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Reused share block: canvas is height-capped (compact) so it fits max-w-md. */}
+        <SharePreview params={params} personName={personName} compact />
+        <button
+          type="button"
+          onClick={onShare}
+          className="flex items-center justify-center gap-2 h-10 rounded-lg bg-secondary text-secondary-foreground text-xs hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <Share2 className="w-3.5 h-3.5" /> Copy share link
+        </button>
+
+        <div className="flex flex-col gap-2.5">
+          <CopyRow label="Token ID" value={result.tokenId != null ? String(result.tokenId) : 'not detected'} />
+          <CopyRow label="Contract" value={result.contractAddress} />
+          <CopyRow label="Tx hash" value={result.txHash} />
+          {result.tokenUri && (
+            <a
+              href={result.tokenUri}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline font-mono flex items-center gap-1"
+            >
+              metadata.json <ExternalLink className="w-3 h-3 shrink-0" />
+            </a>
+          )}
+        </div>
+        <div className="rounded-lg bg-secondary/60 border border-border p-3 text-xs text-muted-foreground leading-relaxed">
+          <p>1. In MetaMask, open the NFTs tab and choose "Import NFT".</p>
+          <p>2. Paste the contract address and Token ID shown above.</p>
+          <p>3. Confirm — your flower appears in your wallet.</p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Runs the server-backed save and reports the outcome via toast.
+// saveFlower now reports which case occurred (Clusters A & D):
+//  - 'created': a genuinely new flower was added -> use createdMessage.
+//  - 'updated': either the edit path succeeded, or the create path collided
+//    with an already-saved flower's deterministic id and was folded into an
+//    update of that flower -> use updatedMessage.
+//  - 'aborted': the flower being edited no longer exists (deleted) -> this is
+//    NOT a success; toast an error instead and return false.
+// Returns true only on success (created/updated); on failure or abort surfaces
+// an error toast and returns false.
+export async function runSaveFlow(
+  saveFlower: () => Promise<'created' | 'updated' | 'aborted'>,
+  messages: { createdMessage: string; updatedMessage: string },
+): Promise<boolean> {
+  try {
+    const result = await saveFlower();
+    if (result === 'aborted') {
+      toast.error('This flower was deleted — nothing to update.');
+      return false;
+    }
+    toast.success(result === 'created' ? messages.createdMessage : messages.updatedMessage);
+    return true;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save flower';
+    toast.error(message);
+    return false;
+  }
+}
+
 export default function CreateFlower() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const params = useFlowerStore((s) => s.params);
   const generationWord = useFlowerStore((s) => s.generationWord);
   const title = useFlowerStore((s) => s.title);
   const editingFlowerId = useFlowerStore((s) => s.editingFlowerId);
+  const savedFlowers = useFlowerStore((s) => s.savedFlowers);
   const isGenerating = useFlowerStore((s) => s.isGenerating);
   const generateFromWord = useFlowerStore((s) => s.generateFromWord);
   const saveFlower = useFlowerStore((s) => s.saveFlower);
@@ -236,8 +509,13 @@ export default function CreateFlower() {
   const [isSaving, setIsSaving] = useState(false);
   const [mintTxHash, setMintTxHash] = useState('');
   const [mintTokenUri, setMintTokenUri] = useState('');
+  const [mintResult, setMintResult] = useState<MintResult | null>(null);
   const [showRegenerateWarning, setShowRegenerateWarning] = useState(false);
   const [paramsDirty, setParamsDirty] = useState(false);
+  // UI-only: GIF encode in-flight (spinner + disabled state + re-entry guard).
+  const [isEncodingGif, setIsEncodingGif] = useState(false);
+  // UI-only: mobile/tablet controls drawer visibility. Does NOT touch generation/mint state.
+  const [controlsOpen, setControlsOpen] = useState(false);
 
   const isEditMode = editingFlowerId !== null;
 
@@ -245,13 +523,79 @@ export default function CreateFlower() {
   const originalTitleRef = useRef(title);
   const originalParamsRef = useRef('');
 
-  // Clear edit mode when navigating fresh to /create (sidebar click).
-  // location.key is unique per navigation event, so this fires even for same-route navigation.
-  // Navigation from MyFlowers passes { state: { isEditing: true } } to preserve edit mode.
+  // Name input, so the prefill/recent affordances can focus it after refilling.
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  // One-shot guard so a late-loading display name / re-render never clobbers
+  // text the user has since typed.
+  const prefilledRef = useRef(false);
+
+  // Deterministic "more like this" siblings of the current name, and the
+  // user's recent generation words. Both are pure/derived — no store writes.
+  const variations = useMemo(() => buildVariations(wordInput), [wordInput]);
+  const recentNames = useMemo(() => recentGenerationWords(savedFlowers), [savedFlowers]);
+
+  // Single reconciliation effect for every /create mount / same-route
+  // navigation event (location.key is unique per navigation, so this fires
+  // even for same-route re-entry, e.g. re-clicking the sidebar "Create
+  // Flower" link). Combines Clusters B2/B3 (don't destroy fresh create-mode
+  // work-in-progress) and C (durable route state vs. non-persisted store
+  // edit context can disagree after F5 or Back/Forward).
+  //
+  // location.state.isEditing survives F5/back-forward (it lives in
+  // history.state), but editingFlowerId/params/title/generationWord do not
+  // (persist partialize only keeps savedFlowers/ownerUserId). That split
+  // creates three cases to reconcile on entry, checked in order:
+  //
+  //  1. Route says isEditing, but the store has NO editingFlowerId (reload
+  //     mid-edit wiped it) → pseudo-edit with blank state. Replace the route
+  //     state so it stops claiming an edit session, tell the user once, and
+  //     continue in clean create mode. Do NOT clearEditMode's params reset
+  //     here — the store is already at defaults.
+  //  2. The store DOES have an editingFlowerId, but that flower is no longer
+  //     in savedFlowers (deleted — e.g. via another tab, or a stale Back into
+  //     an old history entry after deletion) → clear edit mode and inputs so
+  //     the page doesn't pretend to edit a flower that no longer exists.
+  //  3. Route does NOT say isEditing, but the store still holds a (valid)
+  //     leftover editingFlowerId from a previous /create visit that the user
+  //     left without discarding → clear edit mode and inputs. This is the
+  //     ONLY case that calls clearEditMode for a plain fresh-create entry;
+  //     previously clearEditMode ran unconditionally here, which also wiped
+  //     params/title/generationWord for a genuine create-mode WIP flower
+  //     (Cluster B2) — it is now gated on an edit session actually existing.
+  //
+  // In every other case (fresh create with no edit residue, or a valid
+  // ongoing edit session) this is a deliberate no-op: create-mode WIP and
+  // edit-mode state are left completely untouched.
   useEffect(() => {
-    if (!location.state?.isEditing) {
-      clearEditMode();
+    const store = useFlowerStore.getState();
+
+    if (location.state?.isEditing && !store.editingFlowerId) {
+      navigate('.', { replace: true, state: null });
+      toast.info('Your edit session was reset by the reload — starting a fresh flower.');
+      return;
     }
+
+    if (store.editingFlowerId && !savedFlowers.some(f => f.id === store.editingFlowerId)) {
+      clearEditMode();
+      setWordInput('');
+      setTitleInput('');
+      return;
+    }
+
+    if (!location.state?.isEditing && store.editingFlowerId) {
+      clearEditMode();
+      // Cluster B3: the local word/title inputs are only ever synced FROM the
+      // store while isEditMode is true (see the sync effect below), so they
+      // must be cleared explicitly here — otherwise the stale word/title of
+      // the just-exited edit session prefill the "fresh" create page and can
+      // steer a subsequent Generate+Save into re-colliding with that same
+      // flower's deterministic backend id.
+      setWordInput('');
+      setTitleInput('');
+    }
+  // Deliberately keyed on location.key only (not savedFlowers), so this
+  // reconciliation runs once per navigation event rather than fighting with
+  // in-progress edits every time savedFlowers changes.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
 
@@ -275,17 +619,28 @@ export default function CreateFlower() {
     }
   }, [params, isEditMode]);
 
-  const hasUnsavedChanges = isEditMode && (
-    wordInput !== originalWordRef.current ||
+  // Cluster B1: in edit mode, dirty means "differs from the saved snapshot"
+  // (existing behavior). In CREATE mode, a generated-but-unsaved flower
+  // (params.flowerId set, id not yet present in savedFlowers) is now also
+  // considered unsaved work, so the blocker/beforeunload guards below protect
+  // it — previously they were permanently inert outside edit mode.
+  const editModeDirty = wordInput !== originalWordRef.current ||
     titleInput !== originalTitleRef.current ||
-    paramsDirty
+    paramsDirty;
+  const savedFlowerIds = useMemo(() => new Set(savedFlowers.map(f => f.id)), [savedFlowers]);
+  const hasUnsavedChanges = hasUnsavedWork(
+    isEditMode,
+    editModeDirty,
+    /* wordChanged unused in create branch */ false,
+    params.flowerId,
+    savedFlowerIds,
   );
 
   const blocker = useBlocker(hasUnsavedChanges);
 
   // Bug 4: guard browser refresh / tab close
   useEffect(() => {
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
     if (hasUnsavedChanges) {
       window.addEventListener('beforeunload', handler);
     }
@@ -303,7 +658,50 @@ export default function CreateFlower() {
     }
   }, [isEditMode, generationWord, title]);
 
+  // One-shot entry prefill: an explicit ?name= deep-link (viral loop) wins over
+  // the first-visit onboarding prefill and does NOT consume the onboarding
+  // gate. Guarded by prefilledRef and !wordInput so it never clobbers text the
+  // user has typed; depends on `profile` so a late-loading display name still
+  // prefills. Sets only local wordInput — it never calls generate, so it can't
+  // manufacture false unsaved work (params.flowerId stays empty). Keyed on
+  // location.key so it re-runs per navigation, in step with the reconciliation
+  // effect above that may clear wordInput on a stale edit exit.
+  //
+  // isEditMode is also a dep: the reconciliation effect above (defined
+  // earlier, so it flushes first in the same commit) can call clearEditMode()
+  // when exiting a stale edit session on this same navigation. That store
+  // write lands after this effect's closure already captured the OLD
+  // (still-true) isEditMode, so without isEditMode in deps this effect would
+  // bail out on the stale value and never get a second chance — since
+  // `profile`/`location.key` don't change again, the prefill would be lost
+  // for that navigation. Listing isEditMode here lets the effect re-run once
+  // it flips to false.
+  useEffect(() => {
+    if (prefilledRef.current || isEditMode) return;
+    const queryName = new URLSearchParams(location.search).get('name');
+    const { name, markOnboarded } = resolveInitialName({
+      queryName,
+      displayName: profile?.display_name,
+      hasOnboarded: hasCreateOnboarded(),
+    });
+    if (name && !wordInput) {
+      prefilledRef.current = true;
+      setWordInput(name);
+      nameInputRef.current?.focus();
+      // Only consume the one-time onboarding gate when the prefill actually
+      // applied — otherwise a user who typed before `profile` loaded would
+      // permanently lose their first-visit display-name prefill even though
+      // it never ran.
+      if (markOnboarded) markCreateOnboarded();
+    } else if (queryName) {
+      // A deep-link with a blank/edit state still counts as handled.
+      prefilledRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile, location.key, isEditMode]);
+
   const handleCheckBackend = async () => {
+    if (isCheckingBackend(healthStatus)) return;
     setHealthStatus('checking');
     try {
       const ok = await checkFlowerBackendHealth();
@@ -315,26 +713,97 @@ export default function CreateFlower() {
     }
   };
 
-  const handleConnectWallet = async () => {
-    if (!window.ethereum) {
-      toast.error('MetaMask not found. Install MetaMask and connect to Ganache RPC.');
+  // Shared blob-to-anchor download helper (PNG + GIF reuse the same sanitized-title
+  // filename and object-URL lifecycle).
+  const triggerDownload = (blob: Blob, ext: 'png' | 'gif') => {
+    const safeTitle = (titleInput.trim() || generationWord || 'flower').replace(/[\\/:*?"<>|]/g, '_');
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${safeTitle}.${ext}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPng = async () => {
+    const blob = await captureFlowerPng();
+    if (!blob) {
+      toast.error('Could not capture the flower image. Is the 3D view visible?');
+      return;
+    }
+    triggerDownload(blob, 'png');
+  };
+
+  const handleDownloadGif = async () => {
+    if (isEncodingGif) return; // re-entry guard, matches other handlers
+    setIsEncodingGif(true);
+    const toastId = toast.loading('Rendering GIF…');
+    try {
+      const blob = await captureFlowerGif({ frames: 36, size: 512, background: 'dark' });
+      if (!blob) {
+        toast.error('Could not render the GIF. Is the 3D view visible?', { id: toastId });
+        return;
+      }
+      triggerDownload(blob, 'gif');
+      toast.success('GIF downloaded', { id: toastId });
+    } catch {
+      toast.error('GIF export failed.', { id: toastId });
+    } finally {
+      setIsEncodingGif(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!params.flowerId) {
+      toast.error('Save or generate a flower first.');
+      return;
+    }
+    // The share link points at the backend /share/:id OG route so crawlers get
+    // the preview HTML and humans are redirected on to the SPA.
+    const url = buildShareUrl(flowerBackendBaseUrl, params.flowerId);
+    const shareTitle = titleInput.trim() || generationWord || 'My Petal Pixel flower';
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, url });
+      } catch {
+        /* user dismissed the share sheet — not an error */
+      }
       return;
     }
     try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Share link copied');
+    } catch {
+      toast.error('Could not copy the share link.');
+    }
+  };
+
+  const handleConnectWallet = async (): Promise<string | null> => {
+    if (!window.ethereum) {
+      toast.error('MetaMask not found. Install MetaMask and connect to Ganache RPC.');
+      return null;
+    }
+    try {
+      const { BrowserProvider } = await import('ethers');
       const provider = new BrowserProvider(window.ethereum);
       await provider.send('eth_requestAccounts', []);
+      await ensureCorrectNetwork(provider);
       const signer = await provider.getSigner();
       const address = await signer.getAddress();
       setWalletAddress(address);
       toast.success(`Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
+      return address;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Wallet connection failed';
       toast.error(message);
+      return null;
     }
   };
 
   const handleWordInputChange = (value: string) => {
-    const sanitized = value.replace(/\s/g, '');
+    const sanitized = value.replace(/\s+/g, ' ').slice(0, 64);
     setWordInput(sanitized);
   };
 
@@ -349,18 +818,14 @@ export default function CreateFlower() {
     }
   };
 
-  const handleGenerate = async () => {
-    const word = wordInput.trim();
+  const handleGenerate = async (overrideWord?: string) => {
+    if (isGenerating) return;
+    const word = (overrideWord ?? wordInput).trim();
     if (!word) {
-      toast.error('Enter a generation word first.');
+      toast.error('Enter a name or phrase first.');
       return;
     }
-    if (word.includes(' ')) {
-      toast.error('Generation word must be a single word (no spaces).');
-      return;
-    }
-
-    if (isEditMode && word !== generationWord) {
+    if (shouldWarnRegenerate(isEditMode, word, generationWord, paramsDirty)) {
       setShowRegenerateWarning(true);
       return;
     }
@@ -373,45 +838,101 @@ export default function CreateFlower() {
     await doGenerate(wordInput.trim());
   };
 
+  const handleSurpriseMe = () => {
+    if (isGenerating) return;
+    const name = pickSurpriseName();
+    setWordInput(name); // entries are pre-sanitized to the input's contract
+    void handleGenerate(name); // same guarded path: isGenerating + regen dialog
+  };
+
   const handleTitleChange = (value: string) => {
     setTitleInput(value);
     setTitle(value);
   };
 
-  const handleSave = async () => {
-    if (isSaving) return;
+  const handleSave = async (): Promise<boolean> => {
+    if (isSaving) return false;
     if (!params.flowerId) {
       toast.error('Generate a flower first before saving.');
-      return;
+      return false;
     }
     if (!titleInput.trim()) {
       toast.error('Give your flower a title before saving.');
-      return;
+      return false;
     }
     setIsSaving(true);
     try {
       setTitle(titleInput.trim());
-      await saveFlower();
-      // Reset dirty tracking after a successful save
-      originalParamsRef.current = JSON.stringify(useFlowerStore.getState().params);
-      originalWordRef.current = wordInput;
-      originalTitleRef.current = titleInput.trim();
-      setParamsDirty(false);
-      toast.success(isEditMode ? 'Flower updated!' : 'Flower saved to your collection!');
+      const ok = await runSaveFlow(saveFlower, {
+        // Cluster A: a create-path save that collides with an already-saved
+        // flower's deterministic id is folded into an update of that flower,
+        // so its message must say "updated", not "saved" — otherwise the
+        // user is told a new flower was created when their existing one was
+        // actually just modified in place.
+        createdMessage: 'Flower saved to your collection!',
+        updatedMessage: 'Flower updated!',
+      });
+      if (ok) {
+        // Reset dirty tracking after a successful save. Also re-sync the
+        // title input in case the collision path (Cluster A) preserved the
+        // existing saved title instead of the freshly-typed one.
+        const freshState = useFlowerStore.getState();
+        originalParamsRef.current = JSON.stringify(freshState.params);
+        originalWordRef.current = wordInput;
+        originalTitleRef.current = freshState.title;
+        setTitleInput(freshState.title);
+        setParamsDirty(false);
+
+        // Capture-at-SAVE: best-effort OG/preview image for the share landing.
+        // Fire-and-forget against the freshly-saved backend id. Wrapped so it
+        // can NEVER reject or block the save (no WebGL → captureFlowerPng
+        // returns null → guard skips the POST; a failing endpoint is swallowed
+        // by postFlowerPreview). Never toasts on failure — the OG image is
+        // strictly best-effort.
+        const savedId = useFlowerStore.getState().params.flowerId;
+        if (savedId) {
+          void (async () => {
+            try {
+              const png = await captureFlowerPng();
+              if (png) void postFlowerPreview(savedId, png);
+            } catch {
+              /* best-effort: never surface a preview-capture failure */
+            }
+          })();
+        }
+      }
+      return ok;
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleMint = async () => {
+    // Re-entry guard: matches the if (isGenerating) return pattern used for other handlers.
+    if (isMinting) return;
     if (!params.flowerId) {
       toast.error('Generate flower from backend first.');
       return;
     }
 
-    if (!walletAddress) {
-      await handleConnectWallet();
-      if (!walletAddress && !window.ethereum) return;
+    // Defect #4: never mint a regenerated-but-unsaved flower. If the on-chain
+    // flowerId isn't yet persisted (edit mode with unsaved changes, or the
+    // params.flowerId doesn't match any saved backendFlowerId), save first so the
+    // mint is recorded against a real savedFlowers row.
+    const savedFlowers = useFlowerStore.getState().savedFlowers;
+    const isPersisted = savedFlowers.some((f) => f.backendFlowerId === params.flowerId);
+    if (hasUnsavedChanges || !isPersisted) {
+      // Check for concurrent save before calling handleSave, so we can distinguish
+      // the isSaving early-return (silent) from a real save error (handleSave toasts itself).
+      if (isSaving) {
+        toast.info('Save in progress — try minting again in a moment.');
+        return;
+      }
+      const saved = await handleSave();
+      if (!saved) {
+        // handleSave already toasted the reason (e.g. missing title). Abort mint.
+        return;
+      }
     }
 
     if (!window.ethereum) {
@@ -419,51 +940,94 @@ export default function CreateFlower() {
       return;
     }
 
+    // Ensure wallet is connected. The returned address from handleConnectWallet() is
+    // used only as a gate here; the live signer address is read from provider.getSigner()
+    // below to avoid stale-closure issues.
+    if (!walletAddress) {
+      const connected = await handleConnectWallet();
+      if (!connected) return; // rejected / no wallet — handleConnectWallet already toasted
+    }
+
     setIsMinting(true);
     setMintTxHash('');
     setMintTokenUri('');
 
     try {
+      const { BrowserProvider, Contract } = await import('ethers');
       const provider = new BrowserProvider(window.ethereum);
       await ensureCorrectNetwork(provider);
       const signer = await provider.getSigner();
       const signerAddress = await signer.getAddress();
 
-      const prepared = await prepareMintViaGrpc(params.flowerId, signerAddress);
+      // Snapshot the rendered flower for the NFT image. Capture failure must
+      // never block the mint — degrade to metadata without an image.
+      let imageBytes: Uint8Array | undefined;
+      try {
+        const png = await captureFlowerPng();
+        if (png) {
+          imageBytes = new Uint8Array(await png.arrayBuffer());
+        } else {
+          toast.info('Could not capture flower image — minting without a preview.');
+        }
+      } catch {
+        toast.info('Could not capture flower image — minting without a preview.');
+      }
+
+      const prepared = await prepareMintViaGrpc(params.flowerId, signerAddress, imageBytes);
       if (!prepared.contractAddress) {
         throw new Error('Backend returned empty NFT contract address. Set NFT_CONTRACT_ADDRESS in backend env.');
       }
 
-      const mintAbi = ['function mint(address to, string tokenURI) returns (uint256)'];
-      const contract = new Contract(prepared.contractAddress, mintAbi, signer);
+      const contract = new Contract(prepared.contractAddress, MINT_ABI, signer);
 
-      const tx = await contract.mint(prepared.mintTo || signerAddress, prepared.mintTokenUri || prepared.tokenUri);
-      setMintTxHash(tx.hash as string);
+      const { voucher, signature, value } = buildMintCall(prepared);
+      const tx = await contract.mint(voucher, signature, { value });
       toast.info(`Mint tx sent: ${tx.hash}`);
 
+      // Finding 3: don't set mintTxHash (which drives the emerald "success"
+      // banner) until tx.wait() actually resolves. A submitted tx can still
+      // revert on-chain (e.g. the documented onlyOwner revert for a wrong
+      // wallet) — tx.wait() throws in that case and is caught below, but if
+      // we'd already stamped the hash into state, the success-styled banner
+      // would still show a failed/reverted tx. Only a confirmed tx may
+      // populate mintTxHash.
       const receipt = await tx.wait();
       const confirmedHash = (receipt?.hash as string | undefined) || (tx.hash as string);
+      setMintTxHash(confirmedHash);
       await confirmMintViaGrpc(params.flowerId, confirmedHash);
+
+      // ERC-721 Transfer(from=0x0, to, tokenId): tokenId is the third indexed topic.
+      const tokenId = receipt ? extractMintedTokenId(receipt.logs, prepared.contractAddress) : null;
 
       const tokenUri = prepared.mintTokenUri || prepared.tokenUri;
       if (tokenUri) setMintTokenUri(tokenUri);
 
-      await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined);
-      toast.success('NFT minted and confirmed in backend');
+      const synced = await markMintedByBackendFlowerId(params.flowerId, confirmedHash, tokenUri || undefined, {
+        ...(tokenId != null ? { tokenId } : {}),
+        contractAddress: prepared.contractAddress,
+      });
+      if (synced) {
+        toast.success('NFT minted and confirmed in backend');
+      } else {
+        toast.warning('Minted on-chain but failed to sync to your collection');
+      }
+
+      setMintResult({
+        tokenId,
+        contractAddress: prepared.contractAddress,
+        txHash: confirmedHash,
+        tokenUri: tokenUri || '',
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Mint failed';
-      if (message.toLowerCase().includes('not_found') || message.toLowerCase().includes('not found')) {
-        toast.error('Flower not found in backend — click Generate again to re-sync it, then try minting.');
-      } else {
-        toast.error(message);
-      }
+      toast.error(mintErrorMessage(message));
     } finally {
       setIsMinting(false);
     }
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col lg:flex-row h-full min-h-0">
       {showRegenerateWarning && (
         <RegenerateWarningDialog
           onConfirm={() => void handleConfirmRegenerate()}
@@ -474,26 +1038,47 @@ export default function CreateFlower() {
       {blocker.state === 'blocked' && (
         <UnsavedChangesDialog
           isSaving={isSaving}
-          onSaveAndLeave={async () => { await handleSave(); blocker.proceed(); }}
+          onSaveAndLeave={async () => { if (await handleSave()) blocker.proceed(); }}
           onDiscard={() => { clearEditMode(); blocker.proceed(); }}
           onStay={() => blocker.reset()}
         />
       )}
 
-      <div className="flex-1 flex flex-col relative">
+      {mintResult && (
+        <MintSuccessDialog
+          result={mintResult}
+          personName={titleInput.trim() || generationWord || title}
+          onClose={() => setMintResult(null)}
+          onShare={() => void handleShare()}
+        />
+      )}
+
+      <div className="flex-1 flex flex-col relative min-h-0">
         {/* Top bar */}
         <div className="border-b border-border flex flex-col bg-card/50">
           {/* Row 1: inputs */}
           <div className="flex items-center gap-2 px-3 pt-2 pb-1 flex-wrap">
             <div className="flex items-center gap-1.5 bg-secondary rounded-lg px-2.5 py-1.5 min-w-0 flex-1 max-w-[260px]">
               <input
+                ref={nameInputRef}
                 type="text"
                 value={wordInput}
                 onChange={(e) => handleWordInputChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void handleGenerate()}
-                placeholder="Enter a word..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isGenerating) void handleGenerate();
+                }}
+                placeholder="Enter a name or phrase..."
                 className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full font-mono min-w-0"
               />
+              <button
+                onClick={handleSurpriseMe}
+                disabled={isGenerating}
+                title="Surprise me"
+                aria-label="Surprise me"
+                className="shrink-0 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Dices className="w-3.5 h-3.5" />
+              </button>
               <button
                 onClick={() => void handleGenerate()}
                 disabled={isGenerating}
@@ -516,19 +1101,68 @@ export default function CreateFlower() {
             </div>
           </div>
 
+          {/* Variations: deterministic "more like this" siblings of the current
+              name. Clicking reuses the existing guarded handleGenerate — in edit
+              mode it routes through the regenerate-warning dialog; in create
+              mode shouldWarnRegenerate returns false so it just generates. */}
+          {variations.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 pb-1 flex-wrap">
+              <span className="text-xs text-muted-foreground">More like this:</span>
+              {variations.map((v) => (
+                <button
+                  key={v.key}
+                  onClick={() => { setWordInput(v.word); void handleGenerate(v.word); }}
+                  disabled={isGenerating}
+                  title={v.word}
+                  className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: v.gradient }} />
+                  <span>{v.word.slice(v.word.lastIndexOf('#'))}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Recent generation words — refill only (does NOT auto-generate). */}
+          {!isEditMode && recentNames.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 pb-1.5 flex-wrap">
+              <span className="text-xs text-muted-foreground">Recent:</span>
+              {recentNames.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setWordInput(n); nameInputRef.current?.focus(); }}
+                  title={`Reuse "${n}"`}
+                  className="text-xs px-2 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors motion-reduce:transition-none truncate max-w-[160px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Row 2: actions */}
           <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
             <button
+              onClick={() => setControlsOpen(true)}
+              title="Open controls"
+              className="lg:hidden flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <SlidersHorizontal className="w-3 h-3" />
+              <span>Controls</span>
+            </button>
+
+            <button
               onClick={handleCheckBackend}
+              disabled={isCheckingBackend(healthStatus)}
               title={healthStatus === 'ok' ? 'Backend online' : healthStatus === 'error' ? 'Backend offline' : 'Check backend'}
-              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span className={`w-2 h-2 rounded-full ${healthStatus === 'ok' ? 'bg-emerald-400' : healthStatus === 'error' ? 'bg-rose-400' : healthStatus === 'checking' ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground'}`} />
               <span className="hidden md:inline">{healthStatus === 'checking' ? 'Checking...' : 'Backend'}</span>
             </button>
 
             <button
-              onClick={handleConnectWallet}
+              onClick={() => void handleConnectWallet()}
               title="Connect wallet"
               className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
             >
@@ -547,6 +1181,52 @@ export default function CreateFlower() {
               <span>{isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}</span>
             </button>
 
+            <TooltipProvider>
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild disabled={isEncodingGif}>
+                      <button
+                        type="button"
+                        disabled={isEncodingGif}
+                        className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      >
+                        {isEncodingGif
+                          ? <Loader2 className="w-3 h-3 animate-spin motion-reduce:animate-none" />
+                          : <Download className="w-3 h-3" />}
+                        <span className="hidden sm:inline">{isEncodingGif ? 'Encoding…' : 'Download'}</span>
+                        <ChevronDown className="w-3 h-3 opacity-70" />
+                      </button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs max-w-[220px]">
+                    PNG is a still frame. GIF spins 36 frames — larger file (~1–4MB), a few seconds to encode.
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="start" className="min-w-[180px]">
+                  <DropdownMenuItem onSelect={() => void handleDownloadPng()} className="text-xs gap-2">
+                    <Image className="w-3.5 h-3.5" /> PNG · still frame
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => { e.preventDefault(); void handleDownloadGif(); }}
+                    disabled={isEncodingGif}
+                    className="text-xs gap-2"
+                  >
+                    <Film className="w-3.5 h-3.5" /> GIF · spinning (512²)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </TooltipProvider>
+
+            <button
+              onClick={() => void handleShare()}
+              title="Share this flower"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Share2 className="w-3 h-3" />
+              <span className="hidden sm:inline">Share</span>
+            </button>
+
             <button
               onClick={() => void handleMint()}
               disabled={isMinting}
@@ -560,7 +1240,7 @@ export default function CreateFlower() {
           {isEditMode && (
             <div className="px-3 py-1 border-t border-border bg-amber-950/20 flex items-center gap-2">
               <Pencil className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="text-[10px] text-amber-300 truncate">
+              <span className="text-xs text-amber-300 truncate">
                 Editing: <span className="font-semibold">{title}</span>
                 <span className="text-amber-400/60 ml-2">word: {generationWord}</span>
               </span>
@@ -572,8 +1252,8 @@ export default function CreateFlower() {
           <div className="px-3 py-1.5 border-b border-border bg-emerald-950/30 flex flex-wrap items-center gap-x-4 gap-y-1">
             {mintTxHash && (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[10px] text-emerald-400 font-semibold shrink-0">TX</span>
-                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">{mintTxHash}</span>
+                <span className="text-xs text-emerald-400 font-semibold shrink-0">TX</span>
+                <span className="text-xs text-muted-foreground font-mono truncate max-w-[200px]">{mintTxHash}</span>
                 <button
                   onClick={() => { void navigator.clipboard.writeText(mintTxHash); toast.success('Tx hash copied'); }}
                   className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
@@ -585,12 +1265,12 @@ export default function CreateFlower() {
             )}
             {mintTokenUri && (
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="text-[10px] text-emerald-400 font-semibold shrink-0">NFT</span>
+                <span className="text-xs text-emerald-400 font-semibold shrink-0">NFT</span>
                 <a
                   href={mintTokenUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] text-primary hover:underline font-mono truncate max-w-[200px] flex items-center gap-1"
+                  className="text-xs text-primary hover:underline font-mono truncate max-w-[200px] flex items-center gap-1"
                 >
                   metadata.json <ExternalLink className="w-2.5 h-2.5 shrink-0" />
                 </a>
@@ -602,6 +1282,7 @@ export default function CreateFlower() {
         {/* Canvas */}
         <div className="flex-1 relative">
           <FlowerCanvas />
+          <FlowerBadges />
           <FlowerInfo />
 
           <motion.button
@@ -617,7 +1298,26 @@ export default function CreateFlower() {
         </div>
       </div>
 
-      <FlowerControls />
+      {/* Desktop: persistent side panel */}
+      <div className="hidden lg:block">
+        <FlowerControls />
+      </div>
+
+      {/* Mobile/tablet: bottom-sheet drawer */}
+      <Sheet open={controlsOpen} onOpenChange={setControlsOpen}>
+        <SheetContent
+          side="bottom"
+          className="lg:hidden h-[80vh] p-0 flex flex-col bg-card"
+        >
+          <SheetHeader className="px-4 pt-4 pb-2 text-left">
+            <SheetTitle className="text-sm">Flower Controls</SheetTitle>
+            <SheetDescription className="text-xs">Adjust parameters in real-time</SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <FlowerControls className="w-full h-full border-l-0" />
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

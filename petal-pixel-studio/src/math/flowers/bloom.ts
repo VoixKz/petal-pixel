@@ -2,6 +2,16 @@ import * as THREE from "three";
 import type { BloomParams, FlowerType } from "@/math/flowerTypes";
 import { cosDeg, sinDeg } from "@/math/supplement";
 import { getBloomProfile } from "@/math/flowers/bloomProfiles";
+import { solidify, SHELL_THICKNESS } from "@/math/flowers/shell";
+import { addCenterDome } from "@/math/flowers/center";
+
+/**
+ * Pre-shell surface budget for the bloom family. The bloom sweep has no vertex
+ * cap of its own (~100k verts at the dense end); solidify() then ~doubles it, so
+ * cap the base grid here (post-shell ≈ 70k). We coarsen the shared theta/r steps
+ * uniformly rather than clipping the sweep, so appearance is ~identical.
+ */
+export const BLOOM_SURFACE_CAP = 35000;
 
 export function createParametricBloomGeometry(type: FlowerType, params: BloomParams) {
   const profile = getBloomProfile(type);
@@ -9,17 +19,34 @@ export function createParametricBloomGeometry(type: FlowerType, params: BloomPar
   const colors: number[] = [];
   const indices: number[] = [];
 
-  const thetaStep = Math.max(0.1, profile.thetaStep * params.thetaStep);
-  const rStep = Math.max(0.005, profile.rStep * params.rStep);
+  let thetaStep = Math.max(0.1, profile.thetaStep * params.thetaStep);
+  let rStep = Math.max(0.005, profile.rStep * params.rStep);
 
-  const rValues: number[] = [];
-  for (let r = 0; r <= 1.000001; r += rStep) {
-    rValues.push(Math.min(1, r));
-  }
+  const buildRValues = () => {
+    const out: number[] = [];
+    for (let r = 0; r <= 1.000001; r += rStep) out.push(Math.min(1, r));
+    return out;
+  };
+  const buildThetaValues = () => {
+    const out: number[] = [];
+    for (let theta = profile.thetaStart; theta <= profile.thetaEnd + 0.0001; theta += thetaStep) {
+      out.push(theta);
+    }
+    return out;
+  };
 
-  const thetaValues: number[] = [];
-  for (let theta = profile.thetaStart; theta <= profile.thetaEnd + 0.0001; theta += thetaStep) {
-    thetaValues.push(theta);
+  let rValues = buildRValues();
+  let thetaValues = buildThetaValues();
+
+  // Vertex-cap guard (before the shell doubles the count): if the grid would
+  // exceed BLOOM_SURFACE_CAP, coarsen both steps by sqrt(est/cap) and rebuild.
+  const est = rValues.length * thetaValues.length;
+  if (est > BLOOM_SURFACE_CAP) {
+    const grow = Math.sqrt(est / BLOOM_SURFACE_CAP);
+    thetaStep = Math.max(0.1, thetaStep * grow);
+    rStep = Math.max(0.005, rStep * grow);
+    rValues = buildRValues();
+    thetaValues = buildThetaValues();
   }
 
   const indexGrid = Array.from({ length: rValues.length }, () => Array(thetaValues.length).fill(-1));
@@ -40,7 +67,7 @@ export function createParametricBloomGeometry(type: FlowerType, params: BloomPar
         continue;
       }
 
-      const shrink = 1 - theta / (profile.fade * params.fade);
+      const shrink = Math.max(0.05, 1 - theta / (profile.fade * params.fade));
       const scale = params.scale * shrink;
       if (scale <= 0) {
         continue;
@@ -74,10 +101,27 @@ export function createParametricBloomGeometry(type: FlowerType, params: BloomPar
     }
   }
 
+  // Fill the soft/flat centre with a small deep dome + stamens (colour = the
+  // deep inner stop, i.e. profile.color at r=0 under the bright-tips reversal).
+  // Appended after the base surface (append-after-base invariant).
+  const inner = profile.color(0, params);
+  const innerColor = new THREE.Color().setRGB(inner.r, inner.g, inner.b);
+  addCenterDome(positions, colors, indices, {
+    radius: Math.max(4, params.scale * 0.05),
+    height: Math.max(4, params.scale * 0.04),
+    color: innerColor,
+    up: "y",
+    baseOffset: 0,
+    stamens: 7,
+  });
+
+  // Petal thickness: append a normal-offset backing shell after the base surface.
+  const solid = solidify(positions, colors, indices, SHELL_THICKNESS);
+
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(solid.positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(solid.colors, 3));
+  geometry.setIndex(solid.indices);
   geometry.computeVertexNormals();
   return geometry;
 }
