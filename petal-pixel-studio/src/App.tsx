@@ -9,6 +9,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageErrorBoundary } from "./components/PageErrorBoundary";
 
+const Landing = lazy(() => import("./pages/Landing"));
 const Index = lazy(() => import("./pages/Index"));
 const CreateFlower = lazy(() => import("./pages/CreateFlower"));
 const MyFlowers = lazy(() => import("./pages/MyFlowers"));
@@ -18,6 +19,8 @@ const Profile = lazy(() => import("./pages/Profile"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const Login = lazy(() => import("./pages/Login"));
 const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const ShareFlower = lazy(() => import("./pages/ShareFlower"));
@@ -34,7 +37,7 @@ const queryClient = new QueryClient();
 
 function AppProviders() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Sonner />
@@ -51,6 +54,9 @@ const router = createBrowserRouter([
   {
     element: <AppProviders />,
     children: [
+      { path: "/", element: <Suspense fallback={null}><Landing /></Suspense> },
+      { path: "/forgot-password", element: <Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense> },
+      { path: "/reset-password", element: <Suspense fallback={<PageLoader />}><ResetPassword /></Suspense> },
       { path: "/login", element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },
       { path: "/signup", element: <Suspense fallback={<PageLoader />}><Signup /></Suspense> },
       { path: "/auth/callback", element: <Suspense fallback={<PageLoader />}><AuthCallback /></Suspense> },
@@ -64,7 +70,7 @@ const router = createBrowserRouter([
           </ProtectedRoute>
         ),
         children: [
-          { path: "/", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><Index /></Suspense></PageErrorBoundary> },
+          { path: "/console", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><Index /></Suspense></PageErrorBoundary> },
           { path: "/create", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><CreateFlower /></Suspense></PageErrorBoundary> },
           { path: "/my-flowers", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><MyFlowers /></Suspense></PageErrorBoundary> },
           { path: "/nfts", element: <PageErrorBoundary><Suspense fallback={<PageLoader />}><NftCollection /></Suspense></PageErrorBoundary> },
