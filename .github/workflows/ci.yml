@@ -91,7 +91,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: petal-pixel-studio
       - run: docker compose up -d --build
-      - run: curl --silent --retry 60 --retry-delay 2 --retry-connrefused --output /dev/null http://localhost:8080
+      # Docker accepts the port before Vite listens, so the first tries get a reset.
+      - run: curl --silent --fail --retry 60 --retry-delay 2 --retry-all-errors --output /dev/null http://localhost:8080
       - run: npm run test:e2e
         working-directory: petal-pixel-studio
       - run: bash tools/docker/smoke-mint.sh
