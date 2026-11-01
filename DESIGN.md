@@ -2,7 +2,7 @@
 name: Petal Pixel
 description: A name becomes a flower. A calm pale gallery with very large type, black pills, and one colour borrowed from the flower last grown.
 colors:
-  petal-accent: "#ffec2e"
+  petal-accent: "#f49a30"
   on-accent: "#141412"
   ink: "#141412"
   ink-hover: "#33332f"
@@ -70,8 +70,6 @@ rounded:
   row: "10px"
   card: "14px"
   console: "16px"
-  panel: "18px"
-  dialog: "22px"
   stage: "24px"
   pill: "999px"
 spacing:
@@ -123,18 +121,10 @@ components:
     typography: "{typography.label}"
     padding: "0 clamp(16px, 2.3vw, 32px)"
     height: "64px"
-  studio:
-    backgroundColor: "{colors.plinth}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.stage}"
   specimen-tile:
     backgroundColor: "{colors.plinth}"
     textColor: "{colors.ink}"
     rounded: "{rounded.stage}"
-  specimen-tile-strip:
-    backgroundColor: "{colors.plinth-deep}"
-    typography: "{typography.label}"
-    padding: "14px 18px"
   accordion-closed:
     backgroundColor: "{colors.plinth}"
     textColor: "{colors.ink}"
@@ -144,21 +134,6 @@ components:
   accordion-open:
     backgroundColor: "{colors.petal-accent}"
     textColor: "{colors.on-accent}"
-  product-card:
-    backgroundColor: "{colors.paper-white}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.card}"
-    padding: "{spacing.md}"
-  product-panel:
-    backgroundColor: "{colors.paper-white}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.panel}"
-    padding: "{spacing.md}"
-  floating-form:
-    backgroundColor: "{colors.paper-white}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.dialog}"
-    padding: "{spacing.lg}"
   console-button:
     backgroundColor: "{colors.ink}"
     textColor: "{colors.paper-white}"
@@ -192,16 +167,16 @@ The world has two rooms sharing one material. The public face (home page and sig
 Cool, barely violet greys and warm near-black, with one colour on loan from a flower.
 
 ### Primary
-- **Petal Accent** (default in frontmatter): the middle stop of the last grown flower's palette, written onto the page root at runtime; the default is the middle stop of Dana's dahlia. It works as a ground: the third How field, the open question, the closing footer tile and text selection.
+- **Petal Accent** (default in frontmatter): the middle stop of the last grown flower's palette, written onto the page root at runtime; the default is the middle stop of Dana's dahlia. It works as a ground for the open question and for text selection. The third How field keeps Dana's own colour, because that section is a worked example of Dana.
 - **On Accent** (default in frontmatter): the text colour paired with the accent, recomputed as black or white, whichever reads better, whenever the accent changes.
 
 ### Neutral
 - **Ink**: all text, the primary pill, the slider thumb, the focus ring.
 - **Ink Hover**: the primary pill's hover state, one step lifted from Ink.
 - **Muted Ink**: placeholders, secondary metadata, disabled labels. It holds 4.73:1 on Plinth Deep, its darkest ground.
-- **Paper White**: working surfaces only: studio controls, cards, panels, the form, field fills, and text on Ink and Night.
+- **Paper White**: working surfaces only: field fills, light pills, and text on Ink and Night.
 - **Gallery Ground**: the page and the top bar.
-- **Plinth**: what objects stand on: the studio view, tiles, closed questions, footer tiles, the closing section.
+- **Plinth**: what objects stand on: tiles, closed questions, the closing section.
 - **Plinth Deep**: one step down: tile name strips, the second How field, the slider track, disabled pills.
 - **Night**: the full-bleed dark band. It has the same value as Ink but a different job, a place rather than a mark.
 
@@ -249,25 +224,24 @@ Inside the small product cards and panels, type runs at fixed sizes (13px to 22p
 
 The page runs edge to edge with a fluid page margin and no centred container. Sections alternate between open ground with generous vertical padding (the section token) and full-bleed colour bands that sit flush against each other with no gap between them.
 
-Grids are 4 columns for specimens and process fields, 2 for split heads, a 4fr / 8fr split for questions, and 12 for the footer's tile mosaic. Tile gaps are tight (12px, footer 8px) so tiles read as one group; section padding is large, so the contrast between the two is the rhythm. Paragraph spacing, control gaps and card padding step through 8, 12, 16, 24 and 40.
+Grids are 4 columns for specimens, process fields and the things a flower can do, a 7fr / 5fr split for the close, and a 4fr / 8fr split for questions. Tile gaps are tight (12px) so tiles read as one group; section padding is large, so the contrast between the two is the rhythm. Paragraph spacing, control gaps and card padding step through 8, 12, 16, 24 and 40.
 
 The fixed top bar is 64px and solid Gallery Ground, 56px on small screens. The one breakpoint is 900px: grids collapse to 1 or 2 columns, nav links hide and the console button stays, the held scroll stage is released so a phone scrolls normally, and the flower opens by itself instead. Viewport-tall sections use `svh`.
 
 ## Elevation & Depth
 
-Flat by default. Separation comes from tonal steps (Gallery Ground, Plinth, Plinth Deep, Paper White) and from full-bleed Night, with the white card as the top layer. Inactive panels in the sideways row recede by opacity (0.32), not by shadow.
+Flat by default. Separation comes from tonal steps (Gallery Ground, Plinth, Plinth Deep, Paper White) and from full-bleed Night.
 
 The flower is the exception to flatness, by being actually three-dimensional. It casts a soft radial pool of shade drawn in its own canvas, lit without tone mapping so petals keep their colour on a light page. It has no background of its own.
 
 ### Shadow Vocabulary
-- **Floating form** (`box-shadow: 0 24px 60px rgba(20, 20, 18, 0.22)`): the white form in the closing section, which stands for an already-open dialog. It is the only CSS shadow on the public face.
 
 ### Named Rules
 **The One Shadow Rule.** On the public face a soft shadow means an object that has lifted off the page. Cards, tiles and pills stay flat.
 
 ## Shapes
 
-Everything is soft and nothing is sharp, except where a surface deliberately meets the edge of the screen. Radius tracks size: pills and fields are fully round, the largest containers take 24px, footer tiles and product panels 18px, small cards 14px, rows inside them 10px and thumbnails 8px, so nested corners stay concentric in feel. Full-bleed bands stay square. Studio slivers round only the edge facing the studio, since their far edge is cut by the bar or the viewport.
+Everything is soft and nothing is sharp, except where a surface deliberately meets the edge of the screen. Radius tracks size: pills and fields are fully round, tiles and questions take 24px, and flower pickers 14px, so nested corners stay concentric in feel. Full-bleed bands stay square.
 
 Colour chips and the slider thumb are circles. The accordion sign is two drawn CSS bars that rotate, not a glyph. Lines are rare: the only strokes on the public face are the 1px borders on fields.
 
@@ -293,10 +267,9 @@ Confident and single-minded: one shape everywhere.
 The resting stroke measures 1.45:1 on white. It is recorded as shipped and is a known weakness, not a target for new fields.
 
 ### Cards / Containers
-- **Tiles:** Plinth picture area with a contained flower, on a Plinth Deep name strip, 24px corners, clipped. Hover turns the flower slightly (scale 1.05, rotate -2deg, 500ms), never the tile.
-- **Product cards and panels:** Paper White with 14px or 18px corners and 16px padding; these are small pieces of real interface shown on the page. Selected rows inside them use Gallery Ground.
-- **Footer tiles:** Plinth, 18px corners, 20px padding, with Night and accent tiles as the mosaic's two loud pieces.
-- **Shadow Strategy:** flat, see Elevation & Depth. The floating form is the single exception.
+- **Specimen tile:** a picture of one name's flower on Plinth with its name over the foot of the tile. Hovering or focusing it, or the section's light switch, swaps in the same flower lit from inside on Night.
+- **Process field:** one thing at full size on its own full-bleed ground: the name at display scale, the hash at large tabular figures, the facts at headline scale, the flower lit from inside.
+- **Shadow Strategy:** flat, see Elevation & Depth.
 
 ### Navigation
 A solid, borderless bar: wordmark left at Title setting, label-sized links right, then a primary pill. Links fade to 0.6 opacity on hover. Below 900px the links hide and the pill remains. There is no menu.
@@ -304,8 +277,23 @@ A solid, borderless bar: wordmark left at Title setting, label-sized links right
 ### Accordion
 Each question is a Plinth block with 24px corners and a Title-sized summary. The open item takes the accent ground and On Accent text, and its plus folds to a minus (200ms).
 
-### Studio
-The signature component: a live flower in a Plinth frame with white controls docked below, containing a name field, a Grow pill, a Bud to Bloom slider, and a plain result sentence in the frame's corner. A poster still sits under the canvas and fades out (500ms) when the flower is ready. The flower works on a page with no account behind it.
+### Hero
+The signature component: a live plant fills the held first screen, with the sentence split to either side of it. Under it sit a name field, a Grow pill, a plain result sentence, and two text actions: Send it, which copies a link that opens on this flower with the name after the #, and Keep it, which goes to the close. A name grows from soil to a half-open flower by itself, and scrolling the held stage opens the rest. A poster still sits under the canvas and fades out (500ms) when the plant is ready. It works with no account and sends nothing anywhere.
+
+### Close
+The flower the visitor grew, live and fully open, stands on the foot of the band with its stem running off the edge, beside the name already filled in. The sign-in page carries the same flower and names it in the heading. Nothing further down the page shows another person's flower where the visitor's own belongs.
+
+### Night Shelf
+A full-bleed Night band of whole flowers lit from inside, standing in a row. Each picture fades into the night, and pictures overlap with a lighten blend so neighbouring glows join. Below 900px the row scrolls sideways.
+
+### Bloom View
+The plant on its own stage, used in the console studio and on a shared flower's page: a live plant, an age slider and pills for growing again and the lights. It keeps the public ground in both console themes, and starts with the lights off when the console is dark. On a shared page the words stand left of it, and below 900px they follow it.
+
+### Flower Thumbnail
+Each card in the console shows the flower drawn on the visitor's own device from its name, kept in local storage, on the console's secondary ground. Nothing is fetched and nothing needs a picture store.
+
+### Growth Stage
+A full-bleed band with the plant standing right of the words: a live plant growing from soil to bloom under one slider, nine picture buttons for choosing a flower, and pills for growing again, the lights and another colour. Below 900px the words come first, then the plant holds at the top of the screen at 46svh while the controls pass under it, with the flowers in one scrolling row. Turning the lights off is the one place the public face goes dark on request: the band moves to Night over 900ms and the flower glows from its heart. Only the band changes; the bar and the rest of the page stay on Gallery Ground. Bloom needs an opaque canvas, so this canvas paints the band's exact colour as its background.
 
 ### Reveal Motion
 Blocks rise once on entering view (24px, 620ms, `cubic-bezier(0.2, 0.7, 0.2, 1)`), staggered 70ms across a row. Content is only hidden after the script has marked the page, so it survives with no script. Reduced motion removes the rise and jumps growth to its end state.
@@ -317,7 +305,7 @@ Blocks rise once on entering view (24px, 620ms, `cubic-bezier(0.2, 0.7, 0.2, 1)`
 - **Do** use only real generator output for flowers, with a provenance sidecar beside every shipped raster in `public/flowers/`.
 - **Do** step between Gallery Ground, Plinth, Plinth Deep and Paper White to separate surfaces before reaching for anything else.
 - **Do** keep each heading to one short sentence at Headline scale.
-- **Do** label anything unreleased as coming, with a disabled treatment, as the Mint panel does.
+- **Do** label anything unreleased as coming, in the words beside it, as the Mint line does.
 
 ### Don't:
 - **Don't** use weights above 500 on the public face.
@@ -325,6 +313,6 @@ Blocks rise once on entering view (24px, 620ms, `cubic-bezier(0.2, 0.7, 0.2, 1)`
 - **Don't** fix an accent hue in a public component, or fix text colour on an accent ground.
 - **Don't** add a second CSS shadow to the public face, or shadow a card, tile or pill.
 - **Don't** use a square, rectangular or outlined action on the public face; every action is a pill.
-- **Don't** add a dark theme to the public face, or a monospace face to it, including for hashes, which stay in Hanken Grotesk with tabular figures.
+- **Don't** add a dark theme to the public face beyond the night views of the Growth Stage and the gallery, or a monospace face to it, including for hashes, which stay in Hanken Grotesk with tabular figures.
 - **Don't** invent customers, numbers or testimonials as decoration; the flower is the proof.
-- **Don't** give a flower a canvas background or tone mapping; it stands on the page's own ground.
+- **Don't** give a flower a canvas background other than its band's own colour, or tone mapping; it stands on the page's own ground. Night pictures fade into Night with a mask, so no picture shows an edge.

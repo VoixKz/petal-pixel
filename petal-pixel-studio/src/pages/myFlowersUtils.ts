@@ -1,5 +1,5 @@
 import type { SavedFlower } from "@/stores/flowerStore";
-import { familyLabel } from "@/components/flower/paletteUi";
+import { kindOf } from "@/math/blossom/identity";
 
 export type MintFilter = "all" | "minted" | "drafts";
 export type SortOrder = "newest" | "oldest" | "name";
@@ -8,17 +8,13 @@ export interface FlowerFilters {
   search: string;
   /** "all" | "minted" | "drafts" */
   mint: MintFilter;
-  /** "all" or a family label as returned by the shared familyLabel() */
+  /** "all" or a kind of flower, as returned by kindOf() */
   family: string;
 }
 
-/**
- * Unique family/flowerType labels present in the collection, alphabetical.
- * Uses the SHARED familyLabel(params) from paletteUi (v2 family, v1
- * flowerType fallback) — do not reimplement.
- */
+/** The kinds of flower present in the collection, alphabetical. */
 export function collectFamilies(flowers: SavedFlower[]): string[] {
-  return [...new Set(flowers.map((f) => familyLabel(f.params)))].sort((a, b) =>
+  return [...new Set(flowers.map((f) => kindOf(f.generationWord)))].sort((a, b) =>
     a.localeCompare(b),
   );
 }
@@ -35,7 +31,7 @@ export function filterFlowers(flowers: SavedFlower[], filters: FlowerFilters): S
     }
     if (filters.mint === "minted" && !f.isMinted) return false;
     if (filters.mint === "drafts" && f.isMinted) return false;
-    if (filters.family !== "all" && familyLabel(f.params) !== filters.family) return false;
+    if (filters.family !== "all" && kindOf(f.generationWord) !== filters.family) return false;
     return true;
   });
 }

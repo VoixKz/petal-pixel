@@ -4,7 +4,7 @@ import { Activity as ActivityIcon, PlusCircle, Gem, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlowerStore } from '@/stores/flowerStore';
 import { truncateMiddle } from '@/lib/truncate';
-import { paletteGradient, familyLabel } from '@/components/flower/paletteUi';
+import { kindOf, tintOf } from '@/math/blossom/identity';
 import { buildActivityTimeline } from './activityUtils';
 
 function formatDay(date: string): string {
@@ -61,13 +61,8 @@ export default function Activity() {
 
                       {event.kind === 'created' && (
                         <span className="inline-flex items-center gap-1.5 bg-secondary text-secondary-foreground text-xs px-2 py-0.5 rounded-full capitalize">
-                          {event.palette && event.palette.stops.length >= 2 && (
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ background: paletteGradient(event.palette.stops) }}
-                            />
-                          )}
-                          {familyLabel({ family: event.family, flowerType: event.flowerType })}
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tintOf(event.name) }} />
+                          {kindOf(event.name)}
                         </span>
                       )}
 

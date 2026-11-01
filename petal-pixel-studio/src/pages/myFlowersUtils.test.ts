@@ -53,14 +53,14 @@ function makeFlower(
 }
 
 describe("collectFamilies", () => {
-  it("dedupes and sorts labels, mixing v1 flowerTypes and v2 families", () => {
+  it("lists each kind of flower once, in order, whatever the old records say", () => {
     const flowers = [
-      makeFlower({}, { family: "sunflower" }),
-      makeFlower({}, { flowerType: "camellia", family: undefined }), // v1
-      makeFlower({}, { family: "sunflower" }),
-      makeFlower({}, { family: "rhodonea" }),
+      makeFlower({ generationWord: "Zara" }, { family: "sunflower" }),
+      makeFlower({ generationWord: "Dana" }),
+      makeFlower({ generationWord: "Omar" }),
+      makeFlower({ generationWord: "Oleg" }),
     ];
-    expect(collectFamilies(flowers)).toEqual(["camellia", "rhodonea", "sunflower"]);
+    expect(collectFamilies(flowers)).toEqual(["dahlia", "rose", "tulip"]);
   });
 
   it("returns empty array for empty collection", () => {
@@ -101,19 +101,19 @@ describe("filterFlowers", () => {
     expect(filterFlowers([minted, draft], { ...base, mint: "all" })).toEqual([minted, draft]);
   });
 
-  it("family filter matches v2 family and v1 flowerType fallback", () => {
-    const v2 = makeFlower({}, { family: "superformula" });
-    const v1 = makeFlower({}, { flowerType: "lotus", family: undefined });
-    expect(filterFlowers([v2, v1], { ...base, family: "superformula" })).toEqual([v2]);
-    expect(filterFlowers([v2, v1], { ...base, family: "lotus" })).toEqual([v1]);
+  it("filters by the kind of flower the name grows", () => {
+    const tulip = makeFlower({ generationWord: "Zara" });
+    const lotus = makeFlower({ generationWord: "Maria" });
+    expect(filterFlowers([tulip, lotus], { ...base, family: "tulip" })).toEqual([tulip]);
+    expect(filterFlowers([tulip, lotus], { ...base, family: "lotus" })).toEqual([lotus]);
   });
 
   it("combines search + mint + family", () => {
-    const hit = makeFlower({ title: "Aurora Sunflower", isMinted: true }, { family: "sunflower" });
-    const wrongMint = makeFlower({ title: "Aurora Sunflower", isMinted: false }, { family: "sunflower" });
-    const wrongFamily = makeFlower({ title: "Aurora Rose", isMinted: true }, { family: "rose" });
+    const hit = makeFlower({ title: "Aurora", generationWord: "Zara", isMinted: true });
+    const wrongMint = makeFlower({ title: "Aurora", generationWord: "Zara", isMinted: false });
+    const wrongKind = makeFlower({ title: "Aurora", generationWord: "Oleg", isMinted: true });
     expect(
-      filterFlowers([hit, wrongMint, wrongFamily], { search: "aurora", mint: "minted", family: "sunflower" }),
+      filterFlowers([hit, wrongMint, wrongKind], { search: "aurora", mint: "minted", family: "tulip" }),
     ).toEqual([hit]);
   });
 });

@@ -8,22 +8,18 @@ function makeFlower(overrides: {
   title?: string;
   isMinted?: boolean;
   txHash?: string;
-  family?: string;
-  flowerType?: string;
+  generationWord?: string;
 }): SavedFlower {
-  const { id, createdAt, title, isMinted, txHash, family, flowerType } = overrides;
+  const { id, createdAt, title, isMinted, txHash, generationWord } = overrides;
   return {
     id,
     backendFlowerId: id,
     title: title ?? `Flower ${id}`,
-    generationWord: "word",
+    generationWord: generationWord ?? "word",
     createdAt,
     isMinted: isMinted ?? false,
     txHash,
-    params: {
-      flowerType: flowerType ?? "classic",
-      ...(family ? { family } : {}),
-    } as unknown as SavedFlower["params"],
+    params: {} as SavedFlower["params"],
   };
 }
 
@@ -65,21 +61,10 @@ describe("buildActivityTimeline", () => {
     }
   });
 
-  it("carries family + flowerType on created events (v2) and degrades to flowerType-only for v1", () => {
-    const days = buildActivityTimeline([
-      makeFlower({ id: "v1", createdAt: "2026-07-01", flowerType: "rose" }),
-      makeFlower({ id: "v2", createdAt: "2026-07-02", family: "sunflower", flowerType: "classic" }),
-    ]);
-    const v2Created = days[0].events[0];
-    const v1Created = days[1].events[0];
-    expect(v2Created.kind).toBe("created");
-    if (v2Created.kind === "created") {
-      expect(v2Created.family).toBe("sunflower");
-    }
-    if (v1Created.kind === "created") {
-      expect(v1Created.family).toBeUndefined();
-      expect(v1Created.flowerType).toBe("rose");
-    }
+  it("carries the name a created flower grew from, which says what kind it is", () => {
+    const days = buildActivityTimeline([makeFlower({ id: "a", createdAt: "2026-07-02", generationWord: "Dana" })]);
+    const created = days[0].events[0];
+    expect(created.kind === "created" && created.name).toBe("Dana");
   });
 
   it("skips flowers with an empty createdAt", () => {

@@ -88,26 +88,26 @@ describe('MyFlowers page (smoke — real DOM interactions)', () => {
     expect(screen.getByText('Minted One')).toBeInTheDocument();
     expect(screen.queryByText('Draft One')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^drafts$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^not minted$/i }));
     expect(screen.queryByText('Minted One')).not.toBeInTheDocument();
     expect(screen.getByText('Draft One')).toBeInTheDocument();
   });
 
-  it('family select lists families present (v2 family + v1 flowerType fallback) and filters', () => {
+  it('the kind filter lists what the saved names grow, and filters by it', () => {
     useFlowerStore.setState({
       savedFlowers: [
-        seedFlower({ title: 'Sun Card', params: { ...baseParams, family: 'sunflower' } }, 'a'),
-        seedFlower({ title: 'Camellia Card', params: { ...baseParams, family: undefined, flowerType: 'camellia' } }, 'b'),
+        seedFlower({ title: 'Tulip Card', generationWord: 'Zara' }, 'a'),
+        seedFlower({ title: 'Camellia Card', generationWord: 'Anna' }, 'b'),
       ],
     });
     renderPage();
-    const select = screen.getByLabelText('Filter by family') as HTMLSelectElement;
+    const select = screen.getByLabelText('Filter by kind') as HTMLSelectElement;
     const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues).toEqual(['all', 'camellia', 'sunflower']);
+    expect(optionValues).toEqual(['all', 'camellia', 'tulip']);
 
     fireEvent.change(select, { target: { value: 'camellia' } });
     expect(screen.getByText('Camellia Card')).toBeInTheDocument();
-    expect(screen.queryByText('Sun Card')).not.toBeInTheDocument();
+    expect(screen.queryByText('Tulip Card')).not.toBeInTheDocument();
   });
 
   it('sort select reorders the grid (name A-Z)', () => {
@@ -151,29 +151,17 @@ describe('MyFlowers page (smoke — real DOM interactions)', () => {
     expect(screen.getByText('Old Name')).toBeInTheDocument();
   });
 
-  it('preview band + family chip render for both v1 (fallback) and v2 (palette) flowers', () => {
+  it('each card names the kind of flower its name grows, whatever an old record says', () => {
     useFlowerStore.setState({
       savedFlowers: [
-        seedFlower(
-          {
-            title: 'V2 Card',
-            params: {
-              ...baseParams,
-              family: 'sunflower',
-              palette: { id: 'p', stops: [{ pos: 0, hex: '#ff0000' }, { pos: 1, hex: '#0000ff' }] },
-            },
-          },
-          'a',
-        ),
-        seedFlower({ title: 'V1 Card', params: { ...baseParams, family: undefined, flowerType: 'camellia' } }, 'b'),
+        seedFlower({ title: 'First', generationWord: 'Zara', params: { ...baseParams, family: 'sunflower' } }, 'a'),
+        seedFlower({ title: 'Second', generationWord: 'Anna', params: { ...baseParams, flowerType: 'rose' } }, 'b'),
       ],
     });
     renderPage();
-    // Family labels also appear as <option>s in the family select; scope to
-    // the card chip (a <div>, not an <option>).
-    const cardChip = (label: string) =>
-      screen.getAllByText(label).filter((el) => el.tagName === 'DIV');
-    expect(cardChip('sunflower')).toHaveLength(1);
+    // Kinds also appear as <option>s in the filter; scope to the card chip (a <div>).
+    const cardChip = (label: string) => screen.getAllByText(label).filter((el) => el.tagName === 'DIV');
+    expect(cardChip('tulip')).toHaveLength(1);
     expect(cardChip('camellia')).toHaveLength(1);
   });
 });

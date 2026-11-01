@@ -28,9 +28,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ profile: null, user: null }),
 }));
 
-vi.mock('@/components/flower/FlowerCanvas', () => ({ FlowerCanvas: () => null }));
-vi.mock('@/components/flower/FlowerControls', () => ({ FlowerControls: () => null }));
-vi.mock('@/components/flower/FlowerInfo', () => ({ FlowerInfo: () => null }));
+vi.mock('@/components/flower/BloomView', () => ({ BloomView: () => null }));
 
 import CreateFlower from './CreateFlower';
 

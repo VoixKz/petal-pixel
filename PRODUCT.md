@@ -12,7 +12,7 @@ People who want something personal made from a name: their own, or the name of s
 
 ## Product Purpose
 
-Petal Pixel turns any name into a one-of-a-kind 3D flower that grows from a bud on screen. A visitor can keep the flower in their garden and share it. Success is a visitor typing a name within seconds, seeing it bloom, and saving or sending it.
+Petal Pixel turns any name into a one-of-a-kind 3D flower that grows from the soil on screen. A visitor can keep the flower in their garden and share it. Success is a visitor typing a name within seconds, seeing it bloom, and saving or sending it.
 
 ## Positioning
 
@@ -24,7 +24,8 @@ The first touch is usually a shared link or the home page on a phone or laptop. 
 
 ## Capabilities and Constraints
 
-- Nine flower families, a bud-to-bloom growth view, a garden of saved flowers, PNG and GIF export, and public share pages.
+- Eight kinds of flower read from a name's SHA-256, a soil-to-bloom growth view with a night light, a garden of saved flowers, PNG and GIF export, and public share pages.
+- A flower is worked out in the browser from the name alone, so the home page, the console, the garden and a shared page always show the same flower. The home page sends the name nowhere. The backend still stores its older generated parameters with a saved flower, but nothing draws them.
 - The promise on the public site is that a name grows into a flower. NFT ownership and printed lamps are not the headline.
 - Minting exists in the code but is shown as "soon" on the public site. It needs a real network, a funded wallet and public file storage first.
 - Printed flower lamps are a paused idea, not a product. Do not promise them.
@@ -38,7 +39,8 @@ The first touch is usually a shared link or the home page on a phone or laptop. 
 
 ## Evidence on Hand
 
-- Real: the working generator, the nine families, and the growth view.
+- Real: the plant engine, its eight kinds of flower, and the growth view.
+- Real: one 3D scan of a Lycaste virginalis from Smithsonian Open Access, CC0. Other scans we looked at are not cleared: Embreea herrenhusana has no Open Access record, and the Sketchfab models need the owner's account.
 - Absent: users, customers, testimonials, press, usage numbers, prices. Never invent these.
 
 ## Product Principles

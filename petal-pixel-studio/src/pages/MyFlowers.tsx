@@ -4,8 +4,9 @@ import { useFlowerStore, DELETE_GRACE_MS, type SavedFlower } from '@/stores/flow
 import { Gem, Calendar, Flower2, Trash2, Pencil, Search, SearchX, Share2, Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { kindOf, tintOf } from '@/math/blossom/identity';
 import { FlowerThumb } from '@/components/flower/FlowerThumb';
+import { MINT_OPEN } from '@/lib/mintVoucher';
 import { shareFlowerLink } from './shareParams';
 import {
   collectFamilies,
@@ -141,7 +142,7 @@ export default function MyFlowers() {
     <div className="h-full overflow-y-auto p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">My Flowers</h1>
-        <p className="text-sm text-muted-foreground mt-1">Your personal garden of generated flowers</p>
+        <p className="text-sm text-muted-foreground mt-1">Every flower you have kept</p>
       </div>
 
       {savedFlowers.length > 0 && (
@@ -151,13 +152,13 @@ export default function MyFlowers() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title or word…"
+              placeholder="Search by title or name…"
               aria-label="Search flowers"
               className="w-full sm:w-56 bg-secondary text-xs text-foreground rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/40"
             />
           </div>
 
-          <div className="flex items-center gap-1" role="group" aria-label="Mint status filter">
+          {MINT_OPEN && <div className="flex items-center gap-1" role="group" aria-label="Mint status filter">
             {(['all', 'minted', 'drafts'] as const).map((m) => (
               <button
                 key={m}
@@ -168,10 +169,10 @@ export default function MyFlowers() {
                     : 'bg-secondary text-secondary-foreground hover:bg-muted'
                 }`}
               >
-                {m}
+                {m === 'drafts' ? 'not minted' : m}
               </button>
             ))}
-          </div>
+          </div>}
 
           <button
             onClick={() => setFavoritesOnly((v) => !v)}
@@ -188,10 +189,10 @@ export default function MyFlowers() {
           <select
             value={familyFilter}
             onChange={(e) => setFamilyFilter(e.target.value)}
-            aria-label="Filter by family"
+            aria-label="Filter by kind"
             className={`${selectClass} capitalize`}
           >
-            <option value="all">All families</option>
+            <option value="all">All kinds</option>
             {families.map((f) => (
               <option key={f} value={f} className="capitalize">
                 {f}
@@ -244,13 +245,7 @@ export default function MyFlowers() {
             className="bg-card rounded-xl border border-border overflow-hidden hover:border-primary/30 transition-all group cursor-default relative"
             onDoubleClick={() => handleEdit(flower)}
           >
-            <FlowerThumb
-              flowerId={flower.backendFlowerId ?? flower.params.flowerId}
-              params={flower.params}
-              className="h-48 relative overflow-hidden"
-            >
-              <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none" />
-
+            <FlowerThumb name={flower.generationWord} className="h-48 relative overflow-hidden">
               <div className="absolute top-3 right-3 flex items-center gap-2">
                 {flower.isMinted && (
                   <div className="flex items-center gap-1 bg-accent/20 text-accent-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm">
@@ -274,7 +269,7 @@ export default function MyFlowers() {
               </div>
 
               <div className="absolute bottom-3 left-3 text-xs px-2 py-0.5 rounded-full bg-black/40 text-white/80 backdrop-blur-sm capitalize">
-                {familyLabel(flower.params)}
+                {kindOf(flower.generationWord)}
               </div>
               <button
                 onClick={(e) => {
@@ -308,7 +303,7 @@ export default function MyFlowers() {
               </button>
             </FlowerThumb>
 
-            <div className="h-1.5 w-full" style={{ background: previewGradient(flower.params) }} />
+            <div className="h-1.5 w-full" style={{ background: tintOf(flower.generationWord) }} />
 
             <div className="p-4 space-y-2">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -335,21 +330,15 @@ export default function MyFlowers() {
                 )}
               </div>
               <p className="text-xs text-muted-foreground">
-                Word: <span className="text-primary font-mono">{flower.generationWord}</span>
+                Name: <span className="text-primary font-mono">{flower.generationWord}</span>
               </p>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="w-3 h-3" /> {flower.createdAt}
                 </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full ${
-                    flower.isMinted
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-secondary text-secondary-foreground'
-                  }`}
-                >
-                  {flower.isMinted ? 'Minted' : 'Draft'}
-                </span>
+                {flower.isMinted && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">Minted</span>
+                )}
               </div>
             </div>
           </motion.div>

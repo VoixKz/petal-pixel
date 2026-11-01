@@ -1,3 +1,4 @@
+import { kindOf } from "@/math/blossom/identity";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // ── Mock the garden API BEFORE importing the store ──────────────────────
@@ -81,10 +82,9 @@ describe("Cluster A: create-path deterministic-id collision", () => {
     useFlowerStore.setState({
       editingFlowerId: null,
       savedFlowers: [existing],
-      // Auto-title path: title matches whatever generateFromWord would produce
-      // for word "alice" + the default "classic" flowerType ("Luminous Bloom"),
-      // i.e. the user did NOT type a custom title — this is a bare re-generate.
-      title: "Luminous Bloom",
+      // Auto-title path: title matches what generateFromWord would produce for
+      // word "alice", i.e. the user did NOT type a custom title.
+      title: `alice's ${kindOf("alice")}`,
       generationWord: "alice",
       params: { ...baseParams(), flowerId: "flower-abc" },
     });

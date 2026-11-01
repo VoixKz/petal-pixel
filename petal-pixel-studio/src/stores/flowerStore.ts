@@ -17,7 +17,7 @@ import {
   type SunflowerParams,
 } from "@/math/flowerTypes";
 import type { Palette } from "@/math/palette";
-import { toTechniqueParams, toV2Params } from "@/math/flowerGeometry";
+import { toTechniqueParams, toV2Params } from "@/math/flowerParams";
 import { createFlowerViaGrpc } from "@/integrations/flowerBackend/client";
 import {
   deleteGardenFlower,
@@ -27,6 +27,7 @@ import {
   upsertGardenFlower,
 } from "@/integrations/garden/api";
 import { V2_COLOR_A, V2_COLOR_B } from "@/lib/v2Colors";
+import { kindOf } from "@/math/blossom/identity";
 
 export interface FlowerParams {
   flowerId: string;
@@ -187,22 +188,9 @@ function seedToDisplay(seed: bigint) {
   return seed.toString();
 }
 
-function generateAutoTitle(word: string, flowerType: FlowerType | FlowerFamily): string {
-  const prefixes = ["Celestial", "Aurora", "Crystal", "Nebula", "Astral", "Phantom", "Luminous", "Ethereal"];
-  const typeNames: Record<FlowerFamily, string> = {
-    classic: "Bloom",
-    rose: "Rose",
-    zinnia: "Zinnia",
-    camellia: "Camellia",
-    lotus: "Lotus",
-    dahlia: "Dahlia",
-    sunflower: "Sunflower",
-    rhodonea: "Rhodonea",
-    superformula: "Superformula",
-  };
-
-  const hash = Array.from(word).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return `${prefixes[hash % prefixes.length]} ${typeNames[flowerType as FlowerFamily] ?? "Bloom"}`;
+/** A flower's first title says who it belongs to and what it is: "Dana's dahlia". */
+function generateAutoTitle(word: string): string {
+  return `${word}'s ${kindOf(word)}`;
 }
 
 const defaultParams: FlowerParams = {
@@ -298,7 +286,7 @@ export const useFlowerStore = create<FlowerStore>()(
       // ── v2 path: backend is source of truth (family + palette + oneof shape) ──
       if (backendParams.algoVersion === "v2" && backendParams.family) {
         const v2 = toV2Params(backendParams);
-        const autoTitle = generateAutoTitle(trimmed, v2.family);
+        const autoTitle = generateAutoTitle(trimmed);
         set({
           params: {
             ...get().params,
@@ -340,7 +328,7 @@ export const useFlowerStore = create<FlowerStore>()(
         const technique = toTechniqueParams(seed, backendParams);
         const hue = backendParams.hue;
         const baseCount = Math.max(3, backendParams.petalCount || 6);
-        const autoTitle = generateAutoTitle(trimmed, technique.flowerType);
+        const autoTitle = generateAutoTitle(trimmed);
 
         set({
           params: {
@@ -471,10 +459,7 @@ export const useFlowerStore = create<FlowerStore>()(
       // Preserve the existing saved title UNLESS the user's current title
       // differs from what generateFromWord would have auto-titled it — that
       // divergence means the user intentionally typed a new title.
-      const autoTitle = generateAutoTitle(
-        generationWord || existing.generationWord,
-        params.family ?? params.flowerType,
-      );
+      const autoTitle = generateAutoTitle(generationWord || existing.generationWord);
       const userTypedTitle = title !== autoTitle;
       const resolvedTitle = userTypedTitle ? title : existing.title;
 

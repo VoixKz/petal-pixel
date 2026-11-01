@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
 import { truncateMiddle } from '@/lib/truncate';
-import { previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { kindOf, tintOf } from '@/math/blossom/identity';
 import { FlowerThumb } from '@/components/flower/FlowerThumb';
 import {
   Collapsible,
@@ -116,18 +116,13 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
       transition={{ delay: index * 0.1 }}
       className="bg-card rounded-xl border border-border overflow-hidden group"
     >
-      <FlowerThumb
-        flowerId={flower.backendFlowerId ?? params.flowerId}
-        params={params}
-        className="h-40 relative overflow-hidden"
-      >
-        <div className="absolute inset-0 grid-bg opacity-20 pointer-events-none" />
+      <FlowerThumb name={flower.generationWord} className="h-40 relative overflow-hidden">
         <div className="absolute top-3 left-3 flex items-center gap-1 bg-primary/20 text-primary text-xs px-2 py-1 rounded-full backdrop-blur-sm">
           <Gem className="w-3 h-3" /> Verified NFT
         </div>
         <div className="absolute top-3 right-3 flex items-center gap-2">
           <div className="bg-secondary/60 text-secondary-foreground text-xs px-2 py-1 rounded-full backdrop-blur-sm capitalize">
-            {familyLabel(params)}
+            {kindOf(flower.generationWord)}
           </div>
           <button
             onClick={(e) => {
@@ -161,17 +156,12 @@ function NftCard({ flower, index }: { flower: SavedFlower; index: number }) {
         </button>
       </FlowerThumb>
 
-      {/* preview band: v2 uses real palette stops; v1 falls back to colorA/colorB gradient */}
-      <div
-        className="h-2"
-        style={{ background: previewGradient(params) }}
-        title={params.palette?.id}
-      />
+      <div className="h-2" style={{ background: tintOf(flower.generationWord) }} />
 
       <div className="p-4 space-y-2">
         <h3 className="text-sm font-semibold text-foreground">{flower.title}</h3>
         <p className="text-xs text-muted-foreground">
-          Word:{' '}
+          Name:{' '}
           <span className="font-medium text-foreground font-mono">{flower.generationWord}</span>
         </p>
 
@@ -260,7 +250,7 @@ export default function NftCollection() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by title or word…"
+              placeholder="Search by title or name…"
               aria-label="Search flowers"
               className="w-full sm:w-56 bg-secondary text-xs text-foreground rounded-lg pl-9 pr-3 py-2 outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-primary/40"
             />
@@ -281,10 +271,10 @@ export default function NftCollection() {
           <select
             value={familyFilter}
             onChange={(e) => setFamilyFilter(e.target.value)}
-            aria-label="Filter by family"
+            aria-label="Filter by kind"
             className={`${selectClass} capitalize`}
           >
-            <option value="all">All families</option>
+            <option value="all">All kinds</option>
             {families.map((f) => (
               <option key={f} value={f} className="capitalize">
                 {f}

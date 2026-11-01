@@ -121,7 +121,8 @@ export interface FlowerListItem {
  */
 export async function fetchFlowerById(flowerId: string): Promise<FlowerListItem> {
   const res = await fetch(`${flowerBackendBaseUrl}/api/flowers/${encodeURIComponent(flowerId)}`);
-  if (res.status === 404) throw new Error('not_found');
+  // A link with a mangled id is refused as bad input, and to its reader that is the same thing.
+  if (res.status === 404 || res.status === 400) throw new Error('not_found');
   if (!res.ok) throw new Error(`fetchFlowerById failed: ${res.status}`);
   // uint64-precision fix: backend `seed` is an UNQUOTED JSON number that would
   // lose its low digits under JSON.parse (doubles top out at 2^53). Read the raw

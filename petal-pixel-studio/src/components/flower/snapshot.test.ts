@@ -3,32 +3,8 @@ import {
   registerRenderer,
   captureFlowerPng,
   renderToBlob,
-  fitWithin,
-  frameCameraForBounds,
   frameYaws,
 } from './snapshot';
-
-describe('fitWithin', () => {
-  it('leaves dimensions already within max untouched', () => {
-    expect(fitWithin(400, 300, 512)).toEqual({ width: 400, height: 300 });
-  });
-
-  it('downscales the long edge to max, preserving aspect ratio', () => {
-    expect(fitWithin(2048, 1024, 512)).toEqual({ width: 512, height: 256 });
-  });
-
-  it('downscales portrait canvases by height', () => {
-    expect(fitWithin(600, 1200, 512)).toEqual({ width: 256, height: 512 });
-  });
-
-  it('never rounds a non-zero edge down to zero', () => {
-    expect(fitWithin(1, 10000, 512)).toEqual({ width: 1, height: 512 });
-  });
-
-  it('returns zero size for degenerate input', () => {
-    expect(fitWithin(0, 300, 512)).toEqual({ width: 0, height: 0 });
-  });
-});
 
 describe('renderer registry', () => {
   it('resolves null when no renderer is registered', async () => {
@@ -144,30 +120,5 @@ describe('frameYaws', () => {
   it('returns an empty array for non-positive frame counts', () => {
     expect(frameYaws(0)).toEqual([]);
     expect(frameYaws(-5)).toEqual([]);
-  });
-});
-
-describe('frameCameraForBounds', () => {
-  const b = { center: { x: 0, y: -0.4, z: 0 }, radius: 1 } as const;
-
-  it('places the camera so the bounding sphere fits the vertical FOV with margin', () => {
-    const r = frameCameraForBounds(b.center, b.radius, 45, 1 /* aspect */, 1.35);
-    // distance = radius / sin(fov/2) * margin for a sphere at aspect 1.
-    const expected = (1 / Math.sin((45 * Math.PI) / 180 / 2)) * 1.35;
-    expect(r.distance).toBeCloseTo(expected, 5);
-    expect(r.position.x).toBeCloseTo(b.center.x + expected * 0.5, 5);
-    expect(r.target).toEqual(b.center);
-  });
-
-  it('widens distance when aspect < 1 so nothing is cropped horizontally', () => {
-    const wide = frameCameraForBounds(b.center, b.radius, 45, 1, 1.35).distance;
-    const narrow = frameCameraForBounds(b.center, b.radius, 45, 0.5, 1.35).distance;
-    expect(narrow).toBeGreaterThan(wide);
-  });
-
-  it('never returns a non-finite or zero distance for a degenerate radius', () => {
-    const r = frameCameraForBounds(b.center, 0, 45, 1, 1.35);
-    expect(Number.isFinite(r.distance)).toBe(true);
-    expect(r.distance).toBeGreaterThan(0);
   });
 });

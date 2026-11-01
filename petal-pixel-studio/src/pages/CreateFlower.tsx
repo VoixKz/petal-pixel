@@ -1,17 +1,14 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useBlocker, useLocation, useNavigate } from 'react-router-dom';
-import { FlowerCanvas } from '@/components/flower/FlowerCanvas';
-import { FlowerControls } from '@/components/flower/FlowerControls';
-import { FlowerInfo } from '@/components/flower/FlowerInfo';
-import { FlowerBadges } from '@/components/flower/FlowerBadges';
+import { BloomView } from '@/components/flower/BloomView';
+import { FlowerThumb } from '@/components/flower/FlowerThumb';
 import { pickSurpriseName } from './surpriseNames';
 import { useFlowerStore } from '@/stores/flowerStore';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sparkles, Save, Gem, BarChart3, X, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, SlidersHorizontal, Image, Film, Loader2, ChevronDown, Share2 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
+import { Sparkles, Save, Gem, Copy, ExternalLink, AlertTriangle, Pencil, Wallet, Download, Dices, Image, Film, Loader2, ChevronDown, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getRoseFunctionProjections } from '@/math/flowers/rose';
+import { kindOf, tintOf } from '@/math/blossom/identity';
 import type { BrowserProvider } from 'ethers';
 import {
   confirmMintViaGrpc,
@@ -21,7 +18,6 @@ import {
   flowerBackendBaseUrl,
 } from '@/integrations/flowerBackend/client';
 import { captureFlowerPng, captureFlowerGif } from '@/components/flower/snapshot';
-import { SharePreview } from '@/components/flower/SharePreview';
 import { extractMintedTokenId } from './mintReceipt';
 import {
   DropdownMenu,
@@ -47,18 +43,8 @@ import {
   hasUnsavedWork,
   mintErrorMessage,
 } from './createFlowerGuards';
-import { MINT_ABI, buildMintCall } from '@/lib/mintVoucher';
-import { mapPetalCount } from '@/components/flower/sliderMapping';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+import { MINT_ABI, buildMintCall, MINT_OPEN } from '@/lib/mintVoucher';
 
-/** Off on the public site until it has a real network and public file storage. */
-const MINT_OPEN = import.meta.env.VITE_MINT_OPEN !== 'false';
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
 
@@ -113,24 +99,6 @@ function variationWord(name: string, index: number): string {
   return `${name.trim()}${VARIATION_SEP}${index + 1}`;
 }
 
-// FNV-1a 32-bit — a tiny deterministic string hash used ONLY to colour the
-// preview swatch. It never touches the backend seed (SHA-256 of the word).
-function fnv1a(str: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-function variationGradient(word: string): string {
-  const h = fnv1a(word);
-  const hueA = h % 360;
-  const hueB = (hueA + 40 + ((h >> 8) % 80)) % 360;
-  return `linear-gradient(135deg, hsl(${hueA} 70% 55%), hsl(${hueB} 68% 48%))`;
-}
-
 interface FlowerVariation { key: string; word: string; gradient: string }
 
 // 3–4 deterministic siblings of the current name; [] for a blank name so the
@@ -140,7 +108,7 @@ function buildVariations(name: string, count = 4): FlowerVariation[] {
   if (!base) return [];
   return Array.from({ length: count }, (_, i) => {
     const word = variationWord(base, i);
-    return { key: String(i), word, gradient: variationGradient(word) };
+    return { key: String(i), word, gradient: tintOf(word) };
   });
 }
 
@@ -204,76 +172,6 @@ function markCreateOnboarded(): void {
   }
 }
 
-function MathPanel({ onClose }: { onClose: () => void }) {
-  const params = useFlowerStore((s) => s.params);
-  const roseGraphs = params.flowerType === 'rose' ? getRoseFunctionProjections(params.roseParams) : null;
-
-  // Derive effective petal count from the ACTIVE technique params (sliders rewired in Task 14).
-  const countMap = mapPetalCount(params.flowerType);
-  const effectivePetalCount = countMap
-    ? (params[countMap.param === 'classic' ? 'classicParams' : 'bloomParams'] as unknown as Record<string, number>)[countMap.key] ?? params.petalCount
-    : params.petalCount;
-
-  const genericData = Array.from({ length: 120 }, (_, i) => {
-    const t = (i / 120) * Math.PI * 2;
-    const r = params.petalLength * Math.cos(effectivePetalCount * t) + params.noiseIntensity * Math.sin(params.frequency * t);
-    return { t: t.toFixed(2), r, x: r * Math.cos(t), y: r * Math.sin(t) };
-  });
-
-  const graphA = roseGraphs
-    ? roseGraphs.phiSeries.map((p) => ({ t: p.x.toFixed(2), v: p.y }))
-    : genericData.map((p) => ({ t: p.t, v: p.r }));
-  const graphB = roseGraphs
-    ? roseGraphs.petalCutSeries.map((p) => ({ t: p.x.toFixed(2), v: p.y }))
-    : genericData.map((p) => ({ t: p.t, v: p.x }));
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="absolute bottom-0 left-0 right-0 h-[70vh] sm:h-56 glass-panel rounded-t-lg z-20 p-4 overflow-hidden"
-    >
-      <div className="flex justify-between items-center mb-2">
-        <h3 className="text-xs font-semibold text-foreground flex items-center gap-2">
-          <BarChart3 className="w-3.5 h-3.5 text-primary" /> Mathematical Visualization
-        </h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:h-[calc(100%-2rem)] overflow-y-auto">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1 font-mono">
-            {roseGraphs ? 'Rose: phi(theta)=180/opening·exp(-theta/(vDensity·180))' : 'Polar: r = L·cos(n·theta) + N·sin(f·theta)'}
-          </p>
-          <ResponsiveContainer width="100%" height="85%">
-            <LineChart data={graphA}>
-              <XAxis dataKey="t" hide />
-              <YAxis hide />
-              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground mb-1 font-mono">
-            {roseGraphs ? 'Rose: petalCut(theta)' : 'Parametric projection: x(t)'}
-          </p>
-          <ResponsiveContainer width="100%" height="85%">
-            <LineChart data={graphB}>
-              <XAxis dataKey="t" hide />
-              <YAxis hide />
-              <RechartsTooltip contentStyle={{ background: 'hsl(240 8% 10%)', border: '1px solid hsl(240 6% 18%)', borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="v" stroke="hsl(160 84% 39%)" strokeWidth={1.5} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
 function RegenerateWarningDialog({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -289,7 +187,7 @@ function RegenerateWarningDialog({ onConfirm, onCancel }: { onConfirm: () => voi
           <h3 className="text-sm font-semibold text-foreground">Regenerate flower?</h3>
         </div>
         <p className="text-xs text-muted-foreground mb-5">
-          This will regenerate the flower and replace your current parameters, including any unsaved manual changes.
+          A different name grows a different flower, and it replaces the one you are editing.
         </p>
         <div className="flex items-center gap-2 justify-end">
           <button
@@ -397,7 +295,7 @@ function MintSuccessDialog({
   onClose: () => void;
   onShare: () => void;
 }) {
-  const params = useFlowerStore((s) => s.params);
+  const generationWord = useFlowerStore((s) => s.generationWord);
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
@@ -410,8 +308,8 @@ function MintSuccessDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Reused share block: canvas is height-capped (compact) so it fits max-w-md. */}
-        <SharePreview params={params} personName={personName} compact />
+        <FlowerThumb name={generationWord} className="h-48 relative overflow-hidden rounded-lg" />
+        <p className="text-sm font-semibold text-foreground break-words">{personName}</p>
         <button
           type="button"
           onClick={onShare}
@@ -501,7 +399,6 @@ export default function CreateFlower() {
     const s = useFlowerStore.getState();
     return s.editingFlowerId ? s.title : '';
   });
-  const [showMath, setShowMath] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [isMinting, setIsMinting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -512,8 +409,6 @@ export default function CreateFlower() {
   const [paramsDirty, setParamsDirty] = useState(false);
   // UI-only: GIF encode in-flight (spinner + disabled state + re-entry guard).
   const [isEncodingGif, setIsEncodingGif] = useState(false);
-  // UI-only: mobile/tablet controls drawer visibility. Does NOT touch generation/mint state.
-  const [controlsOpen, setControlsOpen] = useState(false);
 
   const isEditMode = editingFlowerId !== null;
 
@@ -712,9 +607,9 @@ export default function CreateFlower() {
   };
 
   const handleDownloadPng = async () => {
-    const blob = await captureFlowerPng();
+    const blob = await captureFlowerPng({ caption: true });
     if (!blob) {
-      toast.error('Could not capture the flower image. Is the 3D view visible?');
+      toast.error("Couldn't draw the picture. Check that the flower is showing, then try again.");
       return;
     }
     triggerDownload(blob, 'png');
@@ -725,9 +620,9 @@ export default function CreateFlower() {
     setIsEncodingGif(true);
     const toastId = toast.loading('Rendering GIF…');
     try {
-      const blob = await captureFlowerGif({ frames: 36, size: 512, background: 'dark' });
+      const blob = await captureFlowerGif({ frames: 36, size: 512, background: 'dark', caption: true });
       if (!blob) {
-        toast.error('Could not render the GIF. Is the 3D view visible?', { id: toastId });
+        toast.error("Couldn't draw the GIF. Check that the flower is showing, then try again.", { id: toastId });
         return;
       }
       triggerDownload(blob, 'gif');
@@ -741,7 +636,7 @@ export default function CreateFlower() {
 
   const handleShare = async () => {
     if (!params.flowerId) {
-      toast.error('Save or generate a flower first.');
+      toast.error('Grow a flower first, then share it.');
       return;
     }
     // The share link points at the backend /share/:id OG route so crawlers get
@@ -795,7 +690,7 @@ export default function CreateFlower() {
     try {
       await generateFromWord(word);
       setTitleInput(useFlowerStore.getState().title);
-      toast.success('Flower generated from backend');
+      toast.success(`${word} is growing.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Backend is offline or generation failed';
       toast.error(message);
@@ -806,7 +701,7 @@ export default function CreateFlower() {
     if (isGenerating) return;
     const word = (overrideWord ?? wordInput).trim();
     if (!word) {
-      toast.error('Enter a name or phrase first.');
+      toast.error('Type a name first.');
       return;
     }
     if (shouldWarnRegenerate(isEditMode, word, generationWord, paramsDirty)) {
@@ -837,7 +732,7 @@ export default function CreateFlower() {
   const handleSave = async (): Promise<boolean> => {
     if (isSaving) return false;
     if (!params.flowerId) {
-      toast.error('Generate a flower first before saving.');
+      toast.error('Grow a flower first, then save it.');
       return false;
     }
     if (!titleInput.trim()) {
@@ -895,7 +790,7 @@ export default function CreateFlower() {
     // Re-entry guard: matches the if (isGenerating) return pattern used for other handlers.
     if (isMinting) return;
     if (!params.flowerId) {
-      toast.error('Generate flower from backend first.');
+      toast.error('Grow a flower first.');
       return;
     }
 
@@ -1052,7 +947,7 @@ export default function CreateFlower() {
                   if (e.key === 'Enter' && !isGenerating) void handleGenerate();
                 }}
                 placeholder="Enter a name or phrase..."
-                className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full font-mono min-w-0"
+                className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full min-w-0"
               />
               <button
                 onClick={handleSurpriseMe}
@@ -1066,6 +961,7 @@ export default function CreateFlower() {
               <button
                 onClick={() => void handleGenerate()}
                 disabled={isGenerating}
+                aria-label="Generate"
                 className="bg-primary text-primary-foreground text-xs px-2.5 py-1 rounded-md font-medium hover:opacity-90 transition-opacity flex items-center gap-1 shrink-0"
               >
                 <Sparkles className="w-3 h-3" />
@@ -1101,7 +997,7 @@ export default function CreateFlower() {
                   className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors motion-reduce:transition-none disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: v.gradient }} />
-                  <span>{v.word.slice(v.word.lastIndexOf('#'))}</span>
+                  <span className="capitalize">{kindOf(v.word)}</span>
                 </button>
               ))}
             </div>
@@ -1109,7 +1005,7 @@ export default function CreateFlower() {
 
           {/* Recent generation words — refill only (does NOT auto-generate). */}
           {!isEditMode && recentNames.length > 0 && (
-            <div className="flex items-center gap-1.5 px-3 pb-1.5 flex-wrap">
+            <div className="hidden sm:flex items-center gap-1.5 px-3 pb-1.5 flex-wrap">
               <span className="text-xs text-muted-foreground">Recent:</span>
               {recentNames.map((n) => (
                 <button
@@ -1124,17 +1020,8 @@ export default function CreateFlower() {
             </div>
           )}
 
-          {/* Row 2: actions */}
-          <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
-            <button
-              onClick={() => setControlsOpen(true)}
-              title="Open controls"
-              className="lg:hidden flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <SlidersHorizontal className="w-3 h-3" />
-              <span>Controls</span>
-            </button>
-
+          {/* Row 2: actions, once there is a flower to act on */}
+          {params.flowerId && <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5 flex-wrap">
             {MINT_OPEN && <button
               onClick={() => void handleConnectWallet()}
               title="Connect wallet"
@@ -1149,7 +1036,7 @@ export default function CreateFlower() {
             <button
               onClick={() => void handleSave()}
               disabled={isSaving || isGenerating}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-3 h-3" />
               <span>{isSaving ? 'Saving...' : isEditMode ? 'Update' : 'Save'}</span>
@@ -1174,19 +1061,19 @@ export default function CreateFlower() {
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="text-xs max-w-[220px]">
-                    PNG is a still frame. GIF spins 36 frames — larger file (~1–4MB), a few seconds to encode.
+                    PNG is a still by day. GIF turns slowly with the lights off — larger file, a few seconds to encode.
                   </TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="start" className="min-w-[180px]">
                   <DropdownMenuItem onSelect={() => void handleDownloadPng()} className="text-xs gap-2">
-                    <Image className="w-3.5 h-3.5" /> PNG · still frame
+                    <Image className="w-3.5 h-3.5" /> PNG · picture
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={(e) => { e.preventDefault(); void handleDownloadGif(); }}
                     disabled={isEncodingGif}
                     className="text-xs gap-2"
                   >
-                    <Film className="w-3.5 h-3.5" /> GIF · spinning (512²)
+                    <Film className="w-3.5 h-3.5" /> GIF · slowly turning
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1205,19 +1092,19 @@ export default function CreateFlower() {
               onClick={() => void handleMint()}
               disabled={isMinting || !MINT_OPEN}
               title={MINT_OPEN ? undefined : 'Minting is coming soon'}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-60"
             >
               <Gem className="w-3 h-3" />
               <span className="hidden sm:inline">{!MINT_OPEN ? 'Mint soon' : isMinting ? 'Minting...' : 'Mint NFT'}</span>
             </button>
-          </div>
+          </div>}
 
           {isEditMode && (
-            <div className="px-3 py-1 border-t border-border bg-amber-950/20 flex items-center gap-2">
-              <Pencil className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="text-xs text-amber-300 truncate">
+            <div className="px-3 py-1 border-t border-border bg-amber-500/15 flex items-center gap-2">
+              <Pencil className="w-3 h-3 text-amber-800 dark:text-amber-300 shrink-0" />
+              <span className="text-xs text-amber-900 dark:text-amber-200 truncate">
                 Editing: <span className="font-semibold">{title}</span>
-                <span className="text-amber-400/60 ml-2">word: {generationWord}</span>
+                <span className="opacity-70 ml-2">name: {generationWord}</span>
               </span>
             </div>
           )}
@@ -1254,45 +1141,10 @@ export default function CreateFlower() {
           </div>
         )}
 
-        {/* Canvas */}
-        <div className="flex-1 relative">
-          <FlowerCanvas />
-          <FlowerBadges />
-          <FlowerInfo />
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setShowMath(!showMath)}
-            className="absolute bottom-4 right-4 w-10 h-10 rounded-lg glass-panel flex items-center justify-center z-10 text-muted-foreground hover:text-primary transition-colors"
-          >
-            <BarChart3 className="w-4 h-4" />
-          </motion.button>
-
-          {showMath && <MathPanel onClose={() => setShowMath(false)} />}
+        <div className="flex-1 relative min-h-0">
+          <BloomView name={generationWord} followTheme />
         </div>
       </div>
-
-      {/* Desktop: persistent side panel */}
-      <div className="hidden lg:block">
-        <FlowerControls />
-      </div>
-
-      {/* Mobile/tablet: bottom-sheet drawer */}
-      <Sheet open={controlsOpen} onOpenChange={setControlsOpen}>
-        <SheetContent
-          side="bottom"
-          className="lg:hidden h-[80vh] p-0 flex flex-col bg-card"
-        >
-          <SheetHeader className="px-4 pt-4 pb-2 text-left">
-            <SheetTitle className="text-sm">Flower Controls</SheetTitle>
-            <SheetDescription className="text-xs">Adjust parameters in real-time</SheetDescription>
-          </SheetHeader>
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <FlowerControls className="w-full h-full border-l-0" />
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }
