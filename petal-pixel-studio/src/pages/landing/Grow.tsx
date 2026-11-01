@@ -17,6 +17,23 @@ function hasWebGL(): boolean {
 }
 
 const wantsLessMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Keeps the control in focus in sight. On a small screen the plant holds at the top, and
+ * the browser's own scrolling doesn't count it as covering anything, so this works it out.
+ */
+function bringIntoSight(control: HTMLElement, stage: HTMLElement | null) {
+  const row = control.closest<HTMLElement>(".grow__picks");
+  if (row) {
+    const box = control.getBoundingClientRect();
+    const middle = box.left - row.getBoundingClientRect().left + box.width / 2;
+    row.scrollLeft += middle - row.clientWidth / 2;
+  }
+  const holding = stage && getComputedStyle(stage).position === "sticky";
+  if (!holding) return;
+  const covered = stage.getBoundingClientRect().bottom + 12 - control.getBoundingClientRect().top;
+  if (covered > 0) window.scrollBy({ top: -covered, behavior: "instant" });
+}
 const stillOfGrower = (grower: Grower) => `/flowers/grow/${grower.id}.webp`;
 
 /** A flower that cannot load leaves its picture on the page, and the rest keeps working. */
@@ -42,6 +59,7 @@ class StageGuard extends Component<{ flower: string; onFail: () => void; childre
 
 export function Grow() {
   const section = useRef<HTMLElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
   const slider = useRef<HTMLInputElement>(null);
   const life = useRef({ value: 0 }).current;
   const glow = useRef({ value: 0 }).current;
@@ -149,7 +167,7 @@ export function Grow() {
         </p>
       </div>
 
-      <div className="grow__stage" role="img" aria-label={`${grower.label}, growing from soil to full bloom`}>
+      <div ref={stage} className="grow__stage" role="img" aria-label={`${grower.label}, growing from soil to full bloom`}>
         <img
           className="grow__poster"
           src={stillOfGrower(grower)}
@@ -176,7 +194,7 @@ export function Grow() {
         )}
       </div>
 
-      <div className="grow__controls">
+      <div className="grow__controls" onFocus={(event) => bringIntoSight(event.target, stage.current)}>
         <div className="grow__picks rise" role="group" aria-label="Flower">
           {GROWERS.map((item) => (
             <button
@@ -185,7 +203,6 @@ export function Grow() {
               className="grow__pick"
               aria-pressed={item.id === grower.id}
               onClick={() => choose(item)}
-              onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "center" })}
             >
               <img src={stillOfGrower(item)} alt="" loading="lazy" width={480} height={480} />
               <span>{item.label}</span>

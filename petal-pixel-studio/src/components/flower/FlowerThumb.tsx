@@ -55,7 +55,7 @@ export function FlowerThumb({
 
   return (
     <div className={`${className} bg-secondary`}>
-      {picture && <img src={picture} alt="" loading="lazy" className={imgClassName} />}
+      {picture && <img src={picture} alt="" className={imgClassName} />}
       {children}
     </div>
   );

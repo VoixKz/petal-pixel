@@ -17,8 +17,9 @@ function Rig({ life }: { life: { value: number } }) {
     const wide = size.width > 900 && size.width > size.height;
     const tall = size.height > size.width;
     const far = tall ? 8.8 : 7.3;
-    const lookAt = lerp(lerp(0.62, 1.86, up), 2.36, close);
-    const distance = lerp(lerp(4.6, far, up), tall ? 7.2 : 6, close);
+    // Open, the view rises until the soil has left it and the stem runs off the foot.
+    const lookAt = lerp(lerp(0.72, 1.9, up), tall ? 2.36 : 2.62, close);
+    const distance = lerp(lerp(5.2, far, up), tall ? 7.2 : 6, close);
     camera.position.set(0, lookAt + 0.9, distance);
     camera.lookAt(0, lookAt, 0);
     // On a wide screen the words sit on the left, so the plant stands right of centre.

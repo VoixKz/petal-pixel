@@ -256,7 +256,13 @@
   touch-action: pan-y;
 }
 .grow__stage:active { cursor: grabbing; }
-.grow__canvas { position: absolute; inset: 0; }
+/* The band ends under the plant, so its soil and shadow fade instead of being cut off. */
+.grow__canvas {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 140px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 140px), transparent);
+}
 .grow__poster {
   position: absolute;
   top: 50%;
@@ -676,7 +682,6 @@
     transition: background-color 900ms ease;
   }
   .grow[data-night="true"] .grow__stage { background: var(--night); }
-  /* The band ends under the plant, so its shadow fades instead of being cut off. */
   .grow__canvas { -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent); mask-image: linear-gradient(to bottom, #000 86%, transparent); }
   .grow__poster { left: 50%; width: min(46svh, 90vw); }
   .grow__controls { width: 100%; margin-top: 16px; }
