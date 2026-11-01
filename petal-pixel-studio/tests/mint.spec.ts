@@ -13,6 +13,8 @@ import {
 } from "./helpers";
 
 test("name to flower to NFT in the wallet, and a second buyer is refused", async ({ browser }) => {
+  // CI renders WebGL on the CPU, and minting captures the flower more than once.
+  test.setTimeout(240_000);
   const name = uniqueName("Minted");
 
   const annaContext = await browser.newContext();
@@ -24,7 +26,7 @@ test("name to flower to NFT in the wallet, and a second buyer is refused", async
 
   await anna.getByRole("button", { name: "Mint NFT" }).click();
 
-  await expect(anna.getByText("NFT minted and confirmed in backend")).toBeVisible({ timeout: 30_000 });
+  await expect(anna.getByText("NFT minted and confirmed in backend")).toBeVisible({ timeout: 120_000 });
   expect(await ownerOf(tokenId)).toBe(ALICE_WALLET);
 
   await anna.goto("/nfts");
