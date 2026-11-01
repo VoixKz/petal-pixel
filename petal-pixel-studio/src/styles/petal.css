@@ -8,8 +8,12 @@
   --ink: #141412;
   --muted: #5a5a5e;
   --night: #141412;
-  --accent: #ffec2e;
+  --night-raised: #262624;
+  --night-line: #3b3b38;
+  --night-muted: #b4b4ae;
+  --accent: #f49a30;
   --on-accent: #141412;
+  --dana: #f49a30;
   --margin: clamp(16px, 2.3vw, 32px);
   --radius: 24px;
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -32,7 +36,10 @@
 .pp *::after { box-sizing: border-box; }
 :where(.pp) a { color: inherit; }
 :where(.pp) :where(h1, h2, h3, p) { margin: 0; }
+.pp p,
+.pp li { text-wrap: pretty; }
 .pp h2 {
+  text-wrap: balance;
   font-size: var(--step-head);
   font-weight: 500;
   letter-spacing: -0.04em;
@@ -82,6 +89,7 @@
   position: fixed;
   inset: 0 0 auto;
   z-index: 20;
+  transition: background-color 900ms ease;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -103,104 +111,8 @@
 }
 .pp-bar__links a:not(.pp-button):hover { opacity: 0.6; }
 
-/* Hero: a held stage, with the sentence broken around the working flower. */
-.hero { height: 240svh; }
-.hero__stage {
-  position: sticky;
-  top: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, min(44vw, 74svh)) minmax(0, 1fr);
-  column-gap: clamp(16px, 2vw, 32px);
-  align-items: center;
-  height: 100svh;
-  padding: 64px var(--margin) 0;
-  overflow: hidden;
-}
-.hero__title {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--step-display);
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  line-height: 0.9;
-}
-.hero__half--last { text-align: right; }
-.hero__centre {
-  position: relative;
-  z-index: 1;
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  --stage: calc(100svh - 64px);
-  --tall: min(calc(var(--stage) - 148px), 680px);
-  --gap: calc((var(--stage) - var(--tall)) / 2);
-  height: var(--tall);
-}
-.hero__sliver {
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: calc(var(--gap) - 16px);
-  overflow: hidden;
-  background: var(--surface);
-}
-.hero__sliver img { width: 100%; height: 340px; object-fit: contain; display: block; margin-top: -150px; }
-.hero__sliver--above { top: calc(-1 * var(--gap)); border-radius: 0 0 var(--radius) var(--radius); }
-.hero__sliver--below { bottom: calc(-1 * var(--gap)); border-radius: var(--radius) var(--radius) 0 0; }
-.hero__note {
-  position: absolute;
-  left: var(--margin);
-  bottom: 28px;
-  width: calc((100% - min(44vw, 74svh)) / 2 - 2 * var(--margin));
-  min-height: 5.8em;
-  display: flex;
-  align-items: flex-end;
-}
-.hero__note p { transition: opacity 240ms ease; }
-
-/* The studio fragment */
-.studio {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
-}
-.studio__view { position: relative; flex: 1; min-height: 0; }
-.studio__view canvas { position: absolute !important; inset: 0; }
-.studio__poster {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  transition: opacity 500ms ease;
-}
-.studio__poster[data-gone="true"] { opacity: 0; }
-.studio__result {
-  position: absolute;
-  top: 16px;
-  left: 20px;
-  right: 20px;
-  z-index: 1;
-  font-size: var(--step-small);
-}
-.studio__controls {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  background: #fff;
-}
-.studio__form { display: flex; gap: 8px; }
-.studio__input {
+/* A name field: one shape on the hero and at the close. */
+.field {
   flex: 1;
   min-width: 0;
   height: 48px;
@@ -212,46 +124,320 @@
   font: inherit;
   transition: border-color 160ms ease;
 }
-.studio__input::placeholder { color: var(--muted); }
-.studio__input:hover { border-color: var(--muted); }
-.studio__slider {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+.field::placeholder { color: var(--muted); }
+.field:hover { border-color: var(--muted); }
+
+/* Hero: a held stage. The plant fills it, and the sentence breaks around the plant. */
+.hero { height: 240svh; }
+.hero__stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  padding: 64px var(--margin) 0;
+  overflow: hidden;
+}
+.hero__plant { position: absolute; inset: 0; }
+.hero__canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
+.hero__canvas:active { cursor: grabbing; }
+/* Drawn with the stage's own camera, so the plant barely moves when the canvas takes over. */
+.hero__poster {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  transform: translateX(-50%);
+  transition: opacity 500ms ease;
+}
+.hero__poster[data-gone="true"] { opacity: 0; }
+.hero__title {
+  position: relative;
+  z-index: 1;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 8px 2px;
+  justify-content: space-between;
+  height: 100%;
+  font-size: var(--step-display);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  pointer-events: none;
+}
+.hero__half--last { text-align: right; }
+.hero__note {
+  position: absolute;
+  z-index: 1;
+  left: var(--margin);
+  bottom: 28px;
+  width: min(26vw, 30em);
+  pointer-events: none;
+}
+.hero__grow {
+  position: absolute;
+  z-index: 1;
+  right: var(--margin);
+  bottom: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: min(30vw, 420px);
+}
+.hero__says {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
   font-size: var(--step-small);
 }
-.studio__slider input {
+.hero__next { display: flex; gap: 14px; }
+.hero__next button,
+.hero__next a {
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.hero__next :is(button, a):hover { opacity: 0.6; }
+.hero__form { display: flex; gap: 8px; }
+
+/* Watch one grow: the plant fills the band, the words stand beside it. */
+.grow {
+  --grow-ink: var(--ink);
+  --grow-quiet: var(--muted);
+  --grow-line: var(--surface-strong);
+  --grow-tile: var(--surface);
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 24px;
+  min-height: max(100svh, 760px);
+  padding: 96px var(--margin) 40px;
+  background: var(--ground);
+  color: var(--grow-ink);
+  overflow: clip;
+  transition: background-color 900ms ease, color 900ms ease;
+}
+.grow[data-night="true"] {
+  --grow-ink: #fff;
+  --grow-quiet: var(--night-muted);
+  --grow-line: var(--night-line);
+  --grow-tile: var(--night-raised);
+  background: var(--night);
+}
+.pp .grow { scroll-margin-top: 0; }
+.grow :focus-visible { outline-color: var(--grow-ink); }
+/* Keyboard focus never lands under the fixed bar. */
+.grow button,
+.grow input { scroll-margin-top: 80px; }
+.grow__head,
+.grow__controls {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 24px;
+  width: min(100%, clamp(420px, 40vw, 580px));
+  pointer-events: none;
+}
+.grow__head > *,
+.grow__controls > * { pointer-events: auto; }
+.grow h2 { font-size: clamp(3rem, 5.6vw, 5.25rem); white-space: nowrap; }
+.grow__lead { max-width: 30em; }
+.grow__stage {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.grow__stage:active { cursor: grabbing; }
+.grow__canvas { position: absolute; inset: 0; }
+.grow__poster {
+  position: absolute;
+  top: 50%;
+  left: 69%;
+  width: min(40vw, 560px);
+  height: auto;
+  transform: translate(-50%, -50%);
+  transition: opacity 500ms ease;
+  pointer-events: none;
+}
+.grow__poster[data-hidden="true"] { opacity: 0; }
+.grow__picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.grow__pick {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--grow-tile);
+  color: inherit;
+  font: inherit;
+  font-size: var(--step-small);
+  line-height: 1.15;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background-color 900ms ease;
+}
+.grow__pick:active img { transform: scale(0.97); }
+.grow__pick[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--grow-ink); }
+.grow__pick:focus-visible { outline-offset: 4px; }
+.grow__pick img {
+  display: block;
   width: 100%;
-  height: 28px;
+  height: auto;
+  aspect-ratio: 1;
+  transition: transform 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.grow__pick:hover img { transform: scale(1.06); }
+.grow__age input {
+  width: 100%;
+  height: 44px;
   margin: 0;
   background: transparent;
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
 }
-.studio__slider input::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: var(--surface-strong); }
-.studio__slider input::-moz-range-track { height: 6px; border-radius: 999px; background: var(--surface-strong); }
-.studio__slider input::-webkit-slider-thumb {
+.grow__age input::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: var(--grow-line); }
+.grow__age input::-moz-range-track { height: 6px; border-radius: 999px; background: var(--grow-line); }
+.grow__age input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 22px;
   height: 22px;
   margin-top: -8px;
   border: 0;
   border-radius: 50%;
-  background: var(--ink);
-  transition: transform 160ms ease;
+  background: var(--grow-ink);
 }
-.studio__slider input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: var(--ink); }
-.studio__slider input:active::-webkit-slider-thumb { transform: scale(1.15); }
-.studio__error { padding: 0 8px; color: #a3222a; font-size: var(--step-small); }
+.grow__age input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: var(--grow-ink); }
+.grow__stages { position: relative; height: 20px; margin: 0 11px; color: var(--grow-quiet); font-size: var(--step-small); }
+.grow__stages span { position: absolute; top: 0; transform: translateX(-50%); }
+.grow__stages span:first-child { transform: translateX(-11px); }
+.grow__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.grow[data-night="true"] .pp-button { background: #fff; color: var(--ink); }
+.grow[data-night="true"] .pp-button:hover { background: var(--surface); }
+.grow[data-night="true"] .pp-button--quiet { background: var(--night-raised); color: #fff; }
+.grow[data-night="true"] .pp-button--quiet:hover { background: var(--night-line); }
+.grow__note { min-height: 2.9em; color: var(--grow-quiet); font-size: var(--step-small); }
+
+@media (min-width: 901px) and (max-height: 800px) {
+  .grow { gap: 16px; min-height: max(100svh, 640px); padding: 80px var(--margin) 16px; }
+  .grow__head,
+  .grow__controls { gap: 14px; }
+  .grow__pick img { height: 72px; object-fit: contain; aspect-ratio: auto; }
+  .grow__note { min-height: 0; }
+}
+
+/* A plant on its own stage, in the console and on a shared flower's page. */
+.bloom {
+  --grow-ink: var(--ink);
+  --grow-quiet: var(--muted);
+  --grow-line: var(--surface-strong);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--grow-ink);
+  transition: background-color 900ms ease, color 900ms ease;
+}
+.bloom[data-night="true"] {
+  --grow-ink: #fff;
+  --grow-quiet: var(--night-muted);
+  --grow-line: var(--night-line);
+  background: var(--night);
+}
+.bloom :focus-visible { outline-color: var(--grow-ink); }
+.bloom[data-night="true"] .pp-button--quiet { background: var(--night-raised); color: #fff; }
+.bloom[data-night="true"] .pp-button--quiet:hover { background: var(--night-line); }
+.bloom__canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
+.bloom__canvas:active { cursor: grabbing; }
+.bloom__says { position: absolute; top: 16px; left: var(--margin); font-size: var(--step-small); pointer-events: none; }
+.bloom__controls {
+  position: absolute;
+  left: var(--margin);
+  right: var(--margin);
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  pointer-events: none;
+}
+.bloom__controls > * { pointer-events: auto; }
+.bloom__controls .grow__age { flex: 1 1 220px; }
+.bloom__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A shared flower: the plant fills the page and the words stand beside it. */
+.share { min-height: 100svh; transition: background-color 900ms ease, color 900ms ease; }
+/* The lights go out on the whole page, so the words beside the flower stay readable. */
+.share:has(.bloom[data-night="true"]) { background: var(--night); color: #fff; }
+.share:has(.bloom[data-night="true"]) :focus-visible { outline-color: #fff; }
+.share:has(.bloom[data-night="true"]) .pp-bar { background: var(--night); }
+.share:has(.bloom[data-night="true"]) :is(.share__yours, .pp-bar) .pp-button { background: #fff; color: var(--ink); }
+.share:has(.bloom[data-night="true"]) .share__links button:disabled { color: var(--night-muted); }
+.share__flower { position: relative; min-height: 100svh; }
+.share__stage { position: absolute; inset: 0; }
+.share__stage .bloom__controls { left: 46%; }
+.share__words {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 24px;
+  width: min(100%, clamp(420px, 42vw, 620px));
+  min-height: 100svh;
+  padding: 96px var(--margin) 40px;
+  pointer-events: none;
+}
+.share__words > * { pointer-events: auto; }
+.share__words h1 { font-size: clamp(3rem, 6vw, 5.5rem); font-weight: 500; letter-spacing: -0.04em; line-height: 0.95; overflow-wrap: anywhere; text-wrap: balance; }
+.share__yours { display: flex; gap: 8px; }
+.share__links { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: var(--step-small); }
+.share__links a,
+.share__links button {
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.share__links :is(a, button):hover { opacity: 0.6; }
+.share__links button:disabled { color: var(--muted); cursor: progress; }
+.share__state {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 24px;
+  min-height: 100svh;
+  padding: 96px var(--margin) 40px;
+}
+.share__state h1 { font-size: var(--step-head); font-weight: 500; letter-spacing: -0.04em; line-height: 0.95; }
 
 /* Same name, same flower */
 .names { padding: clamp(96px, 12vw, 200px) var(--margin) clamp(96px, 12vw, 200px); background: var(--ground); position: relative; }
 .names__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .names__intro {
-  grid-column: span 3;
+  grid-column: span 2;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -259,9 +445,10 @@
   padding-right: 8vw;
 }
 .names__intro p { max-width: 34em; }
+.names__intro > div { display: grid; justify-items: start; gap: 16px; }
 .tile {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  display: block;
   width: 100%;
   padding: 0;
   border: 0;
@@ -273,22 +460,43 @@
   text-align: left;
   cursor: pointer;
 }
-.tile__picture { aspect-ratio: 1; overflow: hidden; }
-.tile__picture img { display: block; width: 100%; height: 100%; object-fit: contain; transition: transform 500ms cubic-bezier(0.2, 0.7, 0.2, 1); }
-.tile:hover .tile__picture img { transform: scale(1.05) rotate(-2deg); }
+.tile__picture { position: relative; display: block; aspect-ratio: 1; overflow: hidden; }
+.tile__picture img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 420ms ease;
+}
+.tile:hover .tile__picture img { transform: scale(1.04); }
+.tile__night { opacity: 0; }
+.names[data-night="true"] .tile__night,
+.tile:focus-visible .tile__night { opacity: 1; }
+@media (hover: hover) {
+  .tile:hover .tile__night { opacity: 1; }
+}
 .tile__strip {
+  position: absolute;
+  inset: auto 0 0;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 8px;
-  padding: 14px 18px;
-  background: var(--surface-strong);
+  padding: 16px 18px;
   font-size: var(--step-small);
   text-transform: capitalize;
+  transition: color 420ms ease;
 }
 .tile__name { font-size: var(--step-body); font-weight: 500; }
+.names[data-night="true"] .tile__strip,
+.tile:focus-visible .tile__strip { color: #fff; }
+@media (hover: hover) {
+  .tile:hover .tile__strip { color: #fff; }
+}
 
-/* How it works: one card, four fields */
+/* How it works: one thing at full size in each field */
 .how__title { padding: 0 var(--margin) clamp(40px, 5vw, 72px); }
 .how__fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .how__field {
@@ -297,82 +505,78 @@
   flex-direction: column;
   justify-content: space-between;
   gap: 40px;
-  min-height: 76svh;
-  padding: 14svh clamp(16px, 2vw, 28px) 28px;
+  min-height: min(84svh, 760px);
+  padding: 28px clamp(16px, 2vw, 28px);
+  overflow: hidden;
 }
 .how__field:nth-child(1) { background: var(--surface); }
 .how__field:nth-child(2) { background: var(--surface-strong); }
-.how__field:nth-child(3) { background: var(--accent); color: var(--on-accent); }
-.how__field:nth-child(4) { background: var(--night); color: #fff; }
-.how__clause { font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
-.card {
+.how__field:nth-child(3) { background: var(--dana); color: var(--ink); }
+.how__field:nth-child(4) { justify-content: flex-end; background: var(--night); color: #fff; }
+.how__clause { position: relative; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+.how__name { font-size: clamp(4rem, 8.4vw, 8.75rem); font-weight: 500; letter-spacing: -0.05em; line-height: 0.9; }
+.how__hash {
   display: grid;
-  gap: 8px;
-  width: min(100%, 260px);
-  margin: 0 auto;
-  padding: 16px;
-  border-radius: 14px;
-  background: #fff;
-  color: #141412;
-  font-size: 14px;
+  grid-template-columns: repeat(2, auto);
+  justify-content: space-between;
+  row-gap: 0.1em;
+  font-size: clamp(1.25rem, 2.25vw, 2.25rem);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
-.card__label { color: #5a5a5e; font-size: 13px; }
-.card__value { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
-.card__hash { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; font-size: 14px; }
-.card__row { display: flex; justify-content: space-between; gap: 8px; }
-.card__row span:last-child { font-weight: 500; text-transform: capitalize; }
-.card__chips { display: flex; gap: 6px; }
-.card__chips i { width: 22px; height: 22px; border-radius: 50%; display: block; }
-.card img { width: 100%; aspect-ratio: 1; object-fit: contain; display: block; }
+.how__facts { display: grid; gap: 18px; margin: 0; }
+.how__facts dt { font-size: var(--step-small); }
+.how__facts dd { margin: 0; font-size: clamp(2.25rem, 3.6vw, 3.5rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
+.how__chips { display: flex; gap: 8px; padding-top: 6px; }
+.how__chips i { display: block; width: clamp(40px, 4.4vw, 64px); aspect-ratio: 1; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink); }
+.how__bloom {
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  width: 150%;
+  max-width: none;
+  height: auto;
+  transform: translateX(-50%);
+  -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent);
+  mask-image: radial-gradient(closest-side, #000 72%, transparent);
+}
 
-/* What you can do with it: a dark row with one lit panel */
+/* What you can do with it: a row of flowers lit from inside */
 .keep {
   position: relative;
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: 40px;
-  min-height: 96svh;
-  padding: clamp(72px, 8vw, 120px) 0 64px;
+  padding: clamp(72px, 8vw, 120px) 0 clamp(56px, 6vw, 88px);
   background: var(--night);
   color: #fff;
   overflow: hidden;
 }
-.keep__head { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: end; padding: 0 var(--margin); }
-.keep__note { min-height: 4.4em; }
-.keep__nav { display: flex; gap: 8px; margin-top: 16px; }
-.keep__note strong { display: block; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; }
-.keep__row {
-  display: flex;
-  align-items: center;
-  gap: 8vw;
-  padding: 16px calc(50% - min(240px, 43vw));
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
+.keep h2 { position: relative; z-index: 1; padding: 0 var(--margin); }
+.keep__shelf {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 16px 0 0;
 }
-.keep__row::-webkit-scrollbar { display: none; }
-.keep__panel {
-  flex: 0 0 min(480px, 86vw);
-  scroll-snap-align: center;
-  opacity: 0.32;
-  cursor: pointer;
-  transition: opacity 240ms ease;
+/* Each picture fades into the night, and where two glows meet the brighter one shows. */
+.keep__lamp { position: relative; margin: 0 -9%; mix-blend-mode: lighten; }
+.keep__lamp img {
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 48%, #000 66%, transparent);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 48%, #000 66%, transparent);
 }
-.keep__panel[data-lit="true"] { opacity: 1; }
-.panel { display: grid; gap: 10px; padding: 16px; border-radius: 18px; background: #fff; color: #141412; font-size: 14px; }
-.panel__title { display: flex; justify-content: space-between; font-size: 16px; font-weight: 500; }
-.panel__row { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 8px; border-radius: 10px; }
-.panel__row[data-picked="true"] { background: #f0f0f1; }
-.panel__row img { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: #e5e5e7; }
-.panel__row small { color: #5a5a5e; font-size: 13px; display: block; }
-.panel__menu { display: grid; gap: 2px; }
-.panel__item { display: flex; justify-content: space-between; padding: 10px 8px; border-radius: 8px; }
-.panel__item[data-picked="true"] { background: #f0f0f1; }
-.panel__item small { color: #5a5a5e; font-size: 13px; }
-.panel__preview { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; }
-.panel__preview img { width: 96px; height: 96px; object-fit: contain; }
-.panel__action { display: flex; align-items: center; justify-content: center; height: 42px; border-radius: 999px; background: #141412; color: #fff; font-weight: 500; }
-.panel__action[data-off="true"] { background: #e5e5e7; color: #5a5a5e; }
+.keep__lamp figcaption { position: absolute; left: 0; right: 0; bottom: 6%; color: var(--night-muted); font-size: var(--step-small); text-align: center; }
+.keep__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin: 24px 0 0;
+  padding: 0 var(--margin);
+  color: var(--night-muted);
+  list-style: none;
+}
+.keep__list strong { display: block; margin-bottom: 6px; color: #fff; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
 
 /* Questions */
 .faq { display: grid; grid-template-columns: 4fr 8fr; gap: 24px; padding: clamp(96px, 12vw, 200px) var(--margin); }
@@ -402,34 +606,49 @@
 .faq__item[open] .faq__sign::after { transform: rotate(0deg); }
 .faq__item p { max-width: 38em; padding: 0 24px 24px; }
 
-/* The close: the first step is already open */
+/* The close: the name is already in the field */
 .close {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 440px);
-  gap: 32px;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 24px;
   align-items: center;
-  min-height: 90svh;
-  padding: 96px clamp(16px, 8vw, 128px) 96px var(--margin);
+  min-height: min(90svh, 820px);
+  padding: 0 0 0 var(--margin);
   background: var(--surface);
+  overflow: hidden;
 }
-.close p { max-width: 26em; margin-top: 24px; }
-.dialog { display: grid; gap: 16px; padding: 24px; border-radius: 22px; background: #fff; color: #141412; box-shadow: 0 24px 60px rgba(20, 20, 18, 0.22); /* taste-skill-ignore: an open dialog */ }
-.dialog h3 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
-.dialog label { display: grid; gap: 6px; font-size: 14px; }
-.dialog .pp-button { min-height: 52px; font-size: 16px; }
+.close__words { position: relative; z-index: 1; display: grid; justify-items: start; gap: 24px; padding: 96px 0; }
+.close__words p { max-width: 26em; }
+.close__form { display: flex; gap: 8px; width: min(100%, 520px); }
+/* The stem runs off the bottom of the band, so the flower stands on the page's edge. */
+.close__flower { position: relative; align-self: end; width: 118%; aspect-ratio: 1; margin-right: -18%; }
+.close__flower img { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity 500ms ease; }
+.close__flower img[data-gone="true"] { opacity: 0; }
+.close__flower canvas { position: absolute !important; inset: 0; }
 
-/* Footer */
-.foot { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; padding: 8px; }
-.foot__tile { display: flex; flex-direction: column; justify-content: space-between; gap: 24px; min-height: 220px; padding: 20px; border-radius: 18px; background: var(--surface); }
-.foot__tile a { text-decoration: none; }
-.foot__tile a:hover { text-decoration: underline; }
-.foot__statement { grid-column: span 5; }
-.foot__nav { grid-column: span 4; }
-.foot__maker { grid-column: span 3; }
+/* Footer: the night carries on under the page */
+.foot {
+  display: grid;
+  gap: clamp(40px, 6vw, 88px);
+  padding: clamp(40px, 5vw, 72px) var(--margin) 20px;
+  background: var(--night);
+  color: #fff;
+  overflow: hidden;
+}
+.foot .pp-button--light:hover { background: var(--surface-strong); }
+.foot :focus-visible { outline-color: #fff; }
+.foot__top { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 3fr) auto; gap: 24px; align-items: start; }
+.foot__statement { max-width: 22em; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
 .foot__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.foot__mark { grid-column: span 8; min-height: 320px; align-items: center; justify-content: center; background: var(--night); color: #fff; font-size: 9vw; font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
-.foot__open { grid-column: span 4; min-height: 320px; background: var(--accent); color: var(--on-accent); }
-.foot__small { font-size: var(--step-small); }
+.foot a { text-decoration: none; }
+.foot__list a:hover,
+.foot__base a:hover { text-decoration: underline; }
+/* Set from the width of the words, so they run exactly margin to margin. */
+.foot__mark { font-size: calc((100vw - 2 * var(--margin)) / 4.04); font-weight: 500; letter-spacing: -0.05em; line-height: 0.82; white-space: nowrap; }
+.foot__base { display: flex; justify-content: space-between; gap: 16px; color: var(--night-muted); }
+.foot__base small { font-size: var(--step-small); }
+.foot__base a { color: #fff; }
 
 /* Sections rise in once. Nothing is hidden unless the script has marked the page. */
 .pp[data-motion="on"] .rise { opacity: 0; transform: translateY(24px); }
@@ -441,47 +660,98 @@
 }
 
 @media (max-width: 900px) {
+  /* The words come first, then the plant holds at the top while the controls pass under it. */
+  .grow { display: block; min-height: 0; padding: 96px var(--margin) 40px; }
+  .grow__head,
+  .grow__controls { z-index: auto; }
+  .grow__head { width: 100%; }
+  .grow h2 { font-size: clamp(2.75rem, 12.6vw, 5rem); }
+  .grow__stage {
+    position: sticky;
+    top: 64px;
+    z-index: 1;
+    height: 46svh;
+    margin: 16px calc(var(--margin) * -1) 0;
+    background: inherit;
+    transition: background-color 900ms ease;
+  }
+  .grow[data-night="true"] .grow__stage { background: var(--night); }
+  /* The band ends under the plant, so its shadow fades instead of being cut off. */
+  .grow__canvas { -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent); mask-image: linear-gradient(to bottom, #000 86%, transparent); }
+  .grow__poster { left: 50%; width: min(46svh, 90vw); }
+  .grow__controls { width: 100%; margin-top: 16px; }
+  /* ...or under the plant, which holds below the bar here. */
+  .grow button,
+  .grow input { scroll-margin-top: calc(64px + 46svh + 12px); }
+  .grow__picks {
+    display: flex;
+    gap: 8px;
+    margin: 0 calc(var(--margin) * -1);
+    padding: 4px var(--margin);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--margin);
+    scrollbar-width: none;
+  }
+  .grow__picks::-webkit-scrollbar { display: none; }
+  .grow__pick { flex: 0 0 92px; scroll-snap-align: center; }
   .pp-bar { height: 56px; }
   .pp-bar__links a:not(.pp-button) { display: none; }
   .pp-bar .pp-button { min-height: 40px; padding: 0 16px; }
 
+  .share__flower { display: flex; flex-direction: column; }
+  .share__stage { position: relative; inset: auto; height: 68svh; margin-top: 56px; }
+  .share__stage .bloom__controls { left: var(--margin); }
+  .share__words { order: 1; width: 100%; min-height: 0; padding: 32px var(--margin) 40px; }
+  .share__yours .pp-button { flex: none; }
+  .share__links a,
+  .share__links button { padding: 13px 0; }
+
   .hero { height: auto; }
-  .hero__stage {
-    position: relative;
-    height: auto;
-    min-height: 100svh;
-    grid-template-columns: minmax(0, 1fr);
-    align-content: start;
-    row-gap: 12px;
-    padding: 68px var(--margin) 24px;
-  }
-  .hero__title { display: block; grid-column: 1; grid-row: 1; font-size: 13.5vw; }
+  .hero__stage { position: relative; display: flex; flex-direction: column; height: 100svh; min-height: 600px; padding: 72px var(--margin) 20px; }
+  .hero__title { display: block; flex: 1; height: auto; font-size: 13.5vw; }
   .hero__half { display: block; }
   .hero__half br { display: none; }
-  .hero__centre { grid-column: 1; grid-row: 2; height: min(62svh, 500px); }
-  .hero__sliver { display: none; }
-  .hero__note { position: static; grid-row: 3; width: auto; min-height: 0; display: block; }
+  .hero__note { display: none; }
+  .hero__grow { position: relative; right: auto; bottom: auto; width: 100%; }
 
   .names__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .names__intro { grid-column: span 2; padding: 0 0 24px; }
   .tile__strip { padding: 10px 12px; }
-  .tile:last-child { grid-column: span 2; }
-  .tile:last-child .tile__picture { aspect-ratio: 2 / 1; }
 
   .how__fields { grid-template-columns: minmax(0, 1fr); }
-  .how__field { min-height: 0; padding-top: 48px; }
+  .how__field { min-height: 0; padding-top: 32px; gap: 32px; }
+  .how__field:nth-child(4) { min-height: 112vw; justify-content: flex-end; }
+  .how__name { font-size: 26vw; }
+  .how__hash { font-size: 6.4vw; }
 
-  .keep__head { grid-template-columns: minmax(0, 1fr); }
+  .keep__shelf {
+    display: flex;
+    margin: 8px 0 0;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .keep__shelf::-webkit-scrollbar { display: none; }
+  .keep__lamp { flex: 0 0 56vw; margin: 0 -5vw; scroll-snap-align: center; }
+  .keep__list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
   .faq { grid-template-columns: minmax(0, 1fr); }
   .faq__heading { position: static; }
 
-  .close { grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 72px var(--margin); }
+  .close { grid-template-columns: minmax(0, 1fr); gap: 0; min-height: 0; padding: 72px var(--margin) 0; }
+  .close__words { padding: 0; }
+  .close__form { flex-direction: column; }
+  .close__form .field { flex: 0 0 48px; }
+  .close__flower { justify-self: center; width: 112%; margin: 0; }
 
-  .foot { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 6px; }
-  .foot__mark { grid-column: span 2; grid-row: 1; min-height: 160px; font-size: 13vw; }
-  .foot__open { grid-column: span 2; grid-row: 2; min-height: 180px; }
-  .foot__statement { grid-column: span 2; }
-  .foot__nav, .foot__maker { grid-column: span 1; }
+  .foot__top { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .foot__statement { line-height: 1.25; }
+  .foot__list { gap: 0; }
+  .foot__list a { display: flex; align-items: center; min-height: 44px; }
+  .hero__next button,
+  .hero__next a { padding: 12px 0; }
+  .how__clause { line-height: 1.25; }
+  .foot__base { flex-direction: column; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -511,8 +781,11 @@
 .gate__done { font-size: var(--step-body); }
 .gate__or { display: grid; gap: 10px; }
 .gate__links { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: var(--step-small); }
-.gate__picture { display: flex; align-items: flex-end; margin: 8px 8px 8px 0; border-radius: var(--radius); background: var(--surface); position: relative; overflow: hidden; padding: 24px; }
-.gate__picture img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 6%; }
+.gate__picture { display: flex; align-items: flex-start; margin: 8px 8px 8px 0; border-radius: var(--radius); background: var(--surface); position: relative; overflow: hidden; padding: 24px; }
+/* The stem runs off the foot of the picture, so nothing ends in mid-air. */
+.gate__picture img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: bottom; }
+.gate__flower { position: absolute; left: 0; right: 0; bottom: 0; aspect-ratio: 1; opacity: 0; transition: opacity 500ms ease; }
+.gate__flower[data-drawn="true"] { opacity: 1; }
 .gate__picture p { position: relative; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
 @media (max-width: 900px) {
   .gate { grid-template-columns: minmax(0, 1fr); }

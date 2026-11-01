@@ -6,9 +6,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { PageErrorBoundary } from "./components/PageErrorBoundary";
 
+const DashboardLayout = lazy(() => import("@/components/layout/DashboardLayout").then((m) => ({ default: m.DashboardLayout })));
 const Landing = lazy(() => import("./pages/Landing"));
 const Index = lazy(() => import("./pages/Index"));
 const CreateFlower = lazy(() => import("./pages/CreateFlower"));

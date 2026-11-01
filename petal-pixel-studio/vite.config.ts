@@ -16,6 +16,9 @@ export default defineConfig(() => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          // Small shared helpers stay with React, or the first page would have to wait for
+          // the heavy chunk they happened to land in.
+          if (id.includes("vite/preload-helper") || id.includes("commonjsHelpers") || id.includes("/clsx/") || id.includes("/zustand/")) return "vendor-react";
           if (!id.includes("node_modules")) return;
           if (id.includes("three") || id.includes("@react-three") || id.includes("postprocessing")) return "vendor-three";
           if (id.includes("/ethers/")) return "vendor-ethers";

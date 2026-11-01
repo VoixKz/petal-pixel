@@ -1,107 +1,116 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
-import { createFlowerViaGrpc } from "@/integrations/flowerBackend/client";
-import { toV2Params, type V2Params } from "@/math/flowerGeometry";
-import { inkFor, plainFamily, SPECIMENS, stillOf } from "./specimens";
+import { identityOf } from "@/math/blossom/identity";
+import { FIRST_NAME, inkFor, type GrownFlower } from "./specimens";
 
-const GrowingFlower = lazy(() =>
-  import("@/components/flower/GrowingFlower").then((m) => ({ default: m.GrowingFlower })),
-);
+const HeroStage = lazy(() => import("./HeroStage"));
 
-const FIRST_NAME = "Dana";
-/** How far a new flower opens by itself. On a held stage the scroll opens the rest. */
-const RESTING_GROWTH = 0.58;
+/** How far a new flower grows by itself. On a held stage the scroll opens the rest. */
+const RESTING_LIFE = 0.62;
+/** The first flower starts on its stem, so the page never opens on bare soil. */
+const FIRST_LIFE = 0.3;
+const SECONDS_TO_REST = 7;
+
 const opensByItself = () => window.matchMedia("(max-width: 900px)").matches;
-const GROW_MS = 3800;
 
 const NOTES = [
-  "Type any name. It grows from a bud in front of you, and the same name always grows the same flower.",
-  "The letters are all it needs. They set the family, the colours and every petal.",
-  "Once it opens it's yours. Keep it in your garden or send it to the person it's named after.",
+  "Type any name and it grows from the soil, the same flower every time. Scroll and it opens.",
+  "The letters are all it needs. They set the kind of flower, its colours and every petal.",
+  "Once it opens it's yours. Send it to the person it's named after, or keep it in your garden.",
 ];
+
+/** A flower can be sent as a link. The name stays after the #, so it never reaches a server. */
+const linkFor = (name: string) => `${window.location.origin}/#name=${encodeURIComponent(name)}`;
+const nameInLink = () => new URLSearchParams(window.location.hash.slice(1)).get("name") ?? "";
 
 const article = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
 
+function hasWebGL(): boolean {
+  try {
+    return Boolean(document.createElement("canvas").getContext("webgl2"));
+  } catch {
+    return false;
+  }
+}
+
 interface HeroProps {
   name: string;
-  onGrown: (name: string, stops: string[]) => void;
+  onGrown: (flower: GrownFlower, colours: readonly string[]) => void;
 }
 
 export function Hero({ name, onGrown }: HeroProps) {
   const reduceMotion = useRef(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const section = useRef<HTMLElement>(null);
-  const slider = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
-  const growth = useRef({ value: 0 });
-  const base = useRef(0);
+  const life = useRef({ value: FIRST_LIFE }).current;
+  const base = useRef(FIRST_LIFE);
   const held = useRef(0);
   const animation = useRef(0);
 
   const [draft, setDraft] = useState("");
-  const [params, setParams] = useState<V2Params | null>(null);
-  const [shownName, setShownName] = useState("");
-  const [family, setFamily] = useState("");
+  const [seed, setSeed] = useState("");
+  const [shown, setShown] = useState("");
+  const [sentence, setSentence] = useState("");
+  const [sent, setSent] = useState("");
   const [canvasReady, setCanvasReady] = useState(false);
-  const [poster, setPoster] = useState("/flowers/hero.webp");
-  const [problem, setProblem] = useState("");
-  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState(0);
   const [onScreen, setOnScreen] = useState(true);
+  const [webgl] = useState(hasWebGL);
 
   const apply = () => {
-    const opened = base.current + (1 - base.current) * held.current;
-    growth.current.value = opened;
+    life.value = base.current + (1 - base.current) * held.current;
   };
 
-  const setBase = (value: number) => {
-    base.current = value;
-    if (slider.current) slider.current.value = String(value);
-    apply();
-  };
-
-  const growTo = (target: number) => {
+  const growFrom = (start: number) => {
     cancelAnimationFrame(animation.current);
+    const target = opensByItself() ? 1 : RESTING_LIFE;
     if (reduceMotion.current) {
-      setBase(target);
+      base.current = 1;
+      apply();
       return;
     }
-    const from = base.current;
-    const started = performance.now();
+    base.current = start;
+    let last = performance.now();
     const step = (now: number) => {
-      const t = Math.min((now - started) / GROW_MS, 1);
-      setBase(from + (target - from) * (1 - (1 - t) ** 3));
-      if (t < 1) animation.current = requestAnimationFrame(step);
+      const seconds = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      base.current = Math.min(base.current + (seconds * RESTING_LIFE) / SECONDS_TO_REST, target);
+      apply();
+      if (base.current < target) animation.current = requestAnimationFrame(step);
     };
     animation.current = requestAnimationFrame(step);
   };
 
-  const grow = async (wanted: string, asked = true) => {
+  const grow = (wanted: string, start: number) => {
     const clean = wanted.trim();
     if (!clean) return;
-    setBusy(true);
-    setProblem("");
-    try {
-      const response = await createFlowerViaGrpc(clean);
-      if (!response.params) throw new Error("empty response");
-      const v2 = toV2Params(response.params);
-      setParams(v2);
-      setShownName(clean);
-      setFamily(plainFamily(v2.family));
-      onGrown(clean, (v2.palette?.stops ?? []).map((s) => s.hex));
-      setBase(0);
-      growTo(opensByItself() ? 1 : RESTING_GROWTH);
-    } catch {
-      if (asked) setProblem("That didn't grow. Check your connection and try again.");
-      // The first flower is the page's own: show it open rather than a bud that never grows.
-      else setPoster("/flowers/dana.webp");
-    } finally {
-      setBusy(false);
-    }
+    const flower = identityOf(clean);
+    setSeed(flower.seed);
+    setShown(clean);
+    setSent("");
+    setSentence(`${clean} grows ${article(flower.kind)} ${flower.kind}.`);
+    onGrown({ name: clean, seed: flower.seed, species: flower.kind }, flower.colour);
+    growFrom(start);
   };
 
   useEffect(() => {
-    void grow(name || FIRST_NAME, Boolean(name));
+    const wanted = name || nameInLink();
+    setDraft("");
+    grow(wanted || FIRST_NAME, wanted ? 0 : FIRST_LIFE);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name]);
+
+  const send = async () => {
+    const link = linkFor(shown);
+    window.history.replaceState(null, "", `#name=${encodeURIComponent(shown)}`);
+    try {
+      if (navigator.share) await navigator.share({ title: sentence, url: link });
+      else await navigator.clipboard.writeText(link);
+      setSent(navigator.share ? "" : "Link copied. It opens on this flower.");
+    } catch (error) {
+      // Closing the share sheet is not a failure.
+      if ((error as Error).name !== "AbortError") setSent("Couldn't copy it. The link is in the address bar.");
+    }
+  };
 
   useEffect(() => () => cancelAnimationFrame(animation.current), []);
 
@@ -119,6 +128,7 @@ export function Hero({ name, onGrown }: HeroProps) {
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     return () => window.removeEventListener("scroll", onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -131,13 +141,29 @@ export function Hero({ name, onGrown }: HeroProps) {
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (draft.trim()) void grow(draft);
+    if (draft.trim()) grow(draft, 0);
     else field.current?.focus();
   };
 
   return (
     <section ref={section} className="hero" aria-label="Grow a flower from a name">
       <div className="hero__stage">
+        <div className="hero__plant" role="img" aria-label={sentence || "A flower growing from the soil"}>
+          <img
+            className="hero__poster"
+            data-gone={canvasReady && webgl ? "true" : "false"}
+            src="/flowers/first.webp"
+            alt=""
+            width={1600}
+            height={1000}
+          />
+          {webgl && seed && (
+            <Suspense fallback={null}>
+              <HeroStage seed={seed} life={life} active={onScreen} onReady={() => setCanvasReady(true)} />
+            </Suspense>
+          )}
+        </div>
+
         <h1 className="hero__title">
           <span className="hero__half hero__half--first">
             Every <br />
@@ -149,83 +175,41 @@ export function Hero({ name, onGrown }: HeroProps) {
           </span>
         </h1>
 
-        <div className="hero__centre">
-          <div className="hero__sliver hero__sliver--above" aria-hidden="true">
-            <img src={stillOf(SPECIMENS[2])} alt="" />
-          </div>
-          <div className="studio" data-ui>
-            <div className="studio__view">
-              <img
-                className="studio__poster"
-                data-gone={canvasReady && params ? "true" : "false"}
-                src={poster}
-                alt="A dahlia grown from the name Dana"
-                width={900}
-                height={900}
-              />
-              <Suspense fallback={null}>
-                <GrowingFlower
-                  params={params}
-                  growth={growth.current}
-                  active={onScreen}
-                  onReady={() => setCanvasReady(true)}
-                />
-              </Suspense>
-              <p className="studio__result" aria-live="polite">
-                {shownName ? `${shownName} grows ${article(family)} ${family}.` : " "}
-              </p>
-            </div>
-            <div className="studio__controls">
-              <form className="studio__form" onSubmit={submit}>
-                <input
-                  ref={field}
-                  className="studio__input"
-                  aria-label="A name to grow"
-                  placeholder="Type a name"
-                  maxLength={64}
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-                <button className="pp-button" type="submit" disabled={busy}>
-                  {busy ? "Growing" : "Grow it"}
-                </button>
-              </form>
-              <label className="studio__slider">
-                <span>Bud</span>
-                <input
-                  ref={slider}
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.001}
-                  defaultValue={0}
-                  aria-label="How far the flower has opened"
-                  onChange={(e) => {
-                    cancelAnimationFrame(animation.current);
-                    setBase(Number(e.target.value));
-                  }}
-                />
-                <span>Bloom</span>
-              </label>
-              {problem && <p className="studio__error" role="alert">{problem}</p>}
-            </div>
-          </div>
-          <div className="hero__sliver hero__sliver--below" aria-hidden="true">
-            <img src={stillOf(SPECIMENS[1])} alt="" />
-          </div>
-        </div>
-
         <div className="hero__note">
           <p key={note}>{NOTES[note]}</p>
         </div>
+
+        {webgl && (
+          <div className="hero__grow">
+            <div className="hero__says">
+              <p aria-live="polite">{sent || sentence}</p>
+              <span className="hero__next">
+                <button type="button" onClick={() => void send()}>Send it</button>
+                <a href="#save">Keep it</a>
+              </span>
+            </div>
+            <form className="hero__form" onSubmit={submit}>
+              <input
+                ref={field}
+                id="name-field"
+                className="field"
+                aria-label="A name to grow"
+                placeholder="Type a name"
+                maxLength={64}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <button className="pp-button" type="submit">Grow it</button>
+            </form>
+          </div>
+        )}
       </div>
     </section>
   );
 }
 
-/** The colour the page takes from a flower's palette. */
-export function accentFrom(stops: string[]): { accent: string; onAccent: string } | null {
-  // The middle stop is the colour a flower reads as; the last one mostly sits in its shadows.
-  const accent = stops[Math.floor(stops.length / 2)];
+/** The colour the page takes from a flower: its middle one is the one it reads as. */
+export function accentFrom(colours: readonly string[]): { accent: string; onAccent: string } | null {
+  const accent = colours[Math.floor(colours.length / 2)];
   return accent ? { accent, onAccent: inkFor(accent) } : null;
 }

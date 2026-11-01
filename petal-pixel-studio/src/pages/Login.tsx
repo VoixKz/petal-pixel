@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { usesPasswordForm } from "@/integrations/auth";
-import { errorText, Field, Gate, useReturnTo } from "./auth/Gate";
+import { errorText, Field, Gate, useGateTitle, useReturnTo } from "./auth/Gate";
 import { GoogleButton } from "./auth/GoogleButton";
 
 function PasswordSignIn() {
@@ -11,6 +11,7 @@ function PasswordSignIn() {
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = useReturnTo();
+  const title = useGateTitle("Sign in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [problem, setProblem] = useState("");
@@ -33,7 +34,7 @@ function PasswordSignIn() {
   };
 
   return (
-    <Gate title="Welcome back">
+    <Gate title={title}>
       <form className="gate__fields" onSubmit={(e) => void submit(e)}>
         <Field label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} />
         <Field label="Password" type="password" autoComplete="current-password" value={password} onChange={setPassword} />
@@ -55,6 +56,7 @@ function RedirectSignIn() {
   const { signIn } = useAuth();
   const location = useLocation();
   const returnTo = useReturnTo();
+  const title = useGateTitle("Sign in");
   const [busy, setBusy] = useState(false);
 
   const start = async () => {
@@ -68,7 +70,7 @@ function RedirectSignIn() {
   };
 
   return (
-    <Gate title="Welcome back">
+    <Gate title={title}>
       <button className="pp-button" type="button" disabled={busy} onClick={() => void start()}>
         {busy ? "Opening sign-in…" : "Sign In"}
       </button>

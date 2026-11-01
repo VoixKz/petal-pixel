@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { seedOf } from "@/math/blossom/name";
 import "@/styles/petal.css";
+
+const KeptFlower = lazy(() => import("@/pages/landing/KeptFlower"));
 
 /** Where to go after signing in: the page that asked for it, or the console. */
 export function useReturnTo(): string {
@@ -11,7 +14,26 @@ export function useReturnTo(): string {
   return from?.pathname ? `${from.pathname}${from.search ?? ""}` : "/console";
 }
 
+/** The flower waiting to be kept, when sign-in was asked for one. */
+function useWaitingName(): string {
+  return new URLSearchParams(useReturnTo().split("?")[1] ?? "").get("name") ?? "";
+}
+
+export function useGateTitle(plain: string): string {
+  const name = useWaitingName();
+  return name && name.length <= 24 ? `Keep ${name}'s flower` : plain;
+}
+
 export function Gate({ title, children }: { title: string; children: ReactNode }) {
+  const name = useWaitingName();
+  const [seed, setSeed] = useState("");
+  const [drawn, setDrawn] = useState(false);
+
+  useEffect(() => {
+    // The picture side only exists on a wide screen, so a phone never pays for this.
+    if (name && window.matchMedia("(min-width: 901px)").matches) setSeed(seedOf(name));
+  }, [name]);
+
   return (
     <div className="pp gate">
       <div className="gate__form">
@@ -22,8 +44,15 @@ export function Gate({ title, children }: { title: string; children: ReactNode }
         </main>
       </div>
       <div className="gate__picture">
-        <img src="/flowers/dana.webp" alt="" width={800} height={800} />
-        <p>Dana grows a dahlia.</p>
+        {!name && <img src="/flowers/names/dana.webp" alt="" width={900} height={900} />}
+        {seed && (
+          <div className="gate__flower" data-drawn={drawn}>
+            <Suspense fallback={null}>
+              <KeptFlower seed={seed} active onReady={() => setDrawn(true)} />
+            </Suspense>
+          </div>
+        )}
+        <p>A name becomes a flower.</p>
       </div>
     </div>
   );

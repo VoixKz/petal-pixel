@@ -1,33 +1,35 @@
-// Real output of the generator for nine names, one per flower family.
+// Real output of the blossom engine for the names shown on the page. The numbers in
+// specimens.test.ts hold them to what the engine really grows for each name.
 export interface Specimen {
   name: string;
-  family: string;
-  stops: [string, string, string];
+  species: string;
 }
 
-/** Everyday names for the families whose code names are mathematical terms. */
-const PLAIN_NAMES: Record<string, string> = {
-  classic: "trumpet flower",
-  rhodonea: "star flower",
-  superformula: "shell flower",
-};
+/** The flower a visitor has just grown, carried down the page. */
+export interface GrownFlower {
+  name: string;
+  seed: string;
+  species: string;
+}
 
-export const plainFamily = (family: string) => PLAIN_NAMES[family] ?? family;
+export const FIRST_NAME = "Dana";
+/** The real SHA-256 of "dana", which is also the seed of the page's first flower. */
+export const FIRST_SEED = "2c9e0a2585dc7406589a3724f0027811506e0f133726303a15d6779d532a2573";
 
 export const SPECIMENS: Specimen[] = [
-  { name: "Anna", family: "camellia", stops: ["#f3ddb2", "#f1a759", "#da672d"] },
-  { name: "Ben", family: "rose", stops: ["#ffeff7", "#ffb9e0", "#e36bbe"] },
-  { name: "Zara", family: "lotus", stops: ["#e1ddee", "#b1a6de", "#7363bd"] },
-  { name: "Dana", family: "dahlia", stops: ["#ecff86", "#ffec2e", "#fbb914"] },
-  { name: "Oleg", family: "zinnia", stops: ["#ffecf4", "#ffaed5", "#ea5ab3"] },
-  { name: "Maria", family: "trumpet flower", stops: ["#ffeec0", "#fec26b", "#e7853f"] },
-  { name: "Sofia", family: "sunflower", stops: ["#e9dbdf", "#dfb1bf", "#c87f96"] },
-  { name: "Omar", family: "star flower", stops: ["#f9ffa8", "#fff652", "#ccb71c"] },
-  { name: "Alina", family: "shell flower", stops: ["#d89fcb", "#984b8a", "#582054"] },
+  { name: "Anna", species: "camellia" },
+  { name: "Maria", species: "lotus" },
+  { name: "Aisha", species: "magnolia" },
+  { name: "Oleg", species: "rose" },
+  { name: "Sara", species: "peony" },
+  { name: "Iris", species: "anemone" },
 ];
 
-/** Lower-case key of each still in /public/flowers. */
-export const stillOf = (s: Specimen) => `/flowers/${s.name.toLowerCase()}.webp`;
+/** A flower lit from inside, stood in a row at night. */
+export const LAMPS = ["Zara", "Maria", "Dana", "Omar", "Anna"];
+
+export const stillOf = (name: string, night: boolean) => `/flowers/names/${name.toLowerCase()}${night ? "-night" : ""}.webp`;
+export const lampOf = (name: string) => `/flowers/lamps/${name.toLowerCase()}.webp`;
 
 /** Black or white, whichever reads better on a colour. */
 export function inkFor(hex: string): string {
