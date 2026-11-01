@@ -221,3 +221,34 @@ func TestGrpcWebPreflightRefusesOtherOrigins(t *testing.T) {
 		t.Errorf("Access-Control-Allow-Origin = %q, want none", got)
 	}
 }
+
+func TestListenAddr(t *testing.T) {
+	cases := []struct {
+		name, grpcAddr, port, want string
+	}{
+		{"default", "", "", ":50051"},
+		{"hosting platform port", "", "3000", ":3000"},
+		{"explicit address wins", "127.0.0.1:9000", "3000", "127.0.0.1:9000"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Setenv("GRPC_ADDR", c.grpcAddr)
+			t.Setenv("PORT", c.port)
+			if got := listenAddr(); got != c.want {
+				t.Errorf("listenAddr() = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestDatabaseDSN(t *testing.T) {
+	t.Setenv("DB_DSN", "")
+	t.Setenv("NEON_DATABASE_URL", "postgres://neon")
+	if got := databaseDSN(); got != "postgres://neon" {
+		t.Errorf("hosted database: got %q", got)
+	}
+	t.Setenv("DB_DSN", "postgres://local")
+	if got := databaseDSN(); got != "postgres://local" {
+		t.Errorf("explicit DSN wins: got %q", got)
+	}
+}

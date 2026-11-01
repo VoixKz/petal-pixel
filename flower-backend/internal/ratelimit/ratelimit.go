@@ -4,11 +4,14 @@ package ratelimit
 import (
 	"context"
 	"net"
+	"net/http"
+	"strings"
 	"sync"
 
 	"golang.org/x/time/rate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -51,19 +54,42 @@ func ClientIP(addr string) string {
 	return host
 }
 
-// UnaryInterceptor applies the limiter to one gRPC method.
-func UnaryInterceptor(l *Limiter, method string) grpc.UnaryServerInterceptor {
+// RequestIP returns the client address of an HTTP request. ipHeader names a
+// header set by a trusted proxy; leave it empty when clients connect directly,
+// because a client can otherwise pick its own identity.
+func RequestIP(r *http.Request, ipHeader string) string {
+	if ipHeader != "" {
+		if ip := strings.TrimSpace(r.Header.Get(ipHeader)); ip != "" {
+			return ip
+		}
+	}
+	return ClientIP(r.RemoteAddr)
+}
+
+// UnaryInterceptor applies the limiter to one gRPC method. ipHeader works as in
+// RequestIP.
+func UnaryInterceptor(l *Limiter, method, ipHeader string) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if info.FullMethod != method {
 			return handler(ctx, req)
 		}
-		client := "unknown"
-		if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
-			client = ClientIP(p.Addr.String())
-		}
-		if !l.Allow(client) {
+		if !l.Allow(callerIP(ctx, ipHeader)) {
 			return nil, status.Error(codes.ResourceExhausted, "too many requests")
 		}
 		return handler(ctx, req)
 	}
+}
+
+func callerIP(ctx context.Context, ipHeader string) string {
+	if ipHeader != "" {
+		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			if values := md.Get(ipHeader); len(values) > 0 && strings.TrimSpace(values[0]) != "" {
+				return strings.TrimSpace(values[0])
+			}
+		}
+	}
+	if p, ok := peer.FromContext(ctx); ok && p.Addr != nil {
+		return ClientIP(p.Addr.String())
+	}
+	return "unknown"
 }
