@@ -10,7 +10,7 @@ import {
   PrepareMintRequestSchema,
   UpdateMeRequestSchema,
 } from "@/gen/flower/v1/service_pb";
-import { getAccessToken } from "@/integrations/auth/oidc";
+import { getAccessToken } from "@/integrations/auth";
 
 export const flowerBackendBaseUrl = import.meta.env.VITE_FLOWER_BACKEND_URL || "http://localhost:50051";
 
@@ -168,11 +168,3 @@ export function buildShareUrl(backendBaseUrl: string, flowerId: string): string 
   return `${base}/share/${encodeURIComponent(flowerId)}`;
 }
 
-export async function checkFlowerBackendHealth() {
-  const response = await fetch(`${flowerBackendBaseUrl}/healthz`, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(`Health check failed with status ${response.status}`);
-  }
-  const payload = await response.json() as { status?: string };
-  return payload.status === "ok";
-}

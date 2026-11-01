@@ -1,0 +1,8 @@
+node_modules
+dist
+spike
+tests
+test-results
+playwright-report
+.env
+.env.*

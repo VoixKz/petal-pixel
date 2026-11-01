@@ -62,7 +62,7 @@ test("another account does not see your flower", async ({ page, context }) => {
 test("the sign-up page opens registration", async ({ page }) => {
   await page.goto("/signup");
 
-  await page.getByRole("button", { name: "Create Account" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
 
   await page.waitForURL(/\/realms\/petal-pixel\//);
   await expect(page.getByRole("button", { name: "Register" })).toBeVisible();

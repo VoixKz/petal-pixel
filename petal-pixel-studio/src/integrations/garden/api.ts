@@ -7,7 +7,7 @@ import {
 } from "@/gen/flower/v1/service_pb";
 import { flowerClient } from "@/integrations/flowerBackend/client";
 
-export { getSignedInUserId } from "@/integrations/auth/oidc";
+export { getSignedInUserId } from "@/integrations/auth";
 
 export interface GardenRow {
   flowerId: string;

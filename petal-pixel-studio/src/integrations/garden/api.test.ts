@@ -8,7 +8,7 @@ const rpc = vi.hoisted(() => ({
 }));
 
 vi.mock("@/integrations/flowerBackend/client", () => ({ flowerClient: rpc }));
-vi.mock("@/integrations/auth/oidc", () => ({
+vi.mock("@/integrations/auth", () => ({
   getSignedInUserId: vi.fn(async () => "sub-anna"),
 }));
 
