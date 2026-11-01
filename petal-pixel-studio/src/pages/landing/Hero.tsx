@@ -71,7 +71,8 @@ export function Hero({ name, onGrown }: HeroProps) {
     base.current = start;
     let last = performance.now();
     const step = (now: number) => {
-      const seconds = Math.min((now - last) / 1000, 0.05);
+      // A slow device gets fewer frames, not a slower plant; only a long pause is cut short.
+      const seconds = Math.min((now - last) / 1000, 0.5);
       last = now;
       base.current = Math.min(base.current + (seconds * RESTING_LIFE) / SECONDS_TO_REST, target);
       apply();

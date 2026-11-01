@@ -103,7 +103,8 @@ export function Grow() {
     let frame = 0;
     let last = performance.now();
     const tick = (now: number) => {
-      const seconds = Math.min((now - last) / 1000, 0.05);
+      // A slow device gets fewer frames, not a slower plant; only a long pause is cut short.
+      const seconds = Math.min((now - last) / 1000, 0.5);
       last = now;
       if (playing.current) {
         const pace = life.value < 0.44 ? SECONDS_PER_LIFE_TO_BUD : SECONDS_PER_LIFE_IN_BLOOM;

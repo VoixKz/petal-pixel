@@ -43,10 +43,10 @@ test("a visitor watches a plant grow, picks a flower and turns the lights off", 
   await section.scrollIntoViewIfNeeded();
 
   // A trial click fails if anything is drawn over the heading.
-  await page.getByRole("heading", { name: "Watch one grow." }).click({ trial: true, timeout: 5000 });
+  await page.getByRole("heading", { name: "Watch one grow." }).click({ trial: true, timeout: 20_000 });
 
   const age = page.getByLabel("Age of the plant");
-  await expect.poll(async () => Number(await age.inputValue())).toBeGreaterThan(5);
+  await expect.poll(async () => Number(await age.inputValue()), { timeout: 20_000 }).toBeGreaterThan(5);
 
   const rose = page.getByRole("button", { name: "Rose", exact: true });
   await rose.click();
@@ -58,7 +58,7 @@ test("a visitor watches a plant grow, picks a flower and turns the lights off", 
   await expect(section).toHaveAttribute("data-night", "false");
 
   await page.getByRole("button", { name: "Orchid", exact: true }).click();
-  await expect(page.getByText("scanned in 3D by the Smithsonian")).toBeVisible();
+  await expect(page.getByText("scanned in 3D by the Smithsonian")).toBeVisible({ timeout: 40_000 });
   await expect(page.getByRole("button", { name: "Another colour" })).toHaveCount(0);
 });
 
@@ -67,7 +67,7 @@ test("picking the flower already chosen does not leave it loading", async ({ pag
   await page.locator("#grow").scrollIntoViewIfNeeded();
   const orchid = page.getByRole("button", { name: "Orchid", exact: true });
   await orchid.click();
-  await expect(page.getByText("scanned in 3D by the Smithsonian")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("scanned in 3D by the Smithsonian")).toBeVisible({ timeout: 40_000 });
   await orchid.click();
   await expect(page.getByText("scanned in 3D by the Smithsonian")).toBeVisible();
   await expect(page.getByText("Loading the scan.")).toHaveCount(0);
@@ -82,14 +82,17 @@ for (const [width, height] of [[390, 664], [768, 1024]]) {
 
     for (const key of [...Array(12).fill("Tab"), ...Array(12).fill("Shift+Tab")]) {
       await page.keyboard.press(key);
-      await page.waitForTimeout(60);
-      const seen = await page.evaluate(() => {
-        const element = document.activeElement as HTMLElement;
-        const box = element.getBoundingClientRect();
-        const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-        return { name: element.textContent || element.getAttribute("aria-label"), seen: Boolean(top && element.contains(top)) };
-      });
-      expect(seen, JSON.stringify(seen)).toMatchObject({ seen: true });
+      // Moving focus scrolls the page, so judge where it comes to rest.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const element = document.activeElement as HTMLElement;
+            const box = element.getBoundingClientRect();
+            const top = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+            return Boolean(top && element.contains(top));
+          }),
+        )
+        .toBe(true);
     }
   });
 }

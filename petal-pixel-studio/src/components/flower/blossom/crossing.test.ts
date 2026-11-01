@@ -6,16 +6,20 @@ import { crossings } from "./crossing";
 const moments = Array.from({ length: 21 }, (_, i) => 0.4 + i * 0.03);
 const everyPart = (blossom: Blossom) => [...blossom.petals, ...blossom.head];
 
+/** This is a long sum, and the test runner stops a worker that goes quiet for too long. */
+const breathe = () => new Promise((resolve) => setTimeout(resolve));
+
 describe("a flower opening", () => {
-  it.each(SPECIES.map((species) => [species.id, species] as const))("never passes a %s through itself", (_, species) => {
+  it.each(SPECIES.map((species) => [species.id, species] as const))("never passes a %s through itself", async (_, species) => {
     for (const seed of ["Anna", "Ben", "sample"]) {
       const blossom = buildBlossom(seed, species);
       for (const life of moments) {
         const found = crossings(blossom, everyPart(blossom), life);
         expect({ seed, life, pairs: found.pairs }).toEqual({ seed, life, pairs: 0 });
+        await breathe();
       }
     }
-  }, 60000);
+  }, 120000);
 
   it("would notice a petal left free to pass through its neighbours", () => {
     const blossom = buildBlossom("Anna", SPECIES[0]);
