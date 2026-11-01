@@ -14,7 +14,6 @@ vi.mock("@/integrations/garden/api", () => ({
 
 vi.mock('@/integrations/flowerBackend/client', () => ({
   createFlowerViaGrpc: vi.fn(),
-  checkFlowerBackendHealth: vi.fn(async () => true),
   prepareMintViaGrpc: vi.fn(),
   confirmMintViaGrpc: vi.fn(),
 }));

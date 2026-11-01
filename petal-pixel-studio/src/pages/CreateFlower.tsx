@@ -14,7 +14,6 @@ import { toast } from 'sonner';
 import { getRoseFunctionProjections } from '@/math/flowers/rose';
 import type { BrowserProvider } from 'ethers';
 import {
-  checkFlowerBackendHealth,
   confirmMintViaGrpc,
   prepareMintViaGrpc,
   postFlowerPreview,
@@ -45,10 +44,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   shouldWarnRegenerate,
-  isCheckingBackend,
   hasUnsavedWork,
   mintErrorMessage,
-  type HealthStatus,
 } from './createFlowerGuards';
 import { MINT_ABI, buildMintCall } from '@/lib/mintVoucher';
 import { mapPetalCount } from '@/components/flower/sliderMapping';
@@ -60,6 +57,8 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 
+/** Off on the public site until it has a real network and public file storage. */
+const MINT_OPEN = import.meta.env.VITE_MINT_OPEN !== 'false';
 const TARGET_CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 1337);
 const TARGET_RPC_URL = import.meta.env.VITE_RPC_URL ?? 'http://127.0.0.1:8545';
 
@@ -503,7 +502,6 @@ export default function CreateFlower() {
     return s.editingFlowerId ? s.title : '';
   });
   const [showMath, setShowMath] = useState(false);
-  const [healthStatus, setHealthStatus] = useState<HealthStatus>('idle');
   const [walletAddress, setWalletAddress] = useState('');
   const [isMinting, setIsMinting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -648,10 +646,6 @@ export default function CreateFlower() {
   }, [hasUnsavedChanges]);
 
   useEffect(() => {
-    void handleCheckBackend();
-  }, []);
-
-  useEffect(() => {
     if (isEditMode) {
       setWordInput(generationWord);
       setTitleInput(title);
@@ -678,7 +672,8 @@ export default function CreateFlower() {
   // it flips to false.
   useEffect(() => {
     if (prefilledRef.current || isEditMode) return;
-    const queryName = new URLSearchParams(location.search).get('name');
+    const query = new URLSearchParams(location.search);
+    const queryName = query.get('name');
     const { name, markOnboarded } = resolveInitialName({
       queryName,
       displayName: profile?.display_name,
@@ -693,25 +688,14 @@ export default function CreateFlower() {
       // permanently lose their first-visit display-name prefill even though
       // it never ran.
       if (markOnboarded) markCreateOnboarded();
+      // Arriving from the home page: show the flower they already grew there.
+      if (queryName && query.get('grow') === '1') void handleGenerate(name);
     } else if (queryName) {
       // A deep-link with a blank/edit state still counts as handled.
       prefilledRef.current = true;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, location.key, isEditMode]);
-
-  const handleCheckBackend = async () => {
-    if (isCheckingBackend(healthStatus)) return;
-    setHealthStatus('checking');
-    try {
-      const ok = await checkFlowerBackendHealth();
-      setHealthStatus(ok ? 'ok' : 'error');
-      if (ok) toast.success('Backend is reachable');
-    } catch {
-      setHealthStatus('error');
-      toast.error('Backend is offline. Start the Go server first.');
-    }
-  };
 
   // Shared blob-to-anchor download helper (PNG + GIF reuse the same sanitized-title
   // filename and object-URL lifecycle).
@@ -1151,17 +1135,7 @@ export default function CreateFlower() {
               <span>Controls</span>
             </button>
 
-            <button
-              onClick={handleCheckBackend}
-              disabled={isCheckingBackend(healthStatus)}
-              title={healthStatus === 'ok' ? 'Backend online' : healthStatus === 'error' ? 'Backend offline' : 'Check backend'}
-              className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <span className={`w-2 h-2 rounded-full ${healthStatus === 'ok' ? 'bg-emerald-400' : healthStatus === 'error' ? 'bg-rose-400' : healthStatus === 'checking' ? 'bg-amber-400 animate-pulse' : 'bg-muted-foreground'}`} />
-              <span className="hidden md:inline">{healthStatus === 'checking' ? 'Checking...' : 'Backend'}</span>
-            </button>
-
-            <button
+            {MINT_OPEN && <button
               onClick={() => void handleConnectWallet()}
               title="Connect wallet"
               className="flex items-center gap-1.5 text-xs px-2 py-1.5 rounded-md bg-secondary text-secondary-foreground hover:bg-muted transition-colors"
@@ -1170,7 +1144,7 @@ export default function CreateFlower() {
               <span className="hidden md:inline">
                 {walletAddress ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}` : 'Wallet'}
               </span>
-            </button>
+            </button>}
 
             <button
               onClick={() => void handleSave()}
@@ -1229,11 +1203,12 @@ export default function CreateFlower() {
 
             <button
               onClick={() => void handleMint()}
-              disabled={isMinting}
+              disabled={isMinting || !MINT_OPEN}
+              title={MINT_OPEN ? undefined : 'Minting is coming soon'}
               className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md bg-accent text-accent-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
             >
               <Gem className="w-3 h-3" />
-              <span className="hidden sm:inline">{isMinting ? 'Minting...' : 'Mint NFT'}</span>
+              <span className="hidden sm:inline">{!MINT_OPEN ? 'Mint soon' : isMinting ? 'Minting...' : 'Mint NFT'}</span>
             </button>
           </div>
 

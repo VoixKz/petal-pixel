@@ -37,7 +37,7 @@ export default function Index() {
 
   const stats = [
     { label: 'Total Flowers', value: String(totalFlowers), icon: Flower2, color: 'text-primary' },
-    { label: 'Minted NFTs', value: String(mintedCount), icon: Gem, color: 'text-accent' },
+    { label: 'Minted NFTs', value: String(mintedCount), icon: Gem, color: 'text-foreground' },
     { label: 'Drafts', value: String(draftCount), icon: FileEdit, color: 'text-primary' },
   ];
 

@@ -1,5 +1,3 @@
-export type HealthStatus = 'idle' | 'checking' | 'ok' | 'error';
-
 /**
  * Defect #11: the regenerate warning must fire not only when the generation
  * word changed, but also when the user made manual parameter (slider) tweaks
@@ -21,11 +19,6 @@ export function shouldWarnRegenerate(
   savedIds: ReadonlySet<string> | readonly string[] = [],
 ): boolean {
   return hasUnsavedWork(isEditMode, paramsDirty, word !== generationWord, flowerId, savedIds);
-}
-
-/** Defect #13: used to disable the Backend button and short-circuit re-entry. */
-export function isCheckingBackend(status: HealthStatus): boolean {
-  return status === 'checking';
 }
 
 /** Turns a failed mint's error text into what the user should do next. */
