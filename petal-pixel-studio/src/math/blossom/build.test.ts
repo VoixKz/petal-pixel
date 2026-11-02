@@ -69,6 +69,16 @@ describe("buildBlossom", () => {
     expect(LIFE.sepals).toBeLessThan(LIFE.petals[0]);
   });
 
+  it("never packs petals against the axis, where they would lose their room", () => {
+    const names = ["Anna", "Ben", "sample", "Mia", "Oleg", "Dana", "Ruslan", "Max", "Zara", "Omar", "Iris", "Sara"];
+    for (const species of SPECIES) {
+      for (const name of names) {
+        const leans = buildBlossom(name, species).petals.map((petal) => petal.lean);
+        expect({ species: species.id, name, lowest: Math.min(...leans) > 0.021 }).toEqual({ species: species.id, name, lowest: true });
+      }
+    }
+  });
+
   it("gives stamens only to flowers that show them", () => {
     for (const species of SPECIES) {
       const stamens = buildBlossom("stamens", species).head.filter((part) => part.kind === PART_KIND.stamen);

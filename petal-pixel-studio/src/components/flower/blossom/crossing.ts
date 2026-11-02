@@ -5,7 +5,7 @@ import { PART_KIND, type Blossom, type Part } from "@/math/blossom/build";
 import { POSE_GLSL } from "./material";
 
 type Vec = { x: number; y: number; z: number; w: number };
-type Pose = (grid: { x: number; y: number }) => [number, number, number];
+type Pose = (grid: { x: number; y: number; z: number }) => [number, number, number];
 
 const clamp = (x: number, low: number, high: number) => Math.min(Math.max(x, low), high);
 const LIBRARY = {
@@ -14,6 +14,7 @@ const LIBRARY = {
   cos: Math.cos,
   exp: Math.exp,
   abs: Math.abs,
+  sqrt: Math.sqrt,
   sign: Math.sign,
   pow: Math.pow,
   tanh: Math.tanh,
@@ -35,7 +36,7 @@ const LIBRARY = {
 function compile(): (attributes: Record<string, Vec>, kind: number, life: number, bud: Vec) => Pose {
   const source = POSE_GLSL.replace(/^(attribute|uniform|varying)[^\n]*$/gm, "")
     .replace(/\b(?:float|vec2|vec3|bool)\s+([A-Za-z_]\w*)\s*\(/g, "function $1(")
-    .replace(/\((?:float|vec2)\s+/g, "(")
+    .replace(/\((?:float|vec2|vec3)\s+/g, "(")
     .replace(/,\s*(?:float|vec2)\s+/g, ", ")
     .replace(/\b(?:const\s+)?(?:float|bool)\s+/g, "let ");
   const names = Object.keys(LIBRARY);
@@ -80,6 +81,8 @@ export function poseOf(part: Part, blossom: Blossom, life: number): Pose {
   return compiled(attributesOf(part), part.kind, life, vec(radius, height, twist, blossom.species.ruffle));
 }
 
+/** The two faces of a part, as the grid numbers them. */
+const FACES = [1, -1];
 const REACHES = 40;
 const TURNS = 240;
 const REACH_STEP = 0.03;
@@ -95,58 +98,79 @@ export interface Crossing {
   pairs: number;
   /** Share of all compared cells that sit on the wrong side. */
   share: number;
+  /** Pairs whose faces run into one another, even though their middles stay apart. */
+  touching: number;
   worst: { a: number; b: number; cells: number } | null;
 }
 
 /** Counts crossings between the given parts at one moment. */
 export function crossings(blossom: Blossom, parts: Part[], life: number): Crossing {
-  const lean = new Float32Array(parts.length * REACHES * TURNS).fill(Number.NaN);
+  const sheets = parts.length * FACES.length;
+  const lean = new Float32Array(sheets * REACHES * TURNS).fill(Number.NaN);
   parts.forEach((part, index) => {
     const pose = poseOf(part, blossom, life);
     const lines = part.kind === PART_KIND.stamen ? 1 : 49;
-    for (let a = 0; a < lines; a += 1) {
-      const u = lines === 1 ? 0 : (a / (lines - 1)) * 2 - 1;
-      let last: number[] | null = null;
-      for (let b = 0; b <= 72; b += 1) {
-        const [x, y, z] = pose({ x: u, y: b / 72 });
-        const here = [Math.hypot(x, y, z), Math.atan2(Math.hypot(x, z), y), unwrapped(Math.atan2(z, x), last?.[2])];
-        // Two surfaces can only be compared at one exact reach, so read each at the rows' centres.
-        if (last && here[0] > last[0]) {
-          const first = Math.max(Math.ceil(last[0] / REACH_STEP - 0.5), INNER);
-          const end = Math.min(Math.ceil(here[0] / REACH_STEP - 0.5), REACHES);
-          for (let row = first; row < end; row += 1) {
-            const t = ((row + 0.5) * REACH_STEP - last[0]) / (here[0] - last[0]);
-            const turn = last[2] + (here[2] - last[2]) * t;
-            const cell = Math.floor((turn / (Math.PI * 2)) * TURNS);
-            const wrapped = ((cell % TURNS) + TURNS) % TURNS;
-            lean[index * REACHES * TURNS + row * TURNS + wrapped] = last[1] + (here[1] - last[1]) * t;
+    FACES.forEach((face, side) => {
+      const sheet = index * FACES.length + side;
+      for (let a = 0; a < lines; a += 1) {
+        const u = lines === 1 ? 0 : (a / (lines - 1)) * 2 - 1;
+        let last: number[] | null = null;
+        for (let b = 0; b <= 72; b += 1) {
+          const [x, y, z] = pose({ x: u, y: b / 72, z: face });
+          const here = [Math.hypot(x, y, z), Math.atan2(Math.hypot(x, z), y), unwrapped(Math.atan2(z, x), last?.[2])];
+          // Two surfaces can only be compared at one exact reach, so read each at the rows' centres.
+          if (last && here[0] > last[0]) {
+            const first = Math.max(Math.ceil(last[0] / REACH_STEP - 0.5), INNER);
+            const end = Math.min(Math.ceil(here[0] / REACH_STEP - 0.5), REACHES);
+            for (let row = first; row < end; row += 1) {
+              const t = ((row + 0.5) * REACH_STEP - last[0]) / (here[0] - last[0]);
+              const turn = last[2] + (here[2] - last[2]) * t;
+              const cell = Math.floor((turn / (Math.PI * 2)) * TURNS);
+              const wrapped = ((cell % TURNS) + TURNS) % TURNS;
+              lean[sheet * REACHES * TURNS + row * TURNS + wrapped] = last[1] + (here[1] - last[1]) * t;
+            }
           }
+          last = here;
         }
-        last = here;
       }
-    }
+    });
   });
 
   const sides = new Int32Array(parts.length * parts.length * 2);
+  const met = new Int32Array(parts.length * parts.length);
+  const low = new Float64Array(parts.length);
+  const high = new Float64Array(parts.length);
   let compared = 0;
   for (let cell = 0; cell < REACHES * TURNS; cell += 1) {
     const here: number[] = [];
-    for (let i = 0; i < parts.length; i += 1) if (!Number.isNaN(lean[i * REACHES * TURNS + cell])) here.push(i);
+    for (let i = 0; i < parts.length; i += 1) {
+      const a = lean[i * FACES.length * REACHES * TURNS + cell];
+      const b = lean[(i * FACES.length + 1) * REACHES * TURNS + cell];
+      if (Number.isNaN(a) && Number.isNaN(b)) continue;
+      low[i] = Math.min(Number.isNaN(a) ? b : a, Number.isNaN(b) ? a : b);
+      high[i] = Math.max(Number.isNaN(a) ? b : a, Number.isNaN(b) ? a : b);
+      here.push(i);
+    }
     for (let m = 0; m < here.length; m += 1) {
       for (let n = m + 1; n < here.length; n += 1) {
-        const gap = lean[here[m] * REACHES * TURNS + cell] - lean[here[n] * REACHES * TURNS + cell];
+        const a = here[m];
+        const b = here[n];
+        const gap = (low[a] + high[a] - low[b] - high[b]) / 2;
         if (Math.abs(gap) < EPSILON) continue;
-        sides[(here[m] * parts.length + here[n]) * 2 + (gap > 0 ? 0 : 1)] += 1;
+        sides[(a * parts.length + b) * 2 + (gap > 0 ? 0 : 1)] += 1;
+        if (Math.min(high[a], high[b]) - Math.max(low[a], low[b]) > EPSILON) met[a * parts.length + b] += 1;
         compared += 1;
       }
     }
   }
 
   let pairs = 0;
+  let touching = 0;
   let wrong = 0;
   let worst: Crossing["worst"] = null;
   for (let a = 0; a < parts.length; a += 1) {
     for (let b = a + 1; b < parts.length; b += 1) {
+      if (met[a * parts.length + b] >= 4) touching += 1;
       const cells = Math.min(sides[(a * parts.length + b) * 2], sides[(a * parts.length + b) * 2 + 1]);
       if (cells < 4) continue;
       pairs += 1;
@@ -154,5 +178,5 @@ export function crossings(blossom: Blossom, parts: Part[], life: number): Crossi
       if (!worst || cells > worst.cells) worst = { a, b, cells };
     }
   }
-  return { pairs, share: compared ? wrong / compared : 0, worst };
+  return { pairs, share: compared ? wrong / compared : 0, touching, worst };
 }

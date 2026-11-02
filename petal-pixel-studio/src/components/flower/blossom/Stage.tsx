@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
@@ -11,6 +11,8 @@ export const NIGHT_GROUND = "#141412";
 export const GROUND = "ground";
 
 const SOIL_RADIUS = 1.5;
+/** How far from the stem a shadow starts to thin out, and where it is gone. */
+const SHADOW_FADE = [1.05, 2];
 
 const SOIL_NOISE = /* glsl */ `
 uniform vec3 uSoil;
@@ -104,6 +106,23 @@ function pebbles(): THREE.Matrix4[] {
 }
 
 /** The patch of earth the plant comes out of. */
+/** The page has no ground of its own, so the plant's shadow thins out past the soil. */
+function shadowOnSoil(): THREE.ShadowMaterial {
+  const material = new THREE.ShadowMaterial({ opacity: 0.1 });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGround;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGround = position.xy;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vGround;")
+      .replace(
+        "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );",
+        `gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * ( 1.0 - smoothstep( ${SHADOW_FADE[0].toFixed(2)}, ${SHADOW_FADE[1].toFixed(2)}, length( vGround ) ) ) );`,
+      );
+  };
+  return material;
+}
+
 function Soil({ glow, lamp }: { glow: { value: number }; lamp: string }) {
   const parts = useMemo(() => {
     return {
@@ -148,6 +167,10 @@ const SUN_PAST_SHADOW = 1.35;
 
 /** How long a frame may take, in ms, before the stage drops to its next level of detail. */
 const FRAME_LIMITS = [30, 70];
+/** How much detail the stage can afford right now. Parts of a plant read it to do with less. */
+export const DetailLevel = createContext(0);
+/** The level from which petals go back to a single surface. */
+export const FULL_DETAIL_BELOW = FRAME_LIMITS.length;
 /** A plant must never starve the page: at the lowest level it draws at most this often. */
 const SLOWEST_GAP_MS = 240;
 const SETTLING_MS = 600;
@@ -232,6 +255,7 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
   const softSun = useRef<THREE.DirectionalLight>(null);
   const fill = useRef<THREE.DirectionalLight>(null);
   const effect = useRef<{ intensity: number }>(null);
+  const groundShadow = useMemo(shadowOnSoil, []);
   const colours = useMemo(
     () => ({ day: new THREE.Color(DAY_GROUND), night: new THREE.Color(NIGHT_GROUND), now: new THREE.Color(DAY_GROUND) }),
     [],
@@ -256,7 +280,7 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
   });
 
   return (
-    <>
+    <DetailLevel.Provider value={level}>
       <hemisphereLight ref={sky} args={["#ffffff", "#d9cdb8", 0.62]} />
       <directionalLight
         ref={sun}
@@ -282,7 +306,7 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
           <Soil glow={glow} lamp="#ffcf9e" />
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[14, 14]} />
-            <shadowMaterial opacity={0.1} />
+            <primitive object={groundShadow} attach="material" />
           </mesh>
         </group>
       )}
@@ -293,6 +317,6 @@ export function Stage({ glow, bloom = false, ground = true, children }: StagePro
         </EffectComposer>
       )}
       {level >= FRAME_LIMITS.length && <SparingFrames gap={gap} />}
-    </>
+    </DetailLevel.Provider>
   );
 }

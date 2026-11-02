@@ -11,15 +11,15 @@ const breathe = () => new Promise((resolve) => setTimeout(resolve));
 
 describe("a flower opening", () => {
   it.each(SPECIES.map((species) => [species.id, species] as const))("never passes a %s through itself", async (_, species) => {
-    for (const seed of ["Anna", "Ben", "sample"]) {
+    for (const seed of ["Anna", "Ben", "sample", "Mia", "Oleg", "Dana"]) {
       const blossom = buildBlossom(seed, species);
       for (const life of moments) {
-        const found = crossings(blossom, everyPart(blossom), life);
-        expect({ seed, life, pairs: found.pairs }).toEqual({ seed, life, pairs: 0 });
+        const { pairs, touching } = crossings(blossom, everyPart(blossom), life);
+        expect({ seed, life, pairs, touching }).toEqual({ seed, life, pairs: 0, touching: 0 });
         await breathe();
       }
     }
-  }, 120000);
+  }, 240000);
 
   it("would notice a petal left free to pass through its neighbours", () => {
     const blossom = buildBlossom("Anna", SPECIES[0]);

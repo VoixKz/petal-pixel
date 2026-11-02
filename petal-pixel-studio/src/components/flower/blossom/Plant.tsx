@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { Suspense, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { buildBlossom, type Blossom } from "@/math/blossom/build";
@@ -8,7 +8,8 @@ import type { Species } from "@/math/blossom/species";
 import { leafDepthMaterial, leafGeometry, leafMaterial, type LeafUniforms } from "./leaf";
 import { Lantern } from "./Lantern";
 import { ScanHead, type ScanSource } from "./Scan";
-import { partsGeometry, petalDepthMaterial, petalMaterial, type BlossomUniforms } from "./material";
+import { heartColour, partsGeometry, petalDepthMaterial, petalMaterial, type BlossomUniforms } from "./material";
+import { DetailLevel, FULL_DETAIL_BELOW } from "./Stage";
 
 /** Where the day light comes from, so petals can glow when it is behind them. */
 const SUN = new THREE.Vector3(3, 7, 4).normalize();
@@ -30,6 +31,8 @@ const RECEPTACLE = new THREE.LatheGeometry(
   ].map(([x, y]) => new THREE.Vector2(x, y)),
   20,
 );
+/** The floor of the flower, in the colour of its petals, so no green shows between their bases. */
+const HEART = new THREE.SphereGeometry(1, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2);
 const THORN = new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0);
 
 /** The stem glows faintly near the flower at night, from the light falling down it. */
@@ -52,8 +55,8 @@ function stemMaterial(glow: { value: number }, lamp: { value: THREE.Color }): TH
 }
 
 /** Lit by the lamp it sits around, so the heart of the flower is never a dark hole. */
-function nearLampMaterial(colour: string, roughness: number, glow: { value: number }, lamp: { value: THREE.Color }): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({ color: colour, roughness });
+function nearLampMaterial(colour: string, roughness: number, glow: { value: number }, lamp: { value: THREE.Color }, sky = 1): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({ color: colour, roughness, envMapIntensity: sky });
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, { uGlow: glow, uLamp: lamp });
     shader.fragmentShader = shader.fragmentShader
@@ -118,8 +121,10 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
     [shared, blossom],
   );
 
+  const solid = useContext(DetailLevel) < FULL_DETAIL_BELOW;
+  const flower = useMemo(() => partsGeometry(scan ? blossom.head : [...blossom.petals, ...blossom.head], solid), [blossom, scan, solid]);
+  const flowerMaterial = useMemo(() => petalMaterial(flowerUniforms, solid), [flowerUniforms, solid]);
   const parts = useMemo(() => {
-    const flower = partsGeometry(scan ? blossom.head : [...blossom.petals, ...blossom.head]);
     const foliage = leafGeometry(blossom.leaves);
     const tube = emptyTube();
     const stem = new THREE.BufferGeometry();
@@ -128,17 +133,18 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
     stem.setAttribute("color", new THREE.BufferAttribute(tube.colours, 3).setUsage(THREE.DynamicDrawUsage));
     stem.setAttribute("aNear", new THREE.BufferAttribute(tube.nearness, 1).setUsage(THREE.DynamicDrawUsage));
     stem.setIndex(tubeIndex());
-    return { flower, foliage, stem, tube, path: emptyPath() };
-  }, [blossom, scan]);
+    return { foliage, stem, tube, path: emptyPath() };
+  }, [blossom]);
   const materials = useMemo(
     () => ({
-      flower: petalMaterial(flowerUniforms),
       flowerDepth: petalDepthMaterial(flowerUniforms),
       leaf: leafMaterial(leafUniforms, blossom.species.gloss),
       leafDepth: leafDepthMaterial(leafUniforms),
       stem: stemMaterial(glow, shared.uLamp),
       pod: nearLampMaterial(blossom.species.pod?.colour ?? blossom.species.green[1], 0.8, glow, shared.uLamp),
       hip: nearLampMaterial(blossom.species.stem.top, 0.6, glow, shared.uLamp),
+      // No sky reaches this deep, and its grey on a dark floor would read as green.
+      heart: nearLampMaterial(`#${heartColour(blossom.colour).getHexString()}`, 1, glow, shared.uLamp, 0),
       thorn: new THREE.MeshStandardMaterial({ color: "#7c4a34", roughness: 0.5 }),
     }),
     [flowerUniforms, leafUniforms, blossom, glow, shared],
@@ -146,7 +152,13 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
 
   useEffect(
     () => () => {
-      parts.flower.dispose();
+      flower.dispose();
+      flowerMaterial.dispose();
+    },
+    [flower, flowerMaterial],
+  );
+  useEffect(
+    () => () => {
       parts.foliage.geometry.dispose();
       parts.stem.dispose();
       Object.values(materials).forEach((m) => m.dispose());
@@ -159,6 +171,7 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
   const head = useRef<THREE.Group>(null);
   const turn = useRef<THREE.Group>(null);
   const pod = useRef<THREE.Mesh>(null);
+  const heart = useRef<THREE.Mesh>(null);
   const opened = useCallback(() => smooth(life.value, LIFE.petals[0], LIFE.petals[1]), [life]);
 
   useFrame(({ clock }, delta) => {
@@ -185,6 +198,7 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
       writeThorns(plan, parts.path, blossom.thorns, thorns.current.instanceMatrix.array as Float32Array);
       thorns.current.instanceMatrix.needsUpdate = true;
     }
+    if (heart.current) heart.current.scale.set(0.115, 0.062, 0.115).multiplyScalar(Math.max(opened(), 0.001));
     if (pod.current) pod.current.scale.setScalar(Math.max(smooth(t, LIFE.pod[0], LIFE.pod[1]), 0.001));
     if (turn.current && spin) turn.current.rotation.y += delta * 0.12;
   });
@@ -204,6 +218,7 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
       )}
       <group ref={head}>
         <mesh geometry={RECEPTACLE} material={materials.hip} scale={blossom.species.sepals > 0 ? 1 : 0.68} castShadow />
+        {!scan && <mesh ref={heart} geometry={HEART} material={materials.heart} />}
         {scan && (
           <Suspense fallback={null}>
             <ScanHead source={scan} life={life} glow={glow} lamp={shared.uLamp.value} onReady={onScanReady} />
@@ -216,8 +231,8 @@ export function Plant({ seed, species, scan, onScanReady, life, glow, lamp = "#f
           </group>
         )}
         <mesh
-          geometry={parts.flower}
-          material={materials.flower}
+          geometry={flower}
+          material={flowerMaterial}
           customDepthMaterial={materials.flowerDepth}
           frustumCulled={false}
           castShadow

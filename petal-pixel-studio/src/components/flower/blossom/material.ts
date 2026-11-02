@@ -10,6 +10,10 @@ const SPAN = 0.2;
 const LAG = 0.06;
 const KIND = { sepal: PART_KIND.sepal.toFixed(1), stamen: PART_KIND.stamen.toFixed(1) };
 const TIP_BAND = 0.62;
+/** Half the distance between a petal's two faces, at its base and at its tip. */
+const THICK = [0.015, 0.0055];
+/** How much of a petal's room its thickness may take; the rest is left for it to cup. */
+const SKIN_ROOM = 0.34;
 
 export const POSE_GLSL = /* glsl */ `
 attribute vec4 aShape;   // azimuth, depth, birth, length
@@ -53,7 +57,7 @@ float outlineAt(float v) {
 // Every point of a petal is a reach from the heart, a lean from the upright axis and a
 // turn around it. The closed bud is one shell scaled about the heart, and the open flower
 // is a stack in which each petal knows its room, so they stay apart at every moment.
-vec3 petalPoint(vec2 g) {
+vec3 petalPoint(vec3 g) {
   float u = g.x;
   float v = clamp(g.y, 0.0, 1.0);
   bool sepal = aKind == ${KIND.sepal};
@@ -87,8 +91,14 @@ vec3 petalPoint(vec2 g) {
   float rimRoll = 1.0 - (1.0 - v * v) * (1.0 - across * abs(u) * v);
   float shift = aForm.z * (rimRoll * rimRoll - v * v * v * v) + spine * (exp(-aEdge.x * across * ramp * width) - 1.0);
   float tip = smoothstep(${TIP_BAND.toFixed(3)}, 0.8, v);
-  float room = shift > 0.0 ? mix(aRoom.z, aRoom.w, tip) : mix(aRoom.x, aRoom.y, tip);
-  float openLean = spine + room * tanh(shift / room) + aForm.w * u * side * ramp;
+  float roomIn = mix(aRoom.x, aRoom.y, tip);
+  float roomOut = mix(aRoom.z, aRoom.w, tip);
+  float room = (shift > 0.0 ? roomOut : roomIn) * ${(1 - SKIN_ROOM).toFixed(3)};
+  // A petal has two faces, g.z tells them apart: +1 looks at the heart and -1 away from it.
+  // They stand furthest apart at the base and meet in a rounded rim, inside the room above.
+  float thick = (stamen ? 0.0 : sepal ? 0.45 : 1.0) * mix(${THICK[0].toFixed(4)}, ${THICK[1].toFixed(4)}, v) * sqrt(max(1.0 - across * across, 0.0)) * sqrt(max(1.0 - v * v * v * v * v * v * v * v, 0.0));
+  float skin = min(thick / max(openReach, 0.18), ${SKIN_ROOM.toFixed(3)} * (g.z > 0.0 ? roomIn : roomOut));
+  float openLean = spine + room * tanh(shift / room) + aForm.w * u * side * ramp - g.z * skin;
 
   // A petal only ever opens. Since the outer ones go first, none can pass through another.
   closedLean = softMin(closedLean, openLean, 0.06);
@@ -99,7 +109,7 @@ vec3 petalPoint(vec2 g) {
   float closedTurn = wrapped + uBud.z * height;
   float turn = aShape.x + mix(closedTurn, u * side, age);
   // Waves belong to the place and not the petal, so all the layers ride them together.
-  lean += uBud.w * age * smoothstep(0.2, 0.8, reach) * (sin(turn * 9.0 + reach * 6.0) + 0.5 * sin(turn * 19.0 - reach * 9.0));
+  lean += uBud.w * age * smoothstep(0.2, 0.8, reach) * (sin(turn * 9.0 + reach * 6.0) + 0.35 * sin(turn * 13.0 - reach * 8.0));
 
   return vec3(reach * sin(lean) * cos(turn), reach * cos(lean), reach * sin(lean) * sin(turn));
 }
@@ -126,7 +136,7 @@ function spliceVertex(shader: THREE.WebGLProgramParametersWithUniforms, uniforms
   Object.assign(shader.uniforms, uniforms);
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", `#include <common>\n${POSE_GLSL}`)
-    .replace("#include <begin_vertex>", "vec3 transformed = petalPoint(position.xy);");
+    .replace("#include <begin_vertex>", "vec3 transformed = petalPoint(position);");
 }
 
 export interface BlossomUniforms {
@@ -137,9 +147,11 @@ export interface BlossomUniforms {
   uSun: { value: THREE.Vector3 };
 }
 
-export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMaterial {
+/** With `solid` a petal is two faces around a thickness, each seen from outside only. */
+export function petalMaterial(uniforms: BlossomUniforms, solid: boolean): THREE.MeshPhysicalMaterial {
   const material = new THREE.MeshPhysicalMaterial({
-    side: THREE.DoubleSide,
+    side: solid ? THREE.FrontSide : THREE.DoubleSide,
+    shadowSide: THREE.DoubleSide,
     roughness: 0.7,
     metalness: 0,
     specularIntensity: 0.32,
@@ -154,11 +166,23 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
       /* glsl */ `
       float stepV = position.y > 0.5 ? -0.03 : 0.03;
       const vec3 LAMP = vec3(0.0, 0.26, 0.0);
-      vec3 p0 = petalPoint(position.xy);
-      vec3 pu = petalPoint(position.xy + vec2(position.x > 0.0 ? -0.03 : 0.03, 0.0));
-      vec3 pv = petalPoint(position.xy + vec2(0.0, stepV));
+      // The folds of a petal come from its middle: its two faces pinch together at the rim,
+      // and that pinch would show as a dimple. The rim gets its own turn from face to face.
+      vec3 middle = vec3(position.xy, 0.0);
+      vec3 p0 = petalPoint(middle);
+      vec3 pu = petalPoint(middle + vec3(position.x > 0.0 ? -0.03 : 0.03, 0.0, 0.0));
+      vec3 pv = petalPoint(middle + vec3(0.0, stepV, 0.0));
       vec3 foldNormal = cross(pu - p0, pv - p0) * sign(stepV) * (position.x > 0.0 ? -1.0 : 1.0);
       vec3 objectNormal = dot(foldNormal, foldNormal) > 1e-16 ? normalize(foldNormal) : vec3(0.0, 1.0, 0.0);
+      if (position.z < 0.0) objectNormal = -objectNormal;
+      if (position.z != 0.0) {
+        vec3 sideways = p0 - pu;
+        vec3 onward = (pv - p0) * sign(stepV);
+        vec3 rim = vec3(0.0);
+        if (dot(sideways, sideways) > 1e-8) rim += normalize(sideways) * smoothstep(0.75, 1.0, abs(position.x));
+        if (dot(onward, onward) > 1e-8) rim += normalize(onward) * smoothstep(0.86, 1.0, position.y);
+        objectNormal = normalize(objectNormal + rim * 0.35);
+      }
       vGrid = position.xy;
       vBase = aBase;
       vMid = aMid;
@@ -212,21 +236,28 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
         float ribWidth = 14.0 + 40.0 * v;
         float ribs = sin(vGrid.x * ribWidth + 2.0 * sin(vGrid.x * 7.0)) * (1.0 - smoothstep(0.35, 1.2, fwidth(vGrid.x) * ribWidth));
         float folds = sin(vGrid.x * 3.6 + vTone * 6.28 + v * 3.0) * smoothstep(0.08, 0.6, v);
-        float relief = (ribs * 0.0012 + folds * 0.0065) * (vKind == ${KIND.stamen} ? 0.0 : 1.0);
+        float relief = (ribs * 0.0007 + folds * 0.0065) * (vKind == ${KIND.stamen} ? 0.0 : 1.0);
         vec3 acrossView = dFdx(-vViewPosition);
         vec3 upView = dFdy(-vViewPosition);
         vec3 r1 = cross(upView, normal);
         vec3 r2 = cross(normal, acrossView);
         float area = dot(acrossView, r1) * faceDirection;
         vec3 slope = sign(area) * (dFdx(relief) * r1 + dFdy(relief) * r2);
-        normal = normalize(abs(area) * normal - slope);
+        // At a glancing angle the sums above break into pixel noise, so the relief lets go.
+        vec3 toEye = normalize(vViewPosition);
+        float facing = abs(dot(normal, toEye));
+        normal = normalize(abs(area) * normal - slope * smoothstep(0.1, 0.45, facing));
+        // Seen along its edge, a petal's triangles take turns facing the eye and away from it,
+        // and their opposite light would show as a comb. Turned to the eye, they all agree.
+        normal = normalize(mix(normal, toEye, 1.0 - smoothstep(0.0, 0.28, facing)));
         `,
       )
       .replace(
         "#include <emissivemap_fragment>",
         /* glsl */ `
         // Light bounced between petals takes their colour, so shadows stay rich, not grey.
-        vec3 bounced = diffuseColor.rgb * diffuseColor.rgb;
+        // On a pale petal the base colour carries that, or its shadows would turn grey.
+        vec3 bounced = diffuseColor.rgb * mix(diffuseColor.rgb, vBase, 0.6);
         totalEmissiveRadiance += (1.0 - uGlow) * bounced * (0.16 + exp(-vCore * 2.2) * 0.34);
         // Thin petals let the sun through from behind.
         vec3 sun = normalize((viewMatrix * vec4(uSun, 0.0)).xyz);
@@ -241,7 +272,7 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
         float toward = dot(normal, normalize(vToLamp));
         float lampSide = smoothstep(-0.3, 0.6, toward);
         float rounded = mix(0.42, 1.0, pow(abs(dot(normal, normalize(vViewPosition))), 0.8));
-        float lit = near * mix(1.0, 1.8, lampSide) * (0.56 + 0.44 * abs(toward)) * rounded;
+        float lit = near * mix(1.0, 1.5, lampSide) * (0.56 + 0.44 * abs(toward)) * rounded;
         vec3 through = pow(petal, vec3(mix(2.7, 1.7, lampSide)));
         through /= max(max(through.r, max(through.g, through.b)), 0.001);
         // Seen from outside, the sides of a petal lie over its neighbour: two layers pass less
@@ -250,10 +281,26 @@ export function petalMaterial(uniforms: BlossomUniforms): THREE.MeshPhysicalMate
         float hot = vKind == ${KIND.stamen} ? 0.12 : 0.7;
         totalEmissiveRadiance += uGlow * uLamp * skin * (through * (lit + 0.05) + near * near * near * near * hot);
         `,
+      )
+      .replace(
+        "#include <opaque_fragment>",
+        /* glsl */ `
+        // Pale petals in full sun would burn out to flat white and lose their form, and at
+        // night their rims would turn to metal. Light past this point rolls off, as on film.
+        outgoingLight = min(outgoingLight, vec3(0.6)) + 0.4 * (1.0 - exp(-max(outgoingLight - 0.6, 0.0) / 0.4));
+        #include <opaque_fragment>
+        `,
       );
   };
   material.customProgramCacheKey = () => "blossom-petal";
   return material;
+}
+
+/** What shows under the petals: the shade of their base where it sinks out of the light. */
+export function heartColour([base, mid]: readonly string[]): THREE.Color {
+  const b = new THREE.Color(base);
+  const deep = new THREE.Color(Math.max(b.r * b.r * 0.8, 0.04), Math.max(b.g * b.g * 0.8, 0.04), Math.max(b.b * b.b * 0.8, 0.04));
+  return b.clone().lerp(new THREE.Color(mid), 0.31).multiply(deep.add(b.clone().multiplyScalar(0.1)));
 }
 
 /** Without this the shadow would keep the shape of the flat grid. */
@@ -264,17 +311,39 @@ export function petalDepthMaterial(uniforms: BlossomUniforms): THREE.MeshDepthMa
   return material;
 }
 
+/** The grid again behind itself, facing the other way, for the second face of a petal. */
+function bothFaces(grid: THREE.PlaneGeometry): THREE.BufferGeometry {
+  const rows = grid.attributes.position.array as Float32Array;
+  const count = grid.attributes.position.count;
+  const position = new Float32Array(count * 6);
+  position.set(rows);
+  position.set(rows, count * 3);
+  for (let i = 0; i < count; i += 1) {
+    position[i * 3 + 2] = 1;
+    position[(i + count) * 3 + 2] = -1;
+  }
+  const front = Array.from((grid.index as THREE.BufferAttribute).array);
+  const back = front.map((corner) => corner + count).reverse();
+  const both = new THREE.BufferGeometry();
+  both.setIndex([...front, ...back]);
+  both.setAttribute("position", new THREE.BufferAttribute(position, 3));
+  return both;
+}
+
 /** One grid, drawn once for each part. */
-export function partsGeometry(parts: Part[]): THREE.InstancedBufferGeometry {
-  const grid = new THREE.PlaneGeometry(2, 1, 16, 28);
+export function partsGeometry(parts: Part[], solid: boolean): THREE.InstancedBufferGeometry {
+  const grid = new THREE.PlaneGeometry(2, 1, 18, 28);
   grid.translate(0, 0.5, 0);
+  // Rows gather at the tip and columns at the rim, where the surface turns fastest.
   const rows = grid.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < rows.count; i += 1) rows.setY(i, 1 - (1 - rows.getY(i)) ** 1.5);
+  for (let i = 0; i < rows.count; i += 1) {
+    const x = rows.getX(i);
+    rows.setXY(i, Math.sign(x) * (1 - (1 - Math.abs(x)) ** 1.4), 1 - (1 - rows.getY(i)) ** 1.5);
+  }
+  const shape = solid ? bothFaces(grid) : grid;
   const geometry = new THREE.InstancedBufferGeometry();
-  geometry.index = grid.index;
-  geometry.setAttribute("position", grid.attributes.position);
-  geometry.setAttribute("normal", grid.attributes.normal);
-  geometry.setAttribute("uv", grid.attributes.uv);
+  geometry.index = shape.index;
+  geometry.setAttribute("position", shape.attributes.position);
   geometry.instanceCount = parts.length;
 
   const array = (size: number, fill: (p: Part) => number[]) =>
