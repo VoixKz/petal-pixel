@@ -18,7 +18,7 @@ describe("a flower's identity", () => {
   });
 
   it("says what kind of flower it is", () => {
-    expect(kindOf("Dana")).toBe("dahlia");
+    expect(kindOf("Dana")).toBe("rose");
   });
 
   it("gives a usable colour strip", () => {

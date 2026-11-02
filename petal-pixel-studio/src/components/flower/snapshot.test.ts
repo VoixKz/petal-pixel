@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
+import { arrival,
   registerRenderer,
   captureFlowerPng,
   renderToBlob,
@@ -120,5 +120,22 @@ describe('frameYaws', () => {
   it('returns an empty array for non-positive frame counts', () => {
     expect(frameYaws(0)).toEqual([]);
     expect(frameYaws(-5)).toEqual([]);
+  });
+});
+
+describe("arrival", () => {
+  it("waits for what it was told to wait for", async () => {
+    const flower = arrival(1000);
+    let finished = false;
+    void flower.wait().then(() => (finished = true));
+    await Promise.resolve();
+    expect(finished).toBe(false);
+    flower.landed();
+    await flower.wait();
+    expect(finished).toBe(true);
+  });
+
+  it("stops waiting once its patience runs out, so a picture never hangs", async () => {
+    await expect(arrival(5).wait()).resolves.toBeUndefined();
   });
 });

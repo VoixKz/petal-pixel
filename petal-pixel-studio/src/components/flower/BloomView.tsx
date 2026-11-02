@@ -9,7 +9,7 @@ import { Plant } from './blossom/Plant';
 import { PlantRig } from './blossom/PlantRig';
 import { DAY_GROUND, GROUND, NIGHT_GROUND, Stage } from './blossom/Stage';
 import { Turntable, useTurning } from './blossom/Turntable';
-import { registerRenderer, type RenderOpts } from './snapshot';
+import { arrival, registerRenderer, type RenderOpts } from './snapshot';
 import '@/styles/petal.css';
 
 /** How long a plant takes to grow from bare soil to full bloom. */
@@ -56,6 +56,8 @@ interface Pose {
   hold: { value: boolean };
   angle: { current: number };
   group: MutableRefObject<THREE.Group | null>;
+  /** The flower loads over the network, so a picture taken early would show a bare stem. */
+  head: ReturnType<typeof arrival>;
 }
 
 /**
@@ -64,7 +66,7 @@ interface Pose {
  * It draws to the canvas itself rather than a texture, which keeps the colour and the
  * smooth edges exactly as they look live.
  */
-function CaptureBridge({ title, seed, life, glow, hold, angle, group }: Pose) {
+function CaptureBridge({ title, seed, life, glow, hold, angle, group, head }: Pose) {
   const { gl, scene } = useThree();
   const store = useStore();
 
@@ -75,6 +77,7 @@ function CaptureBridge({ title, seed, life, glow, hold, angle, group }: Pose) {
     const heartHeight = tip.y + tip.ty * 0.28;
 
     return registerRenderer(async (opts?: RenderOpts) => {
+      await head.wait();
       const size = Math.max(1, Math.floor(opts?.size ?? CAPTURE_SIZE));
       const night = opts?.background === 'dark';
       const state = store.getState();
@@ -130,7 +133,7 @@ function CaptureBridge({ title, seed, life, glow, hold, angle, group }: Pose) {
       }
       return new Promise<Blob | null>((resolve) => picture.toBlob(resolve, 'image/png'));
     });
-  }, [title, seed, gl, scene, store, life, glow, hold, angle, group]);
+  }, [title, seed, gl, scene, store, life, glow, hold, angle, group, head]);
 
   return null;
 }
@@ -161,6 +164,10 @@ export function BloomView({ name, shift = false, caption = true, followTheme = f
   const [night, setNight] = useState(glow.value > 0);
   const clean = name.trim();
   const flower = useMemo(() => (clean ? identityOf(clean) : null), [clean]);
+  const head = useMemo(() => arrival(), [flower]);
+  const [lost, setLost] = useState(false);
+
+  useEffect(() => setLost(false), [flower]);
 
   useEffect(() => {
     // Opening a flower that exists shows it open; a new name grows from the soil.
@@ -208,20 +215,21 @@ export function BloomView({ name, shift = false, caption = true, followTheme = f
             {flower && (
               <>
                 <Turntable angle={angle} group={group}>
-                  <Plant key={flower.seed} seed={flower.seed} life={life} glow={glow} sway={!wantsLessMotion()} hold={hold} />
+                  <Plant key={flower.seed} seed={flower.seed} life={life} glow={glow} sway={!wantsLessMotion()} hold={hold} onHeadReady={head.landed} onHeadFailed={() => { head.landed(); setLost(true); }} />
                 </Turntable>
-                <CaptureBridge title={`${clean}'s ${flower.kind}`} seed={flower.seed} life={life} glow={glow} hold={hold} angle={angle} group={group} />
+                <CaptureBridge title={`${clean}'s ${flower.kind}`} seed={flower.seed} life={life} glow={glow} hold={hold} angle={angle} group={group} head={head} />
               </>
             )}
           </Stage>
         </Canvas>
       </div>
 
-      {caption && flower && (
+      {caption && flower && !lost && (
         <p className="bloom__says">
           {clean} grows {article(flower.kind)} {flower.kind}.
         </p>
       )}
+      {lost && <p className="bloom__says">This flower did not load. Reload the page to try again.</p>}
       {!flower && <p className="bloom__says">Type a name and its flower grows here.</p>}
 
       {flower && (

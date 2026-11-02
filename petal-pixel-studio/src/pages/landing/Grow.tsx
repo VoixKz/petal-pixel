@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { GROWERS, STAGES, stageAt, type Grower } from "./growers";
+import { hasWebGL, picture } from "./specimens";
 
 const GrowStage = lazy(() => import("./GrowStage"));
 
@@ -7,14 +8,6 @@ const GrowStage = lazy(() => import("./GrowStage"));
 const BUD_LIFE = 0.34;
 const SECONDS_PER_LIFE_TO_BUD = 14;
 const SECONDS_PER_LIFE_IN_BLOOM = 13;
-
-function hasWebGL(): boolean {
-  try {
-    return Boolean(document.createElement("canvas").getContext("webgl2"));
-  } catch {
-    return false;
-  }
-}
 
 const wantsLessMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -34,7 +27,7 @@ function bringIntoSight(control: HTMLElement, stage: HTMLElement | null) {
   const covered = stage.getBoundingClientRect().bottom + 12 - control.getBoundingClientRect().top;
   if (covered > 0) window.scrollBy({ top: -covered, behavior: "instant" });
 }
-const stillOfGrower = (grower: Grower) => `/flowers/grow/${grower.id}.webp`;
+const stillOfGrower = (grower: Grower) => picture(`/flowers/grow/${grower.id}.webp`);
 
 /** A flower that cannot load leaves its picture on the page, and the rest keeps working. */
 class StageGuard extends Component<{ flower: string; onFail: () => void; children: ReactNode }, { failed: boolean }> {
@@ -72,7 +65,7 @@ export function Grow() {
   const [visible, setVisible] = useState(false);
   const [near, setNear] = useState(false);
   const [drawn, setDrawn] = useState(false);
-  const [scanLoading, setScanLoading] = useState(false);
+  const [headLoading, setHeadLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [webgl] = useState(hasWebGL);
 
@@ -141,29 +134,28 @@ export function Grow() {
     setGrower(next);
     setVariant(0);
     setFailed(false);
-    if (next.id !== grower.id) setScanLoading(Boolean(next.scan));
+    if (next.id !== grower.id) setHeadLoading(true);
     growFrom(BUD_LIFE);
   };
   const onDrawn = useCallback(() => setDrawn(true), []);
-  const onScanReady = useCallback(() => setScanLoading(false), []);
+  const onHeadReady = useCallback(() => setHeadLoading(false), []);
   const onFail = useCallback(() => {
-    setScanLoading(false);
+    setHeadLoading(false);
     setFailed(true);
   }, []);
 
   const live = webgl && !failed;
-  let note = grower.note ?? "Drag the flower to turn it.";
+  let note = "Drag the flower to turn it.";
   if (!webgl) note = "This browser cannot draw the plant, so here is each flower fully open.";
   else if (failed) note = "This flower did not load. Pick another one.";
-  else if (scanLoading) note = "Loading the scan.";
+  else if (headLoading) note = "Loading the flower.";
 
   return (
     <section className="grow" id="grow" ref={section} data-night={night}>
       <div className="grow__head">
         <h2 className="rise">Watch one grow.</h2>
         <p className="grow__lead rise">
-          Eight kinds of flower a name can grow, and one real orchid. Drag the slider, then turn the lights off and the
-          colour comes from inside.
+          Six real flowers a name can grow, from bud to bloom. Drag the slider, then turn the lights off and the colour comes from inside.
         </p>
       </div>
 
@@ -187,7 +179,8 @@ export function Grow() {
                 night={night}
                 active={visible}
                 onReady={onDrawn}
-                onScanReady={onScanReady}
+                onHeadReady={onHeadReady}
+                onHeadFailed={onFail}
               />
             </Suspense>
           </StageGuard>
@@ -239,11 +232,9 @@ export function Grow() {
             <button type="button" className="pp-button pp-button--quiet" onClick={() => setNight((on) => !on)}>
               {night ? "Turn the lights on" : "Turn the lights off"}
             </button>
-            {!grower.scan && (
-              <button type="button" className="pp-button pp-button--quiet" onClick={() => setVariant((n) => n + 1)}>
-                Another colour
-              </button>
-            )}
+            <button type="button" className="pp-button pp-button--quiet" onClick={() => setVariant((n) => n + 1)}>
+              Another colour
+            </button>
           </div>
         )}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBlossom, LIFE, PART_KIND, seededRandom, speciesFor } from "./build";
+import { buildBlossom, seededRandom, speciesFor, tinted } from "./build";
 import { SPECIES } from "./species";
 
 describe("seededRandom", () => {
@@ -28,61 +28,54 @@ describe("buildBlossom", () => {
     expect(buildBlossom("Anna")).toEqual(buildBlossom("Anna"));
   });
 
-  it("builds a different plant from another seed", () => {
-    const species = SPECIES[0];
-    expect(buildBlossom("Anna", species).petals).not.toEqual(buildBlossom("Ben", species).petals);
+  it("reaches every kind of flower", () => {
+    const seen = new Set(Array.from({ length: 400 }, (_, i) => speciesFor(`name-${i}`).id));
+    expect(seen.size).toBe(SPECIES.length);
   });
 
-  it("picks one species per seed", () => {
-    expect(speciesFor("Anna").id).toEqual(speciesFor("Anna").id);
-  });
-
-  it.each(SPECIES.map((s) => [s.id, s] as const))("%s keeps its petal count in range", (_, species) => {
-    for (const seed of ["a", "b", "c", "d"]) {
-      const { petals } = buildBlossom(seed, species);
-      expect(petals.length).toBeGreaterThanOrEqual(species.petals[0]);
-      expect(petals.length).toBeLessThanOrEqual(species.petals[1]);
+  it("gives every name one of its flower's own tints", () => {
+    for (const name of ["Dana", "Maya", "Oleg", "Sara"]) {
+      const flower = buildBlossom(name);
+      expect(flower.species.tints).toContain(flower.tint);
     }
   });
 
-  // This is what stops petals cutting through each other at every stage of opening.
-  it.each(SPECIES.map((s) => [s.id, s] as const))("%s nests every petal inside the one before", (_, species) => {
-    const { petals } = buildBlossom("nesting", species);
-    for (let i = 1; i < petals.length; i += 1) {
-      expect(petals[i].lean).toBeLessThan(petals[i - 1].lean);
-    }
+  it("shows the same kind differently for different names", () => {
+    const rose = SPECIES.find((s) => s.id === "rose");
+    const plants = Array.from({ length: 40 }, (_, i) => buildBlossom(`name-${i}`, rose));
+    expect(new Set(plants.map((p) => p.tint)).size).toBeGreaterThan(2);
+    expect(new Set(plants.map((p) => p.turn.toFixed(3))).size).toBe(40);
   });
 
-  it.each(SPECIES.map((s) => [s.id, s] as const))("%s opens from the outside in", (_, species) => {
-    const { petals } = buildBlossom("order", species);
-    for (let i = 1; i < petals.length; i += 1) {
-      expect(petals[i].birth).toBeGreaterThanOrEqual(petals[i - 1].birth);
-    }
-    expect(petals[0].birth).toBe(LIFE.petals[0]);
-    expect(petals[petals.length - 1].birth).toBe(LIFE.petals[1]);
-  });
-
-  it("keeps the sepals opening before the first petal", () => {
-    const { head } = buildBlossom("sepals", SPECIES[0]);
-    const sepals = head.filter((part) => part.kind === PART_KIND.sepal);
-    expect(sepals.length).toBeGreaterThan(0);
-    expect(LIFE.sepals).toBeLessThan(LIFE.petals[0]);
-  });
-
-  it("never packs petals against the axis, where they would lose their room", () => {
-    const names = ["Anna", "Ben", "sample", "Mia", "Oleg", "Dana", "Ruslan", "Max", "Zara", "Omar", "Iris", "Sara"];
-    for (const species of SPECIES) {
-      for (const name of names) {
-        const leans = buildBlossom(name, species).petals.map((petal) => petal.lean);
-        expect({ species: species.id, name, lowest: Math.min(...leans) > 0.021 }).toEqual({ species: species.id, name, lowest: true });
-      }
+  it("opens most of the way for every name", () => {
+    for (let i = 0; i < 200; i += 1) {
+      const { fullness } = buildBlossom(`name-${i}`);
+      expect(fullness).toBeGreaterThanOrEqual(0.9);
+      expect(fullness).toBeLessThanOrEqual(1);
     }
   });
+});
 
-  it("gives stamens only to flowers that show them", () => {
-    for (const species of SPECIES) {
-      const stamens = buildBlossom("stamens", species).head.filter((part) => part.kind === PART_KIND.stamen);
-      expect(stamens).toHaveLength(species.stamens?.count ?? 0);
-    }
+describe("tinted", () => {
+  const near = (a: string, b: string) => {
+    for (const at of [1, 3, 5]) expect(Math.abs(parseInt(a.slice(at, at + 2), 16) - parseInt(b.slice(at, at + 2), 16))).toBeLessThanOrEqual(2);
+  };
+
+  it("leaves a colour alone when the tint is plain", () => {
+    near(tinted("#fb764e", { hue: 0, saturation: 1, value: 1 }), "#fb764e");
+  });
+
+  it("turns the hue all the way round to where it started", () => {
+    near(tinted("#3366cc", { hue: 1, saturation: 1, value: 1 }), "#3366cc");
+  });
+
+  it("takes the colour out with saturation 0", () => {
+    const grey = tinted("#fb764e", { hue: 0, saturation: 0, value: 1 });
+    expect(grey.slice(1, 3)).toBe(grey.slice(3, 5));
+    expect(grey.slice(3, 5)).toBe(grey.slice(5, 7));
+  });
+
+  it("copes with a negative turn", () => {
+    expect(tinted("#fb764e", { hue: -0.08, saturation: 1, value: 1 })).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

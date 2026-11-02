@@ -2,10 +2,7 @@
 export const LIFE = {
   stem: [0.02, 0.44],
   swell: [0.2, 0.5],
-  sepals: 0.44,
   petals: [0.48, 0.76],
-  stamens: 0.78,
-  pod: [0.62, 0.9],
 } as const;
 
 export const smooth = (x: number, from: number, to: number) => {

@@ -11,9 +11,9 @@
   --night-raised: #262624;
   --night-line: #3b3b38;
   --night-muted: #b4b4ae;
-  --accent: #f49a30;
-  --on-accent: #141412;
-  --dana: #f49a30;
+  --accent: #e0005e;
+  --on-accent: #ffffff;
+  --dana: #e0005e;
   --margin: clamp(16px, 2.3vw, 32px);
   --radius: 24px;
   --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
@@ -279,7 +279,7 @@
   pointer-events: none;
 }
 .grow__poster[data-hidden="true"] { opacity: 0; }
-.grow__picks { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.grow__picks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 .grow__pick {
   display: grid;
   gap: 4px;
@@ -497,9 +497,9 @@
   gap: 8px;
   padding: 16px 18px;
   font-size: var(--step-small);
-  text-transform: capitalize;
   transition: color 420ms ease;
 }
+.tile__strip > span:last-child::first-letter { text-transform: uppercase; }
 .tile__name { font-size: var(--step-body); font-weight: 500; }
 .names[data-night="true"] .tile__strip,
 .tile:focus-visible .tile__strip { color: #fff; }
@@ -522,7 +522,7 @@
 }
 .how__field:nth-child(1) { background: var(--surface); }
 .how__field:nth-child(2) { background: var(--surface-strong); }
-.how__field:nth-child(3) { background: var(--dana); color: var(--ink); }
+.how__field:nth-child(3) { background: var(--dana); color: #fff; }
 .how__field:nth-child(4) { justify-content: flex-end; background: var(--night); color: #fff; }
 .how__clause { position: relative; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
 .how__name { font-size: clamp(4rem, 8.4vw, 8.75rem); font-weight: 500; letter-spacing: -0.05em; line-height: 0.9; }
@@ -660,6 +660,8 @@
 .foot__base { display: flex; justify-content: space-between; gap: 16px; color: var(--night-muted); }
 .foot__base small { font-size: var(--step-small); }
 .foot__base a { color: #fff; }
+.foot__credits { max-width: 34em; margin: 0; color: var(--night-muted); font-size: var(--step-small); line-height: 1.5; }
+.foot__credits a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
 
 /* Sections rise in once. Nothing is hidden unless the script has marked the page. */
 .pp[data-motion="on"] .rise { opacity: 0; transform: translateY(24px); }

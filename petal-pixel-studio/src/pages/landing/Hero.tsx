@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
 import { identityOf } from "@/math/blossom/identity";
-import { FIRST_NAME, inkFor, type GrownFlower } from "./specimens";
+import { FIRST_NAME, hasWebGL, inkFor, picture, type GrownFlower } from "./specimens";
 
 const HeroStage = lazy(() => import("./HeroStage"));
 
@@ -14,7 +14,7 @@ const opensByItself = () => window.matchMedia("(max-width: 900px)").matches;
 
 const NOTES = [
   "Type any name and it grows from the soil, the same flower every time. Scroll and it opens.",
-  "The letters are all it needs. They set the kind of flower, its colours and every petal.",
+  "The letters are all it needs. They set the kind of flower, its colour and how it opens.",
   "Once it opens it's yours. Send it to the person it's named after, or keep it in your garden.",
 ];
 
@@ -23,14 +23,6 @@ const linkFor = (name: string) => `${window.location.origin}/#name=${encodeURICo
 const nameInLink = () => new URLSearchParams(window.location.hash.slice(1)).get("name") ?? "";
 
 const article = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
-
-function hasWebGL(): boolean {
-  try {
-    return Boolean(document.createElement("canvas").getContext("webgl2"));
-  } catch {
-    return false;
-  }
-}
 
 interface HeroProps {
   name: string;
@@ -55,6 +47,9 @@ export function Hero({ name, onGrown }: HeroProps) {
   const [note, setNote] = useState(0);
   const [onScreen, setOnScreen] = useState(true);
   const [webgl] = useState(hasWebGL);
+  const [lost, setLost] = useState(false);
+
+  useEffect(() => setLost(false), [seed]);
 
   const apply = () => {
     life.value = base.current + (1 - base.current) * held.current;
@@ -153,14 +148,23 @@ export function Hero({ name, onGrown }: HeroProps) {
           <img
             className="hero__poster"
             data-gone={canvasReady && webgl ? "true" : "false"}
-            src="/flowers/first.webp"
+            src={picture("/flowers/first.webp")}
             alt=""
             width={1600}
             height={1000}
           />
           {webgl && seed && (
             <Suspense fallback={null}>
-              <HeroStage seed={seed} life={life} active={onScreen} onReady={() => setCanvasReady(true)} />
+              <HeroStage
+                seed={seed}
+                life={life}
+                active={onScreen}
+                onReady={() => setCanvasReady(true)}
+                onLost={() => {
+                  setCanvasReady(true);
+                  setLost(true);
+                }}
+              />
             </Suspense>
           )}
         </div>
@@ -177,13 +181,13 @@ export function Hero({ name, onGrown }: HeroProps) {
         </h1>
 
         <div className="hero__note">
-          <p key={note}>{NOTES[note]}</p>
+          <p key={note}>{webgl ? NOTES[note] : "This browser cannot draw the plant. The flowers further down were grown from names in just the same way."}</p>
         </div>
 
         {webgl && (
           <div className="hero__grow">
             <div className="hero__says">
-              <p aria-live="polite">{sent || sentence}</p>
+              <p aria-live="polite">{lost ? "This flower did not load. Grow it again in a moment." : sent || sentence}</p>
               <span className="hero__next">
                 <button type="button" onClick={() => void send()}>Send it</button>
                 <a href="#save">Keep it</a>

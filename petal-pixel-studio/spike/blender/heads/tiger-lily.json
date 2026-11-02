@@ -1,0 +1,24 @@
+{
+ "id": "tiger-lily",
+ "path": "<models>/tiger-lily-cc0/model.glb",
+ "sphere": [
+  2.13,
+  -0.25,
+  1.49,
+  3.0
+ ],
+ "axis": [
+  0.41,
+  -0.89,
+  0.21
+ ],
+ "flare": 1.7,
+ "tris": 60000,
+ "petals_beyond": {
+  "r": 0.22,
+  "green_under": 0.9
+ },
+ "crumb": 0.03,
+ "cut_all_below": -1.2,
+ "base_lift": 0.8
+}

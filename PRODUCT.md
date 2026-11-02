@@ -12,11 +12,11 @@ People who want something personal made from a name: their own, or the name of s
 
 ## Product Purpose
 
-Petal Pixel turns any name into a one-of-a-kind 3D flower that grows from the soil on screen. A visitor can keep the flower in their garden and share it. Success is a visitor typing a name within seconds, seeing it bloom, and saving or sending it.
+Petal Pixel turns any name into a real 3D flower that grows from the soil on screen. A visitor can keep the flower in their garden and share it. Success is a visitor typing a name within seconds, seeing it bloom, and saving or sending it.
 
 ## Positioning
 
-The same name always grows the same flower. The flower is computed from the name itself, not picked from a library, so it belongs to that name and cannot be copied onto a different one.
+The same name always grows the same flower. The flower is worked out from the name itself: the name picks one of a small library of real flowers, its colour, how far it opens and how its stem and leaves grow. Shape is shared between names of the same kind, so the name, not the shape, is what makes a flower someone's own, and it cannot be copied onto a different one.
 
 ## Operating Context
 
@@ -24,7 +24,7 @@ The first touch is usually a shared link or the home page on a phone or laptop. 
 
 ## Capabilities and Constraints
 
-- Eight kinds of flower read from a name's SHA-256, a soil-to-bloom growth view with a night light, a garden of saved flowers, PNG and GIF export, and public share pages.
+- Six kinds of real flower read from a name's SHA-256, a soil-to-bloom growth view with a night light, a garden of saved flowers, PNG and GIF export, and public share pages.
 - A flower is worked out in the browser from the name alone, so the home page, the console, the garden and a shared page always show the same flower. The home page sends the name nowhere. The backend still stores its older generated parameters with a saved flower, but nothing draws them.
 - The promise on the public site is that a name grows into a flower. NFT ownership and printed lamps are not the headline.
 - Minting exists in the code but is shown as "soon" on the public site. It needs a real network, a funded wallet and public file storage first.
@@ -39,7 +39,7 @@ The first touch is usually a shared link or the home page on a phone or laptop. 
 
 ## Evidence on Hand
 
-- Real: the plant engine, its eight kinds of flower, and the growth view.
+- Real: the plant, its six kinds of flower, each a 3D model of a real flower with its authors credited in the footer, and the growth view.
 - Real: one 3D scan of a Lycaste virginalis from Smithsonian Open Access, CC0. Other scans we looked at are not cleared: Embreea herrenhusana has no Open Access record, and the Sketchfab models need the owner's account.
 - Absent: users, customers, testimonials, press, usage numbers, prices. Never invent these.
 

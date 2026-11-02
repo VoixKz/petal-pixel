@@ -2,7 +2,7 @@
 name: Petal Pixel
 description: A name becomes a flower. A calm pale gallery with very large type, black pills, and one colour borrowed from the flower last grown.
 colors:
-  petal-accent: "#f49a30"
+  petal-accent: "#e0005e"
   on-accent: "#141412"
   ink: "#141412"
   ink-hover: "#33332f"
@@ -160,7 +160,7 @@ The world has two rooms sharing one material. The public face (home page and sig
 - Hanken Grotesk only on the public face, weights 400 and 500.
 - Black pills for every action; large soft corners on every container.
 - Flat tonal steps, with a single shadow in the whole public face.
-- Real generator renders, never stock, illustration or model-made imagery. The specimen tiles, the Night Shelf and the cover are the generator's own geometry path-traced in Blender, so a picture has richer light than the live flower but always its shape and colours.
+- Real flowers only: the plant's own 3D models of real flowers, never stock photos, illustration or image-model pictures. The specimen tiles, the Night Shelf, the Grow thumbnails and the cover are captured from the live plant, so a picture always matches what the page grows.
 
 ## Colors
 
@@ -293,7 +293,7 @@ The plant on its own stage, used in the console studio and on a shared flower's 
 Each card in the console shows the flower drawn on the visitor's own device from its name, kept in local storage, on the console's secondary ground. Nothing is fetched and nothing needs a picture store.
 
 ### Growth Stage
-A full-bleed band with the plant standing right of the words: a live plant growing from soil to bloom under one slider, nine picture buttons for choosing a flower, and pills for growing again, the lights and another colour. Below 900px the words come first, then the plant holds at the top of the screen at 46svh while the controls pass under it, with the flowers in one scrolling row. Turning the lights off is the one place the public face goes dark on request: the band moves to Night over 900ms and the flower glows from its heart. Only the band changes; the bar and the rest of the page stay on Gallery Ground. Bloom needs an opaque canvas, so this canvas paints the band's exact colour as its background.
+A full-bleed band with the plant standing right of the words: a live plant growing from soil to bloom under one slider, six picture buttons for choosing a flower, and pills for growing again, the lights and another colour. Below 900px the words come first, then the plant holds at the top of the screen at 46svh while the controls pass under it, with the flowers in one scrolling row. Turning the lights off is the one place the public face goes dark on request: the band moves to Night over 900ms and the flower glows from its heart. Only the band changes; the bar and the rest of the page stay on Gallery Ground. Bloom needs an opaque canvas, so this canvas paints the band's exact colour as its background.
 
 ### Reveal Motion
 Blocks rise once on entering view (24px, 620ms, `cubic-bezier(0.2, 0.7, 0.2, 1)`), staggered 70ms across a row. Content is only hidden after the script has marked the page, so it survives with no script. Reduced motion removes the rise and jumps growth to its end state.

@@ -43,11 +43,10 @@ export default function KeptFlower({ seed, active, onReady }: KeptFlowerProps) {
       frameloop={active ? "always" : "never"}
       camera={{ position: [0, 3.4, 5], fov: 30 }}
       gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
-      onCreated={onReady}
     >
       <Stage glow={DAYLIGHT} ground={false}>
         <Aim seed={seed} />
-        <Plant key={seed} seed={seed} life={GROWN} glow={DAYLIGHT} sway={!still} />
+        <Plant key={seed} seed={seed} life={GROWN} glow={DAYLIGHT} sway={!still} onHeadReady={onReady} />
       </Stage>
     </Canvas>
   );

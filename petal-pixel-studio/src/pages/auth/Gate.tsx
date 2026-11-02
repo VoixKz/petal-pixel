@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { seedOf } from "@/math/blossom/name";
+import { picture } from "@/pages/landing/specimens";
 import "@/styles/petal.css";
 
 const KeptFlower = lazy(() => import("@/pages/landing/KeptFlower"));
@@ -44,7 +45,7 @@ export function Gate({ title, children }: { title: string; children: ReactNode }
         </main>
       </div>
       <div className="gate__picture">
-        {!name && <img src="/flowers/names/dana.webp" alt="" width={900} height={900} />}
+        {!name && <img src={picture("/flowers/names/dana.webp")} alt="" width={900} height={900} />}
         {seed && (
           <div className="gate__flower" data-drawn={drawn}>
             <Suspense fallback={null}>

@@ -54,7 +54,7 @@ const router = createBrowserRouter([
   {
     element: <AppProviders />,
     children: [
-      { path: "/", element: <Suspense fallback={null}><Landing /></Suspense> },
+      { path: "/", element: <PageErrorBoundary><Suspense fallback={null}><Landing /></Suspense></PageErrorBoundary> },
       { path: "/forgot-password", element: <Suspense fallback={<PageLoader />}><ForgotPassword /></Suspense> },
       { path: "/reset-password", element: <Suspense fallback={<PageLoader />}><ResetPassword /></Suspense> },
       { path: "/login", element: <Suspense fallback={<PageLoader />}><Login /></Suspense> },

@@ -60,7 +60,7 @@ describe("collectFamilies", () => {
       makeFlower({ generationWord: "Omar" }),
       makeFlower({ generationWord: "Oleg" }),
     ];
-    expect(collectFamilies(flowers)).toEqual(["dahlia", "rose", "tulip"]);
+    expect(collectFamilies(flowers)).toEqual(["rose", "tiger lily", "water lily"]);
   });
 
   it("returns empty array for empty collection", () => {
@@ -102,10 +102,10 @@ describe("filterFlowers", () => {
   });
 
   it("filters by the kind of flower the name grows", () => {
-    const tulip = makeFlower({ generationWord: "Zara" });
-    const lotus = makeFlower({ generationWord: "Maria" });
-    expect(filterFlowers([tulip, lotus], { ...base, family: "tulip" })).toEqual([tulip]);
-    expect(filterFlowers([tulip, lotus], { ...base, family: "lotus" })).toEqual([lotus]);
+    const lily = makeFlower({ generationWord: "Zara" });
+    const peony = makeFlower({ generationWord: "Maria" });
+    expect(filterFlowers([lily, peony], { ...base, family: "tiger lily" })).toEqual([lily]);
+    expect(filterFlowers([lily, peony], { ...base, family: "peony" })).toEqual([peony]);
   });
 
   it("combines search + mint + family", () => {
@@ -113,7 +113,7 @@ describe("filterFlowers", () => {
     const wrongMint = makeFlower({ title: "Aurora", generationWord: "Zara", isMinted: false });
     const wrongKind = makeFlower({ title: "Aurora", generationWord: "Oleg", isMinted: true });
     expect(
-      filterFlowers([hit, wrongMint, wrongKind], { search: "aurora", mint: "minted", family: "tulip" }),
+      filterFlowers([hit, wrongMint, wrongKind], { search: "aurora", mint: "minted", family: "tiger lily" }),
     ).toEqual([hit]);
   });
 });

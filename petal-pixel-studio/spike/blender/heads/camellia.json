@@ -1,0 +1,23 @@
+{
+ "id": "camellia",
+ "path": "<models>/camellia-cc0/model.glb",
+ "sphere": [
+  -0.35,
+  -0.94,
+  0.21,
+  2.7
+ ],
+ "axis": [
+  -0.351,
+  -0.796,
+  0.494
+ ],
+ "flare": 1.7,
+ "tris": 70000,
+ "cut_all_below": -0.3,
+ "crumb": 0.03,
+ "petals_beyond": {
+  "r": 0.3,
+  "green_under": 0.72
+ }
+}

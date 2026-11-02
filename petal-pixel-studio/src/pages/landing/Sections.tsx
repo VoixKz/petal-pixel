@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } 
 import { Link, useNavigate } from "react-router-dom";
 import { buildBlossom, speciesFor } from "@/math/blossom/build";
 import { identityOf } from "@/math/blossom/identity";
-import { FIRST_NAME, FIRST_SEED, LAMPS, lampOf, stillOf, SPECIMENS, type GrownFlower, type Specimen } from "./specimens";
+import { SPECIES } from "@/math/blossom/species";
+import { FIRST_NAME, FIRST_SEED, hasWebGL, LAMPS, lampOf, stillOf, SPECIMENS, type GrownFlower, type Specimen } from "./specimens";
 
 const KeptFlower = lazy(() => import("./KeptFlower"));
 const TYPING_PAUSE_MS = 350;
@@ -72,17 +73,17 @@ export function How() {
         <div className="how__field">
           <dl className="how__facts rise" data-ui>
             <div><dt>Kind</dt><dd>{dana.species.label}</dd></div>
-            <div><dt>Petals</dt><dd>{dana.petals.length}</dd></div>
+            <div><dt>Opens</dt><dd>{Math.round(dana.fullness * 100)}%</dd></div>
             <div>
               <dt>Colours</dt>
               <dd className="how__chips">{dana.colour.map((hex) => <i key={hex} style={{ background: hex }} />)}</dd>
             </div>
           </dl>
-          <p className="how__clause">That number decides the kind of flower, its colours and its petals.</p>
+          <p className="how__clause">That number decides the kind of flower, its colour and how far it opens.</p>
         </div>
         <div className="how__field">
           <img className="how__bloom" src={stillOf(FIRST_NAME, true)} alt={`${FIRST_NAME}'s ${dana.species.label.toLowerCase()}, fully open and lit from inside`} loading="lazy" width={900} height={900} />
-          <p className="how__clause">Then it grows, and nothing was picked by hand.</p>
+          <p className="how__clause">Then it grows. The same name always grows the same flower.</p>
         </div>
       </div>
     </section>
@@ -123,6 +124,7 @@ export function Keep() {
 const QUESTIONS = [
   ["Do I need an account?", "Not to grow a flower. You only sign in when you want to keep one in your garden."],
   ["Will my name always grow the same flower?", "Yes. The flower is worked out from the name itself, so it comes out the same for anyone, on any device. Capitals and extra spaces don't change it."],
+  ["Are these real flowers?", "Yes. Each one is a 3D model made from a real flower. Your name picks which flower it is, its colour and how far it opens."],
   ["What can I do with a flower?", "Save it to your garden, download it as a picture or a turning GIF, or send its link to someone."],
   ["Do you keep the names people type?", "Not on this page. A flower here is worked out in your browser and nothing is sent anywhere. A name is stored only when you save it to your garden, so that the flower can have its own page. Don't save anything you wouldn't want kept."],
   ["Can I mint my flower as an NFT?", "Not yet. Minting works in testing but isn't open on this site. It will be marked here when it is."],
@@ -149,6 +151,7 @@ export function Questions() {
 
 export function Close({ flower }: { flower: GrownFlower }) {
   const navigate = useNavigate();
+  const [webgl] = useState(hasWebGL);
   const section = useRef<HTMLElement>(null);
   const [value, setValue] = useState(flower.name);
   const [shown, setShown] = useState(flower);
@@ -202,7 +205,7 @@ export function Close({ flower }: { flower: GrownFlower }) {
       </div>
       <div className="close__flower" role="img" aria-label={`${shown.name}'s ${shown.species}, fully open`}>
         <img data-gone={drawn} src={stillOf(FIRST_NAME, false)} alt="" loading="lazy" width={900} height={900} />
-        {near && (
+        {near && webgl && (
           <Suspense fallback={null}>
             <KeptFlower seed={shown.seed} active={visible} onReady={() => setDrawn(true)} />
           </Suspense>
@@ -234,6 +237,16 @@ export function Foot() {
         <small>© 2026 Petal Pixel</small>
         <small>Made by <a href="https://bexultan.dev">Bexultan Karimtayev</a></small>
       </div>
+      <p className="foot__credits">
+        Real flowers, changed for this site:{" "}
+        {SPECIES.map(({ label, head: { credit } }, i) => (
+          <span key={label}>
+            {i > 0 && ", "}
+            <a href={credit.url}>{label}</a> by {credit.by} ({credit.licence})
+          </span>
+        ))}
+        .
+      </p>
     </footer>
   );
 }

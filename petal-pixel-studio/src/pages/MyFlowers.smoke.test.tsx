@@ -103,9 +103,9 @@ describe('MyFlowers page (smoke — real DOM interactions)', () => {
     renderPage();
     const select = screen.getByLabelText('Filter by kind') as HTMLSelectElement;
     const optionValues = Array.from(select.options).map((o) => o.value);
-    expect(optionValues).toEqual(['all', 'camellia', 'tulip']);
+    expect(optionValues).toEqual(['all', 'hibiscus', 'tiger lily']);
 
-    fireEvent.change(select, { target: { value: 'camellia' } });
+    fireEvent.change(select, { target: { value: 'hibiscus' } });
     expect(screen.getByText('Camellia Card')).toBeInTheDocument();
     expect(screen.queryByText('Tulip Card')).not.toBeInTheDocument();
   });
@@ -161,7 +161,7 @@ describe('MyFlowers page (smoke — real DOM interactions)', () => {
     renderPage();
     // Kinds also appear as <option>s in the filter; scope to the card chip (a <div>).
     const cardChip = (label: string) => screen.getAllByText(label).filter((el) => el.tagName === 'DIV');
-    expect(cardChip('tulip')).toHaveLength(1);
-    expect(cardChip('camellia')).toHaveLength(1);
+    expect(cardChip('tiger lily')).toHaveLength(1);
+    expect(cardChip('hibiscus')).toHaveLength(1);
   });
 });

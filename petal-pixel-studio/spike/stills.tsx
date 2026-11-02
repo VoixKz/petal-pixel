@@ -39,7 +39,7 @@ function Aim({ seed }: { seed: string }) {
   useEffect(() => {
     const plan = buildBlossom(seed, grower?.species).stem;
     const path = emptyPath();
-    traceStem({ ...plan, nod: grower?.scan?.nod ?? plan.nod }, t, 0, path);
+    traceStem(plan, t, 0, path);
     const tip = placeAt(path, path.length);
     const heart = new THREE.Vector3(tip.x, tip.y, tip.z).addScaledVector(new THREE.Vector3(tip.tx, tip.ty, tip.tz), 0.28);
     if (frame === "first") {
@@ -53,6 +53,9 @@ function Aim({ seed }: { seed: string }) {
       camera.lookAt(heart);
       (camera as THREE.PerspectiveCamera).fov = 24;
       (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+    } else if (frame === "cover") {
+      camera.position.set(heart.x - 0.62, heart.y + 0.86, heart.z + 3.5);
+      camera.lookAt(heart.x - 0.62, heart.y - 0.02, heart.z);
     } else if (frame === "lamp") {
       camera.position.set(heart.x, heart.y + 0.3, heart.z + 7.4);
       camera.lookAt(heart.x, heart.y - 0.72, heart.z);
@@ -83,7 +86,7 @@ function App() {
         {night > 0 && <NightBackdrop />}
         {frame === "first" && <ClearBackdrop />}
         <Aim seed={seed} />
-        <Plant seed={seed} species={grower?.species} scan={grower?.scan} life={{ value: t }} glow={{ value: night }} />
+        <Plant seed={seed} species={grower?.species} life={{ value: t }} glow={{ value: night }} onHeadReady={() => ((window as unknown as { __head: boolean }).__head = true)} />
       </Stage>
     </Canvas>
   );

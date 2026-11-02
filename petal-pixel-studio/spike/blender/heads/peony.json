@@ -1,0 +1,25 @@
+{
+ "id": "peony",
+ "path": "<models>/peony/model.glb",
+ "sphere": [
+  -0.01,
+  -0.44,
+  4.9,
+  3.05
+ ],
+ "axis": [
+  0,
+  0,
+  1
+ ],
+ "flare": 1.7,
+ "tris": 70000,
+ "drop_green_beyond": 0.5,
+ "cut_all_below": -0.16,
+ "pivot": [
+  -0.01,
+  -0.44,
+  3.75
+ ],
+ "crumb": 0.004
+}

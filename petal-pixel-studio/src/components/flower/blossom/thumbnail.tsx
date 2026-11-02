@@ -1,7 +1,7 @@
 // Draws small pictures of flowers in the visitor's own browser, one at a time, on a
 // single hidden canvas. A garden needs no picture store this way, and every card shows
 // the flower exactly as the engine grows it today.
-import { useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { advance, createRoot, extend, useStore, useThree, type ReconcilerRoot } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildBlossom } from '@/math/blossom/build';
@@ -27,7 +27,8 @@ function Picture({ seed, onDone }: { seed: string; onDone: (picture: string) => 
     return new THREE.Vector3(tip.x, tip.y, tip.z).addScaledVector(new THREE.Vector3(tip.tx, tip.ty, tip.tz), 0.28);
   }, [seed]);
 
-  useEffect(() => {
+  // The flower arrives over the network, so the picture waits for it.
+  const draw = useCallback(() => {
     camera.position.set(heart.x, heart.y + 1.2, heart.z + 5.1);
     camera.lookAt(heart.x, heart.y - 0.08, heart.z);
     const state = store.getState();
@@ -39,7 +40,7 @@ function Picture({ seed, onDone }: { seed: string; onDone: (picture: string) => 
 
   return (
     <Stage glow={DAYLIGHT} ground={false}>
-      <Plant seed={seed} life={GROWN} glow={DAYLIGHT} />
+      <Plant seed={seed} life={GROWN} glow={DAYLIGHT} onHeadReady={draw} />
     </Stage>
   );
 }

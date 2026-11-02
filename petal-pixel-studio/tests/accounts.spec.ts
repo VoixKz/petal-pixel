@@ -100,7 +100,7 @@ test("a shared flower opens without an account, and growing yours needs none eit
   await stranger.getByLabel("Your name").fill("Zara");
   await stranger.getByRole("button", { name: "Grow yours" }).click();
   await expect(stranger).toHaveURL(/\/#name=Zara$/);
-  await expect(stranger.getByText("Zara grows a tulip.")).toBeVisible();
+  await expect(stranger.getByText("Zara grows a tiger lily.")).toBeVisible();
   await stranger.close();
 });
 

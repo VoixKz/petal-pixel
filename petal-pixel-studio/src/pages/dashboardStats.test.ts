@@ -61,9 +61,9 @@ describe("familyDistribution", () => {
       makeFlower({ generationWord: "Dana" }),
     ];
     expect(familyDistribution(flowers)).toEqual([
-      { family: "tulip", count: 2 },
-      { family: "dahlia", count: 1 },
+      { family: "tiger lily", count: 2 },
       { family: "rose", count: 1 },
+      { family: "water lily", count: 1 },
     ]);
   });
 
@@ -72,7 +72,7 @@ describe("familyDistribution", () => {
       makeFlower({ generationWord: "Dana" }, { flowerType: "rose" }),
       makeFlower({ generationWord: "Dana" }, { algoVersion: "v2", family: "sunflower" }),
     ];
-    expect(familyDistribution(flowers)).toEqual([{ family: "dahlia", count: 2 }]);
+    expect(familyDistribution(flowers)).toEqual([{ family: "rose", count: 2 }]);
   });
 
   it("returns [] for an empty garden", () => {

@@ -17,19 +17,31 @@ export const FIRST_NAME = "Dana";
 export const FIRST_SEED = "2c9e0a2585dc7406589a3724f0027811506e0f133726303a15d6779d532a2573";
 
 export const SPECIMENS: Specimen[] = [
-  { name: "Anna", species: "camellia" },
-  { name: "Maria", species: "lotus" },
-  { name: "Aisha", species: "magnolia" },
-  { name: "Oleg", species: "rose" },
-  { name: "Sara", species: "peony" },
-  { name: "Iris", species: "anemone" },
+  { name: "Iris", species: "rose" },
+  { name: "Oleg", species: "water lily" },
+  { name: "Aisha", species: "peony" },
+  { name: "Maya", species: "tiger lily" },
+  { name: "Ayan", species: "camellia" },
+  { name: "Anna", species: "hibiscus" },
 ];
 
 /** A flower lit from inside, stood in a row at night. */
-export const LAMPS = ["Zara", "Maria", "Dana", "Omar", "Anna"];
+export const LAMPS = ["Dana", "Oleg", "Aisha", "Maya", "Ayan"];
 
-export const stillOf = (name: string, night: boolean) => `/flowers/names/${name.toLowerCase()}${night ? "-night" : ""}.webp`;
-export const lampOf = (name: string) => `/flowers/lamps/${name.toLowerCase()}.webp`;
+/** Pictures were once kept by browsers for a month. A new address is the only way past those copies. */
+export const picture = (path: string) => `${path}?v=2`;
+
+export const stillOf = (name: string, night: boolean) => picture(`/flowers/names/${name.toLowerCase()}${night ? "-night" : ""}.webp`);
+export const lampOf = (name: string) => picture(`/flowers/lamps/${name.toLowerCase()}.webp`);
+
+/** Whether this browser can draw the plant at all. */
+export function hasWebGL(): boolean {
+  try {
+    return Boolean(document.createElement("canvas").getContext("webgl2"));
+  } catch {
+    return false;
+  }
+}
 
 /** Black or white, whichever reads better on a colour. */
 export function inkFor(hex: string): string {

@@ -9,7 +9,7 @@ import { FIRST_NAME, FIRST_SEED, type GrownFlower } from "./landing/specimens";
 export default function Landing() {
   const root = useRef<HTMLDivElement>(null);
   const [wanted, setWanted] = useState("");
-  const [grown, setGrown] = useState<GrownFlower>({ name: FIRST_NAME, seed: FIRST_SEED, species: "dahlia" });
+  const [grown, setGrown] = useState<GrownFlower>({ name: FIRST_NAME, seed: FIRST_SEED, species: "rose" });
 
   const onGrown = useCallback((flower: GrownFlower, colours: readonly string[]) => {
     setGrown(flower);

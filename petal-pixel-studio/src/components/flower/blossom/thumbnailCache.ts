@@ -2,7 +2,7 @@
 // so a list can show what it has without loading any 3D code.
 
 /** Raise this when flowers change shape, so old pictures are drawn again. */
-const VERSION = 3;
+const VERSION = 4;
 const key = (seed: string) => `petal-thumb-${VERSION}-${seed.slice(0, 24)}`;
 const session = new Map<string, string>();
 

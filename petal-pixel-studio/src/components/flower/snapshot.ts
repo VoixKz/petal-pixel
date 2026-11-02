@@ -38,6 +38,21 @@ export function registerRenderer(fn: Renderer): () => void {
   };
 }
 
+/** How long a picture waits for the flower itself before it is taken without it. */
+const FLOWER_PATIENCE_MS = 6000;
+
+/** Something a picture has to wait for, though never for ever. */
+export function arrival(patience = FLOWER_PATIENCE_MS) {
+  let landed = () => {};
+  const here = new Promise<void>((resolve) => {
+    landed = resolve;
+  });
+  return {
+    landed: () => landed(),
+    wait: () => Promise.race([here, new Promise<void>((resolve) => setTimeout(resolve, patience))]),
+  };
+}
+
 /**
  * Public capture wrapper. Runs the most-recently-registered live render pass with
  * `opts`. NEVER throws: resolves null when the stack is empty or the pass fails.

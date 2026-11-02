@@ -21,10 +21,14 @@
     },
     {
       "source": "/flowers/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000" }]
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
     },
     {
-      "source": "/(models|draco)/(.*)",
+      "source": "/models/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }]
+    },
+    {
+      "source": "/draco/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000" }]
     }
   ]

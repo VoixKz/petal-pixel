@@ -104,8 +104,8 @@ describe("leaves", () => {
       const species = SPECIES.find((s) => s.id === id)!;
       return bladesOf(buildBlossom("Anna", species).leaves).length;
     };
-    expect(leafCount("rose")).toBeGreaterThan(leafCount("tulip") * 4);
+    expect(leafCount("rose")).toBeGreaterThan(leafCount("tiger-lily") * 4);
     expect(buildBlossom("Anna", SPECIES.find((s) => s.id === "rose")!).thorns.length).toBeGreaterThan(0);
-    expect(buildBlossom("Anna", SPECIES.find((s) => s.id === "tulip")!).thorns).toHaveLength(0);
+    expect(buildBlossom("Anna", SPECIES.find((s) => s.id === "tiger-lily")!).thorns).toHaveLength(0);
   });
 });

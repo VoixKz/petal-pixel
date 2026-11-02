@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { SPECIES } from "@/math/blossom/species";
 import { GROWERS, STAGES, stageAt } from "./growers";
 
 const inPublic = (path: string) => existsSync(resolve(process.cwd(), "public", path.replace(/^\//, "")));
@@ -10,12 +11,12 @@ describe("growers", () => {
     for (const grower of GROWERS) expect(inPublic(`/flowers/grow/${grower.id}.webp`)).toBe(true);
   });
 
-  it("only offers scans whose file ships with the site", () => {
-    for (const grower of GROWERS) if (grower.scan) expect(inPublic(grower.scan.url)).toBe(true);
+  it("grows only flowers whose file ships with the site", () => {
+    for (const grower of GROWERS) expect(inPublic(grower.species.head.url)).toBe(true);
   });
 
-  it("credits every scan on the page", () => {
-    for (const grower of GROWERS) if (grower.scan) expect(grower.note).toMatch(/Smithsonian/);
+  it("offers every kind of flower there is", () => {
+    expect(new Set(GROWERS.map((g) => g.id))).toEqual(new Set(SPECIES.map((s) => s.id)));
   });
 });
 
