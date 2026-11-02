@@ -1,5 +1,5 @@
-// Package auth checks the OIDC access tokens the identity provider issues.
-// Verifier is the seam for moving from local Keycloak to Cognito.
+// Package auth checks the access tokens the identity provider issues: local
+// Keycloak in Docker, Managed Better Auth on the hosted site.
 package auth
 
 import (
@@ -34,7 +34,11 @@ type OIDCVerifier struct {
 // the provider is reached at a different address from the one in its tokens.
 func NewOIDCVerifier(ctx context.Context, issuer, jwksURL, audience string) *OIDCVerifier {
 	keys := oidc.NewRemoteKeySet(ctx, jwksURL)
-	return &OIDCVerifier{verifier: oidc.NewVerifier(issuer, keys, &oidc.Config{ClientID: audience})}
+	return &OIDCVerifier{verifier: oidc.NewVerifier(issuer, keys, &oidc.Config{
+		ClientID: audience,
+		// Keycloak signs with RS256, Managed Better Auth with Ed25519.
+		SupportedSigningAlgs: []string{oidc.RS256, oidc.EdDSA},
+	})}
 }
 
 func (v *OIDCVerifier) Verify(ctx context.Context, rawToken string) (Claims, error) {

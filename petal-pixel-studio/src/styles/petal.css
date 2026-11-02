@@ -1,0 +1,755 @@
+/* The public face of Petal Pixel: the landing page and the sign-in pages. */
+@import "@fontsource-variable/hanken-grotesk";
+
+.pp {
+  --ground: #f0f0f1;
+  --surface: #e5e5e7;
+  --surface-strong: #d6d6d9;
+  --ink: #141412;
+  --muted: #5a5a5e;
+  --night: #141412;
+  --night-raised: #262624;
+  --night-line: #3b3b38;
+  --night-muted: #b4b4ae;
+  --accent: #e0005e;
+  --on-accent: #ffffff;
+  --dana: #e0005e;
+  --margin: clamp(16px, 2.3vw, 32px);
+  --radius: 24px;
+  --step-small: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+  --step-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem);
+  --step-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem);
+  --step-head: clamp(2.75rem, 1.1rem + 5vw, 6rem);
+  --step-display: clamp(3.25rem, 8.2vw, 10.5rem);
+
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Hanken Grotesk Variable", system-ui, sans-serif;
+  font-size: var(--step-body);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+.pp *,
+.pp *::before,
+.pp *::after { box-sizing: border-box; }
+:where(.pp) a { color: inherit; }
+:where(.pp) :where(h1, h2, h3, p) { margin: 0; }
+.pp p,
+.pp li { text-wrap: pretty; }
+.pp h2 {
+  text-wrap: balance;
+  font-size: var(--step-head);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+.pp [id] { scroll-margin-top: 64px; }
+.pp :focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+}
+.keep :focus-visible { outline-color: #fff; }
+.pp ::selection {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Buttons: one shape everywhere, a black pill. */
+.pp-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: var(--step-small);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+.pp-button:hover { background: #33332f; }
+.pp-button:active { transform: scale(0.97); }
+.pp-button:disabled { background: var(--surface-strong); color: var(--muted); cursor: not-allowed; transform: none; }
+.pp-button--quiet { background: var(--surface); color: var(--ink); }
+.pp-button--quiet:hover { background: var(--surface-strong); }
+.pp-button--light { background: #fff; color: var(--ink); }
+.pp-button--light:hover { background: var(--surface); }
+
+/* Top bar */
+.pp-bar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  transition: background-color 900ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 var(--margin);
+  background: var(--ground);
+}
+.pp-bar__mark {
+  font-size: var(--step-lead);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  text-decoration: none;
+}
+.pp-bar__links { display: flex; align-items: center; gap: clamp(16px, 2vw, 28px); }
+.pp-bar__links a:not(.pp-button) {
+  font-size: var(--step-small);
+  text-decoration: none;
+  transition: opacity 160ms ease;
+}
+.pp-bar__links a:not(.pp-button):hover { opacity: 0.6; }
+
+/* A name field: one shape on the hero and at the close. */
+.field {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  padding: 0 18px;
+  border: 1px solid var(--surface-strong); /* taste-skill-ignore: a form field */
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  transition: border-color 160ms ease;
+}
+.field::placeholder { color: var(--muted); }
+.field:hover { border-color: var(--muted); }
+
+/* Hero: a held stage. The plant fills it, and the sentence breaks around the plant. */
+.hero { height: 240svh; }
+.hero__stage {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  padding: 64px var(--margin) 0;
+  overflow: hidden;
+}
+.hero__plant {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
+}
+.hero__canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
+.hero__canvas:active { cursor: grabbing; }
+/* Drawn with the stage's own camera, so the plant barely moves when the canvas takes over. */
+.hero__poster {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: auto;
+  max-width: none;
+  height: 100%;
+  transform: translateX(-50%);
+  transition: opacity 500ms ease;
+}
+.hero__poster[data-gone="true"] { opacity: 0; }
+.hero__title {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  font-size: var(--step-display);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  pointer-events: none;
+}
+.hero__half--last { text-align: right; }
+/* The visitor's name takes the headline's place, as large as its words allow. */
+.hero__title--own {
+  font-size: max(1.5rem, min(var(--step-display), calc(29vw / var(--wide-em))));
+  animation: hero-name 620ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.hero__title--own .hero__half { max-width: 29vw; overflow-wrap: anywhere; }
+@keyframes hero-name {
+  from { opacity: 0; transform: translateY(20px); }
+}
+.hero__note {
+  position: absolute;
+  z-index: 1;
+  left: var(--margin);
+  bottom: 28px;
+  width: min(26vw, 30em);
+  pointer-events: none;
+}
+.hero__grow {
+  position: absolute;
+  z-index: 1;
+  right: var(--margin);
+  bottom: 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: min(30vw, 420px);
+}
+.hero__says { font-size: var(--step-small); }
+.hero__says:empty { display: none; }
+.hero__next { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.hero__form { display: flex; gap: 8px; }
+
+/* Watch one grow: the plant fills the band, the words stand beside it. */
+.grow {
+  --grow-ink: var(--ink);
+  --grow-quiet: var(--muted);
+  --grow-line: var(--surface-strong);
+  --grow-tile: var(--surface);
+  position: relative;
+  display: grid;
+  align-content: center;
+  gap: 24px;
+  min-height: max(100svh, 760px);
+  padding: 96px var(--margin) 40px;
+  background: var(--ground);
+  color: var(--grow-ink);
+  overflow: clip;
+  transition: background-color 900ms ease, color 900ms ease;
+}
+.grow[data-night="true"] {
+  --grow-ink: #fff;
+  --grow-quiet: var(--night-muted);
+  --grow-line: var(--night-line);
+  --grow-tile: var(--night-raised);
+  background: var(--night);
+}
+.pp .grow { scroll-margin-top: 0; }
+.grow :focus-visible { outline-color: var(--grow-ink); }
+/* Keyboard focus never lands under the fixed bar. */
+.grow button,
+.grow input { scroll-margin-top: 80px; }
+.grow__head,
+.grow__controls {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 24px;
+  width: min(100%, clamp(420px, 40vw, 580px));
+  pointer-events: none;
+}
+.grow__head > *,
+.grow__controls > * { pointer-events: auto; }
+.grow h2 { font-size: clamp(3rem, 5.6vw, 5.25rem); white-space: nowrap; }
+.grow__lead { max-width: 30em; }
+.grow__stage {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: pan-y;
+}
+.grow__stage:active { cursor: grabbing; }
+/* The band ends under the plant, so its soil and shadow fade instead of being cut off. */
+.grow__canvas {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 140px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 140px), transparent);
+}
+.grow__poster {
+  position: absolute;
+  top: 50%;
+  left: 69%;
+  width: min(40vw, 560px);
+  height: auto;
+  transform: translate(-50%, -50%);
+  transition: opacity 500ms ease;
+  pointer-events: none;
+}
+.grow__poster[data-hidden="true"] { opacity: 0; }
+.grow__age input {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.grow__age input::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: var(--grow-line); }
+.grow__age input::-moz-range-track { height: 6px; border-radius: 999px; background: var(--grow-line); }
+.grow__age input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--grow-ink);
+}
+.grow__age input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 50%; background: var(--grow-ink); }
+.grow__stages { position: relative; height: 20px; margin: 0 11px; color: var(--grow-quiet); font-size: var(--step-small); }
+.grow__stages span { position: absolute; top: 0; transform: translateX(-50%); }
+.grow__stages span:first-child { transform: translateX(-11px); }
+.grow__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.grow[data-night="true"] .pp-button { background: #fff; color: var(--ink); }
+.grow[data-night="true"] .pp-button:hover { background: var(--surface); }
+.grow[data-night="true"] .pp-button--quiet { background: var(--night-raised); color: #fff; }
+.grow[data-night="true"] .pp-button--quiet:hover { background: var(--night-line); }
+.grow__note { min-height: 2.9em; color: var(--grow-quiet); font-size: var(--step-small); }
+
+@media (min-width: 901px) and (max-height: 800px) {
+  .grow { gap: 16px; min-height: max(100svh, 640px); padding: 80px var(--margin) 16px; }
+  .grow__head,
+  .grow__controls { gap: 14px; }
+  .grow__note { min-height: 0; }
+}
+
+/* A plant on its own stage, in the console and on a shared flower's page. */
+.bloom {
+  --grow-ink: var(--ink);
+  --grow-quiet: var(--muted);
+  --grow-line: var(--surface-strong);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 360px;
+  overflow: hidden;
+  background: var(--ground);
+  color: var(--grow-ink);
+  transition: background-color 900ms ease, color 900ms ease;
+}
+.bloom[data-night="true"] {
+  --grow-ink: #fff;
+  --grow-quiet: var(--night-muted);
+  --grow-line: var(--night-line);
+  background: var(--night);
+}
+.bloom :focus-visible { outline-color: var(--grow-ink); }
+.bloom[data-night="true"] .pp-button--quiet { background: var(--night-raised); color: #fff; }
+.bloom[data-night="true"] .pp-button--quiet:hover { background: var(--night-line); }
+.bloom__canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
+.bloom__canvas:active { cursor: grabbing; }
+.bloom__says { position: absolute; top: 16px; left: var(--margin); font-size: var(--step-small); pointer-events: none; }
+.bloom__controls {
+  position: absolute;
+  left: var(--margin);
+  right: var(--margin);
+  bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  pointer-events: none;
+}
+.bloom__controls > * { pointer-events: auto; }
+.bloom__controls .grow__age { flex: 1 1 220px; }
+.bloom__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A shared flower: the plant fills the page and the words stand beside it. */
+.share { min-height: 100svh; transition: background-color 900ms ease, color 900ms ease; }
+/* The lights go out on the whole page, so the words beside the flower stay readable. */
+.share:has(.bloom[data-night="true"]) { background: var(--night); color: #fff; }
+.share:has(.bloom[data-night="true"]) :focus-visible { outline-color: #fff; }
+.share:has(.bloom[data-night="true"]) .pp-bar { background: var(--night); }
+.share:has(.bloom[data-night="true"]) :is(.share__yours, .pp-bar) .pp-button { background: #fff; color: var(--ink); }
+.share:has(.bloom[data-night="true"]) .share__links button:disabled { color: var(--night-muted); }
+.share__flower { position: relative; min-height: 100svh; }
+.share__stage { position: absolute; inset: 0; }
+.share__stage .bloom__controls { left: 46%; }
+.share__words {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 24px;
+  width: min(100%, clamp(420px, 42vw, 620px));
+  min-height: 100svh;
+  padding: 96px var(--margin) 40px;
+  pointer-events: none;
+}
+.share__words > * { pointer-events: auto; }
+.share__words h1 { font-size: clamp(3rem, 6vw, 5.5rem); font-weight: 500; letter-spacing: -0.04em; line-height: 0.95; overflow-wrap: anywhere; text-wrap: balance; }
+.share__yours { display: flex; gap: 8px; }
+.share__links { display: flex; flex-wrap: wrap; gap: 4px 20px; font-size: var(--step-small); }
+.share__links a,
+.share__links button {
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.share__links :is(a, button):hover { opacity: 0.6; }
+.share__links button:disabled { color: var(--muted); cursor: progress; }
+.share__state {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 24px;
+  min-height: 100svh;
+  padding: 96px var(--margin) 40px;
+}
+.share__state h1 { font-size: var(--step-head); font-weight: 500; letter-spacing: -0.04em; line-height: 0.95; }
+
+/* Same name, same flower */
+.names { padding: clamp(96px, 12vw, 200px) var(--margin) clamp(96px, 12vw, 200px); background: var(--ground); position: relative; }
+.names__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.names__intro {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding-right: 8vw;
+}
+.names__intro p { max-width: 34em; }
+.names__intro > div { display: grid; justify-items: start; gap: 16px; }
+.tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tile__picture { position: relative; display: block; aspect-ratio: 1; overflow: hidden; }
+.tile__picture img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 700ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 420ms ease;
+}
+.tile:hover .tile__picture img { transform: scale(1.04); }
+.tile__night { opacity: 0; }
+.names[data-night="true"] .tile__night,
+.tile:focus-visible .tile__night { opacity: 1; }
+@media (hover: hover) {
+  .tile:hover .tile__night { opacity: 1; }
+}
+.tile__strip {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 16px 18px;
+  font-size: var(--step-small);
+  transition: color 420ms ease;
+}
+.tile__strip > span:last-child::first-letter { text-transform: uppercase; }
+.tile__name { font-size: var(--step-body); font-weight: 500; }
+.names[data-night="true"] .tile__strip,
+.tile:focus-visible .tile__strip { color: #fff; }
+@media (hover: hover) {
+  .tile:hover .tile__strip { color: #fff; }
+}
+
+/* How it works: one thing at full size in each field */
+.how__title { padding: 0 var(--margin) clamp(40px, 5vw, 72px); }
+.how__fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.how__field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 40px;
+  min-height: min(84svh, 760px);
+  padding: 28px clamp(16px, 2vw, 28px);
+  overflow: hidden;
+}
+.how__field:nth-child(1) { background: var(--surface); }
+.how__field:nth-child(2) { background: var(--surface-strong); }
+.how__field:nth-child(3) { background: var(--dana); color: #fff; }
+.how__field:nth-child(4) { justify-content: flex-end; background: var(--night); color: #fff; }
+.how__clause { position: relative; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+.how__name { font-size: clamp(4rem, 8.4vw, 8.75rem); font-weight: 500; letter-spacing: -0.05em; line-height: 0.9; }
+.how__hash {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: space-between;
+  row-gap: 0.1em;
+  font-size: clamp(1.25rem, 2.25vw, 2.25rem);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.how__facts { display: grid; gap: 18px; margin: 0; }
+.how__facts dt { font-size: var(--step-small); }
+.how__facts dd { margin: 0; font-size: clamp(2.25rem, 3.6vw, 3.5rem); font-weight: 500; letter-spacing: -0.04em; line-height: 1; }
+.how__chips { display: flex; gap: 8px; padding-top: 6px; }
+.how__chips i { display: block; width: clamp(40px, 4.4vw, 64px); aspect-ratio: 1; border-radius: 50%; box-shadow: 0 0 0 2px var(--ink); }
+.how__bloom {
+  position: absolute;
+  top: -6%;
+  left: 50%;
+  width: 150%;
+  max-width: none;
+  height: auto;
+  transform: translateX(-50%);
+  -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent);
+  mask-image: radial-gradient(closest-side, #000 72%, transparent);
+}
+
+/* What you can do with it: a row of flowers lit from inside */
+.keep {
+  position: relative;
+  padding: clamp(72px, 8vw, 120px) 0 clamp(56px, 6vw, 88px);
+  background: var(--night);
+  color: #fff;
+  overflow: hidden;
+}
+.keep h2 { position: relative; z-index: 1; padding: 0 var(--margin); }
+.keep__shelf {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 16px 0 0;
+}
+/* Each picture fades into the night, and where two glows meet the brighter one shows. */
+.keep__lamp { position: relative; margin: 0 -9%; mix-blend-mode: lighten; }
+.keep__lamp img {
+  display: block;
+  width: 100%;
+  height: auto;
+  -webkit-mask-image: radial-gradient(ellipse 50% 50% at 50% 48%, #000 66%, transparent);
+  mask-image: radial-gradient(ellipse 50% 50% at 50% 48%, #000 66%, transparent);
+}
+.keep__lamp figcaption { position: absolute; left: 0; right: 0; bottom: 6%; color: var(--night-muted); font-size: var(--step-small); text-align: center; }
+.keep__list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin: 24px 0 0;
+  padding: 0 var(--margin);
+  color: var(--night-muted);
+  list-style: none;
+}
+.keep__list strong { display: block; margin-bottom: 6px; color: #fff; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+
+/* Questions */
+.faq { display: grid; grid-template-columns: 4fr 8fr; gap: 24px; padding: clamp(96px, 12vw, 200px) var(--margin); }
+.faq__heading { position: sticky; top: 96px; align-self: start; }
+.faq__list { display: grid; gap: 8px; }
+.faq__item { border-radius: var(--radius); background: var(--surface); transition: background-color 200ms ease; }
+.faq__item summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 16px 24px;
+  font-size: var(--step-lead);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  list-style: none;
+  cursor: pointer;
+}
+.faq__item summary::-webkit-details-marker { display: none; }
+.faq__sign { position: relative; flex: 0 0 16px; height: 16px; }
+.faq__sign::before,
+.faq__sign::after { content: ""; position: absolute; left: 0; top: 6.5px; width: 16px; height: 3px; background: currentColor; transition: transform 200ms ease; }
+.faq__sign::after { transform: rotate(90deg); }
+.faq__item[open] { background: var(--accent); color: var(--on-accent); }
+.faq__item[open] .faq__sign::after { transform: rotate(0deg); }
+.faq__item p { max-width: 38em; padding: 0 24px 24px; }
+
+/* The close: the name is already in the field */
+.close {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 24px;
+  align-items: center;
+  min-height: min(90svh, 820px);
+  padding: 0 0 0 var(--margin);
+  background: var(--surface);
+  overflow: hidden;
+}
+.close__words { position: relative; z-index: 1; display: grid; justify-items: start; gap: 24px; padding: 96px 0; }
+.close__words p { max-width: 26em; }
+.close__form { display: flex; gap: 8px; width: min(100%, 520px); }
+/* The stem runs off the bottom of the band, so the flower stands on the page's edge. */
+.close__flower { position: relative; align-self: end; width: 118%; aspect-ratio: 1; margin-right: -18%; }
+.close__flower img { position: absolute; inset: 0; width: 100%; height: 100%; transition: opacity 500ms ease; }
+.close__flower img[data-gone="true"] { opacity: 0; }
+.close__flower canvas { position: absolute !important; inset: 0; }
+
+/* Footer: the night carries on under the page */
+.foot {
+  display: grid;
+  gap: clamp(40px, 6vw, 88px);
+  padding: clamp(40px, 5vw, 72px) var(--margin) 20px;
+  background: var(--night);
+  color: #fff;
+  overflow: hidden;
+}
+.foot .pp-button--light:hover { background: var(--surface-strong); }
+.foot :focus-visible { outline-color: #fff; }
+.foot__top { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 3fr) auto; gap: 24px; align-items: start; }
+.foot__statement { max-width: 22em; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+.foot__list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.foot a { text-decoration: none; }
+.foot__list a:hover,
+.foot__base a:hover { text-decoration: underline; }
+/* Set from the width of the words, so they run exactly margin to margin. */
+.foot__mark { font-size: calc((100vw - 2 * var(--margin)) / 4.04); font-weight: 500; letter-spacing: -0.05em; line-height: 0.82; white-space: nowrap; }
+.foot__base { display: flex; justify-content: space-between; gap: 16px; color: var(--night-muted); }
+.foot__base small { font-size: var(--step-small); }
+.foot__base a { color: #fff; }
+.foot__credits { max-width: 34em; margin: 0; color: var(--night-muted); font-size: var(--step-small); line-height: 1.5; }
+.foot__credits a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
+
+/* Sections rise in once. Nothing is hidden unless the script has marked the page. */
+.pp[data-motion="on"] .rise { opacity: 0; transform: translateY(24px); }
+.pp[data-motion="on"] .rise[data-in="true"] {
+  opacity: 1;
+  transform: none;
+  transition: opacity 620ms ease, transform 620ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--rise-delay, 0ms);
+}
+
+@media (max-width: 900px) {
+  /* The words come first, then the plant holds at the top while the controls pass under it. */
+  .grow { display: block; min-height: 0; padding: 96px var(--margin) 40px; }
+  .grow__head,
+  .grow__controls { z-index: auto; }
+  .grow__head { width: 100%; }
+  .grow h2 { font-size: clamp(2.75rem, 12.6vw, 5rem); }
+  .grow__stage {
+    position: sticky;
+    top: 64px;
+    z-index: 1;
+    height: 46svh;
+    margin: 16px calc(var(--margin) * -1) 0;
+    background: inherit;
+    transition: background-color 900ms ease;
+  }
+  .grow[data-night="true"] .grow__stage { background: var(--night); }
+  .grow__canvas { -webkit-mask-image: linear-gradient(to bottom, #000 86%, transparent); mask-image: linear-gradient(to bottom, #000 86%, transparent); }
+  .grow__poster { left: 50%; width: min(46svh, 90vw); }
+  .grow__controls { width: 100%; margin-top: 16px; }
+  /* ...or under the plant, which holds below the bar here. */
+  .grow button,
+  .grow input { scroll-margin-top: calc(64px + 46svh + 12px); }
+  .pp-bar { height: 56px; }
+  .pp-bar__links a:not(.pp-button) { display: none; }
+  .pp-bar .pp-button { min-height: 40px; padding: 0 16px; }
+
+  .share__flower { display: flex; flex-direction: column; }
+  .share__stage { position: relative; inset: auto; height: 68svh; margin-top: 56px; }
+  .share__stage .bloom__controls { left: var(--margin); }
+  .share__words { order: 1; width: 100%; min-height: 0; padding: 32px var(--margin) 40px; }
+  .share__yours .pp-button { flex: none; }
+  .share__links a,
+  .share__links button { padding: 13px 0; }
+
+  .hero { height: auto; }
+  .hero__stage { position: relative; display: flex; flex-direction: column; height: 100svh; min-height: 600px; padding: 72px var(--margin) 20px; }
+  .hero__title { display: block; flex: 1; height: auto; font-size: 13.5vw; }
+  .hero__half { display: block; }
+  .hero__half br { display: none; }
+  .hero__title--own { font-size: max(1.5rem, min(13.5vw, calc((100vw - 2 * var(--margin)) / var(--narrow-em)))); }
+  .hero__title--own .hero__half { max-width: none; }
+  .hero__note { display: none; }
+  .hero__grow { position: relative; right: auto; bottom: auto; width: 100%; }
+
+  .names__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .names__intro { grid-column: span 2; padding: 0 0 24px; }
+  .tile__strip { padding: 10px 12px; }
+
+  .how__fields { grid-template-columns: minmax(0, 1fr); }
+  .how__field { min-height: 0; padding-top: 32px; gap: 32px; }
+  .how__field:nth-child(4) { min-height: 112vw; justify-content: flex-end; }
+  .how__name { font-size: 26vw; }
+  .how__hash { font-size: 6.4vw; }
+
+  .keep__shelf {
+    display: flex;
+    margin: 8px 0 0;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .keep__shelf::-webkit-scrollbar { display: none; }
+  .keep__lamp { flex: 0 0 56vw; margin: 0 -5vw; scroll-snap-align: center; }
+  .keep__list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
+  .faq { grid-template-columns: minmax(0, 1fr); }
+  .faq__heading { position: static; }
+
+  .close { grid-template-columns: minmax(0, 1fr); gap: 0; min-height: 0; padding: 72px var(--margin) 0; }
+  .close__words { padding: 0; }
+  .close__form { flex-direction: column; }
+  .close__form .field { flex: 0 0 48px; }
+  .close__flower { justify-self: center; width: 112%; margin: 0; }
+
+  .foot__top { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .foot__statement { line-height: 1.25; }
+  .foot__list { gap: 0; }
+  .foot__list a { display: flex; align-items: center; min-height: 44px; }
+  .how__clause { line-height: 1.25; }
+  .foot__base { flex-direction: column; gap: 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp *, .pp *::before, .pp *::after { transition-duration: 1ms !important; }
+  .pp[data-motion="on"] .rise { opacity: 1; transform: none; }
+}
+
+/* Sign-in pages */
+.gate { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 100svh; }
+.gate__form { display: flex; flex-direction: column; padding: var(--margin); }
+.gate__body { width: min(100%, 400px); margin: auto; display: grid; gap: 24px; padding: 40px 0; }
+.gate__body h1 { font-size: clamp(2.25rem, 1.6rem + 2vw, 3.25rem); font-weight: 500; letter-spacing: -0.04em; line-height: 0.95; }
+.gate__fields { display: grid; gap: 14px; }
+.gate__field { display: grid; gap: 6px; font-size: var(--step-small); }
+.gate__field input {
+  height: 52px;
+  padding: 0 18px;
+  border: 1px solid var(--surface-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+.gate__field input:hover { border-color: var(--muted); }
+.gate__hint { color: var(--muted); }
+.gate__error { color: #a3222a; font-size: var(--step-small); }
+.gate__done { font-size: var(--step-body); }
+.gate__or { display: grid; gap: 10px; }
+.gate__links { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: var(--step-small); }
+.gate__picture { display: flex; align-items: flex-start; margin: 8px 8px 8px 0; border-radius: var(--radius); background: var(--surface); position: relative; overflow: hidden; padding: 24px; }
+/* The stem runs off the foot of the picture, so nothing ends in mid-air. */
+.gate__picture img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: bottom; }
+.gate__flower { position: absolute; left: 0; right: 0; bottom: 0; aspect-ratio: 1; opacity: 0; transition: opacity 500ms ease; }
+.gate__flower[data-drawn="true"] { opacity: 1; }
+.gate__picture p { position: relative; font-size: var(--step-lead); font-weight: 500; letter-spacing: -0.03em; line-height: 1.1; }
+@media (max-width: 900px) {
+  .gate { grid-template-columns: minmax(0, 1fr); }
+  .gate__picture { display: none; }
+}

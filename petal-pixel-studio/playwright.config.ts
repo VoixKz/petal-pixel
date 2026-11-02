@@ -8,7 +8,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  timeout: 60_000,
+  timeout: process.env.CI ? 120_000 : 60_000,
+  // CI has no graphics card, and compiling a flower's shaders there takes seconds.
+  expect: { timeout: process.env.CI ? 20_000 : 5_000 },
   reporter: process.env.CI ? "github" : "list",
   use: {
     trace: "on-first-retry",

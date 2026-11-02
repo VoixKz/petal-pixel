@@ -4,7 +4,7 @@ import { NAV_ITEMS } from './navItems';
 describe('NAV_ITEMS', () => {
   it('keeps all 7 nav destinations in order', () => {
     expect(NAV_ITEMS.map((i) => i.path)).toEqual([
-      '/', '/my-flowers', '/create', '/nfts', '/activity', '/profile', '/settings',
+      '/console', '/my-flowers', '/create', '/nfts', '/activity', '/profile', '/settings',
     ]);
   });
   it('has a non-empty label and an icon component for every item', () => {

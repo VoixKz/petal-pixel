@@ -1,6 +1,4 @@
 import type { SavedFlower } from "@/stores/flowerStore";
-import type { FlowerFamily, FlowerType } from "@/math/flowerTypes";
-import type { Palette } from "@/math/palette";
 
 export interface CreatedEvent {
   kind: "created";
@@ -8,10 +6,8 @@ export interface CreatedEvent {
   title: string;
   /** YYYY-MM-DD (SavedFlower.createdAt) */
   date: string;
-  /** v2 flowers only; undefined on v1 records — UI falls back to flowerType. */
-  family?: FlowerFamily;
-  flowerType: FlowerType;
-  palette?: Palette;
+  /** The name it grew from, which says what kind of flower it is. */
+  name: string;
 }
 
 export interface MintedEvent {
@@ -64,9 +60,7 @@ export function buildActivityTimeline(savedFlowers: SavedFlower[]): ActivityDay[
       flowerId: f.id,
       title: f.title,
       date: f.createdAt,
-      family: f.params?.family,
-      flowerType: f.params?.flowerType ?? "classic",
-      palette: f.params?.palette,
+      name: f.generationWord,
     });
   }
 

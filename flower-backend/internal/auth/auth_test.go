@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
@@ -74,6 +75,40 @@ func validClaims() tokenClaims {
 			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},
 		Email: "anna@example.test",
+	}
+}
+
+// Managed Better Auth signs with Ed25519, and go-oidc accepts only RS256 unless
+// told otherwise.
+func TestVerifyAcceptsAnEdDSAToken(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	jwks := jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: public, KeyID: "k1", Algorithm: "EdDSA", Use: "sig"}}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(jwks)
+	}))
+	t.Cleanup(srv.Close)
+	signer, err := jose.NewSigner(
+		jose.SigningKey{Algorithm: jose.EdDSA, Key: private},
+		(&jose.SignerOptions{}).WithHeader("kid", "k1").WithType("JWT"),
+	)
+	if err != nil {
+		t.Fatalf("new signer: %v", err)
+	}
+	token, err := jwt.Signed(signer).Claims(validClaims()).Serialize()
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	got, err := NewOIDCVerifier(context.Background(), testIssuer, srv.URL, testAudience).Verify(context.Background(), token)
+
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if got.Subject != "user-1" {
+		t.Errorf("claims = %+v", got)
 	}
 }
 

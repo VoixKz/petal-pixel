@@ -1,0 +1,10 @@
+{
+ "id": "water-lily",
+ "path": "<models>/water-lily-cc0/model.glb",
+ "only_material": "QS1292-W04-flo",
+ "head_from": 0.5,
+ "flare": 1.6,
+ "base_lift": -0.28,
+ "tris": 70000,
+ "cut_all_below": -0.1
+}

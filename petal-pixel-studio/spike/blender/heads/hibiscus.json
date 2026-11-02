@@ -1,0 +1,24 @@
+{
+ "id": "hibiscus",
+ "path": "<models>/hibiscus-cc0/model.glb",
+ "sphere": [
+  0.09,
+  -1.28,
+  0.61,
+  3.4
+ ],
+ "axis": [
+  0,
+  -0.6,
+  0.8
+ ],
+ "flare": 1.7,
+ "tris": 70000,
+ "cut_all_below": 0.03,
+ "crumb": 0.08,
+ "petals_beyond": {
+  "r": 0.04,
+  "blue_under": 0.8,
+  "green_under": 1.02
+ }
+}

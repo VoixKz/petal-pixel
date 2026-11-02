@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
@@ -53,7 +56,7 @@ func callFrom(t *testing.T, l *Limiter, method, ip string) (bool, error) {
 	t.Helper()
 	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP(ip), Port: 4000}})
 	reached := false
-	_, err := UnaryInterceptor(l, "/svc/Limited")(ctx, nil, &grpc.UnaryServerInfo{FullMethod: method}, func(context.Context, any) (any, error) {
+	_, err := UnaryInterceptor(l, "/svc/Limited", "")(ctx, nil, &grpc.UnaryServerInfo{FullMethod: method}, func(context.Context, any) (any, error) {
 		reached = true
 		return nil, nil
 	})
@@ -78,7 +81,7 @@ func TestInterceptorIgnoresTheClientPort(t *testing.T) {
 	l := New(60, 1)
 	call := func(port int) error {
 		ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: port}})
-		_, err := UnaryInterceptor(l, "/svc/Limited")(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Limited"}, func(context.Context, any) (any, error) {
+		_, err := UnaryInterceptor(l, "/svc/Limited", "")(ctx, nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Limited"}, func(context.Context, any) (any, error) {
 			return nil, nil
 		})
 		return err
@@ -108,5 +111,61 @@ func TestClientIP(t *testing.T) {
 		if got := ClientIP(addr); got != want {
 			t.Errorf("ClientIP(%q) = %q, want %q", addr, got, want)
 		}
+	}
+}
+
+func TestInterceptorCountsTheForwardedClient(t *testing.T) {
+	l := New(60, 1)
+	intercept := UnaryInterceptor(l, "/m", "x-real-ip")
+	info := &grpc.UnaryServerInfo{FullMethod: "/m"}
+	ok := func(context.Context, any) (any, error) { return "ok", nil }
+	proxy := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 1}})
+	from := func(ip string) context.Context {
+		return metadata.NewIncomingContext(proxy, metadata.Pairs("x-real-ip", ip))
+	}
+
+	if _, err := intercept(from("1.1.1.1"), nil, info, ok); err != nil {
+		t.Fatalf("first client: %v", err)
+	}
+	if _, err := intercept(from("2.2.2.2"), nil, info, ok); err != nil {
+		t.Fatalf("second client shares the proxy, not the limit: %v", err)
+	}
+	if _, err := intercept(from("1.1.1.1"), nil, info, ok); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("repeat from the first client = %v, want ResourceExhausted", err)
+	}
+}
+
+func TestInterceptorIgnoresTheHeaderUnlessTrusted(t *testing.T) {
+	l := New(60, 1)
+	intercept := UnaryInterceptor(l, "/m", "")
+	info := &grpc.UnaryServerInfo{FullMethod: "/m"}
+	ok := func(context.Context, any) (any, error) { return "ok", nil }
+	proxy := peer.NewContext(context.Background(), &peer.Peer{Addr: &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 1}})
+	spoof := func(ip string) context.Context {
+		return metadata.NewIncomingContext(proxy, metadata.Pairs("x-real-ip", ip))
+	}
+
+	if _, err := intercept(spoof("1.1.1.1"), nil, info, ok); err != nil {
+		t.Fatalf("first: %v", err)
+	}
+	if _, err := intercept(spoof("2.2.2.2"), nil, info, ok); status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("a client must not pick its own identity: %v", err)
+	}
+}
+
+func TestRequestIP(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/", nil)
+	r.RemoteAddr = "10.0.0.1:443"
+	r.Header.Set("X-Real-Ip", "1.1.1.1")
+
+	if got := RequestIP(r, "x-real-ip"); got != "1.1.1.1" {
+		t.Errorf("trusted header: got %q", got)
+	}
+	if got := RequestIP(r, ""); got != "10.0.0.1" {
+		t.Errorf("no trusted header: got %q", got)
+	}
+	r.Header.Del("X-Real-Ip")
+	if got := RequestIP(r, "x-real-ip"); got != "10.0.0.1" {
+		t.Errorf("missing header falls back to the peer: got %q", got)
 	}
 }

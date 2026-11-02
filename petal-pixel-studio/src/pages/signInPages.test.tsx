@@ -27,12 +27,12 @@ describe("Login", () => {
     await waitFor(() => expect(auth.signIn).toHaveBeenCalledWith("/create?name=Anna"));
   });
 
-  it("returns home without a deep link", async () => {
+  it("goes to the console without a deep link", async () => {
     render(<MemoryRouter><Login /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
 
-    await waitFor(() => expect(auth.signIn).toHaveBeenCalledWith("/"));
+    await waitFor(() => expect(auth.signIn).toHaveBeenCalledWith("/console"));
   });
 
   it("collects no password itself", () => {
@@ -56,7 +56,7 @@ describe("Signup", () => {
   it("opens registration and keeps the deep link", async () => {
     render(<MemoryRouter initialEntries={deepLink}><Signup /></MemoryRouter>);
 
-    fireEvent.click(screen.getByRole("button", { name: "Create Account" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
 
     await waitFor(() => expect(auth.signUp).toHaveBeenCalledWith("/create?name=Anna"));
   });

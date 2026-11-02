@@ -53,26 +53,24 @@ function makeFlower(
 }
 
 describe("familyDistribution", () => {
-  it("counts a v1/v2 mix: v2 by params.family, v1 by params.flowerType, sorted count desc then key asc", () => {
+  it("counts each kind of flower, sorted by count then name", () => {
     const flowers = [
-      makeFlower({}, { algoVersion: "v2", family: "sunflower" }),
-      makeFlower({}, { algoVersion: "v2", family: "sunflower" }),
-      makeFlower({}, { algoVersion: "v2", family: "rhodonea" }),
-      makeFlower({}, { flowerType: "rose" }), // v1 — no family
-      makeFlower({}, { flowerType: "classic" }), // v1 — no family (would collide with default "classic")
+      makeFlower({ generationWord: "Zara" }),
+      makeFlower({ generationWord: "Omar" }),
+      makeFlower({ generationWord: "Oleg" }),
+      makeFlower({ generationWord: "Dana" }),
     ];
     expect(familyDistribution(flowers)).toEqual([
-      { family: "sunflower", count: 2 },
-      { family: "classic", count: 1 },
-      { family: "rhodonea", count: 1 },
+      { family: "tiger lily", count: 2 },
       { family: "rose", count: 1 },
+      { family: "water lily", count: 1 },
     ]);
   });
 
-  it("dedups families across v1 and v2 flowers that resolve to the same label", () => {
+  it("goes by the name, not by what an older record says it was", () => {
     const flowers = [
-      makeFlower({}, { flowerType: "rose" }),
-      makeFlower({}, { algoVersion: "v2", family: "rose" }),
+      makeFlower({ generationWord: "Dana" }, { flowerType: "rose" }),
+      makeFlower({ generationWord: "Dana" }, { algoVersion: "v2", family: "sunflower" }),
     ];
     expect(familyDistribution(flowers)).toEqual([{ family: "rose", count: 2 }]);
   });

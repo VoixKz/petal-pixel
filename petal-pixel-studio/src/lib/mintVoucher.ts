@@ -36,3 +36,6 @@ export function buildMintCall(prepared: PreparedMint) {
     value: price,
   };
 }
+
+/** Off on the public site until it has a real network and public file storage. */
+export const MINT_OPEN = import.meta.env.VITE_MINT_OPEN !== 'false';

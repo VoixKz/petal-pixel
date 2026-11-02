@@ -49,8 +49,10 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 
-	addr := env("GRPC_ADDR", ":50051")
-	dbDSN := os.Getenv("DB_DSN")
+	addr := listenAddr()
+	dbDSN := databaseDSN()
+	// Set where a trusted proxy names the client, as Vercel does with x-real-ip.
+	clientIPHeader := os.Getenv("CLIENT_IP_HEADER")
 	autoMigrate := os.Getenv("DB_AUTO_MIGRATE") == "true"
 
 	chainID := envUint64("CHAIN_ID", 11155111) // Sepolia default
@@ -129,7 +131,7 @@ func main() {
 	verifier := verifierFromEnv()
 	s := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		recoveryUnaryInterceptor,
-		ratelimit.UnaryInterceptor(ratelimit.New(createFlowerPerMinute, createFlowerBurst), flowerv1.FlowerService_CreateFlower_FullMethodName),
+		ratelimit.UnaryInterceptor(ratelimit.New(createFlowerPerMinute, createFlowerBurst), flowerv1.FlowerService_CreateFlower_FullMethodName, clientIPHeader),
 		auth.UnaryInterceptor(verifier, isOpenMethod),
 	))
 	previewLimiter := ratelimit.New(previewPerMinute, previewBurst)
@@ -168,7 +170,7 @@ func main() {
 		if strings.HasPrefix(r.URL.Path, "/api/flowers/") {
 			id := flowerIDFromPath(r.URL.Path, "/api/flowers/")
 			if strings.HasSuffix(r.URL.Path, "/preview") {
-				handleUploadPreview(w, r, store, upl, id, verifier, previewLimiter)
+				handleUploadPreview(w, r, store, upl, id, verifier, previewLimiter, clientIPHeader)
 				return
 			}
 			handlePublicFlower(w, r, store, id)
@@ -213,6 +215,16 @@ func main() {
 	}
 
 	gracefulStop(s, 10*time.Second)
+}
+
+// listenAddr prefers an explicit address, then the PORT a hosting platform sets.
+func listenAddr() string {
+	return env("GRPC_ADDR", ":"+env("PORT", "50051"))
+}
+
+// databaseDSN falls back to the variable the Neon integration creates on Vercel.
+func databaseDSN() string {
+	return env("DB_DSN", os.Getenv("NEON_DATABASE_URL"))
 }
 
 func gracefulStop(s *grpc.Server, timeout time.Duration) {
@@ -564,7 +576,7 @@ func handlePublicFlower(w http.ResponseWriter, r *http.Request, store *grpcapi.S
 // path-traversal / arbitrary-key writes and bounds the blast radius to real
 // ids); a proper ownership gate — or a server-issued signed upload token — must
 // be added when auth is introduced.
-func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, id string, verifier auth.Verifier, limiter *ratelimit.Limiter) {
+func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.Store, upl *assets.S3Uploader, id string, verifier auth.Verifier, limiter *ratelimit.Limiter, clientIPHeader string) {
 	setPreviewCORSHeaders(w, r)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusNoContent)
@@ -590,7 +602,7 @@ func handleUploadPreview(w http.ResponseWriter, r *http.Request, store *grpcapi.
 		http.Error(w, `{"error":"db not configured"}`, http.StatusServiceUnavailable)
 		return
 	}
-	if !limiter.Allow(ratelimit.ClientIP(r.RemoteAddr)) {
+	if !limiter.Allow(ratelimit.RequestIP(r, clientIPHeader)) {
 		http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
 		return
 	}

@@ -10,9 +10,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { usesPasswordForm } from '@/integrations/auth';
 import { accountSecurityUrl } from '@/integrations/auth/oidc';
 import {
   getPrefs,
@@ -212,10 +213,17 @@ export default function SettingsPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button asChild variant="outline" className="h-10 sm:flex-1">
-              <a href={accountSecurityUrl} target="_blank" rel="noreferrer">
-                <KeyRound className="w-4 h-4" />
-                Change password
-              </a>
+              {usesPasswordForm ? (
+                <Link to="/forgot-password">
+                  <KeyRound className="w-4 h-4" />
+                  Change password
+                </Link>
+              ) : (
+                <a href={accountSecurityUrl} target="_blank" rel="noreferrer">
+                  <KeyRound className="w-4 h-4" />
+                  Change password
+                </a>
+              )}
             </Button>
             <Button
               variant="outline"

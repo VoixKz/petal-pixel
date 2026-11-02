@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Flower2, Gem, FileEdit, PlusCircle, ArrowRight, BarChart3, Clock } from 'lucide-react';
+import { Flower2, Gem, PlusCircle, ArrowRight, BarChart3, Clock, Star } from 'lucide-react';
 import { useFlowerStore, type SavedFlower } from '@/stores/flowerStore';
-import { paletteGradient, previewGradient, familyLabel } from '@/components/flower/paletteUi';
+import { kindOf, tintOf } from '@/math/blossom/identity';
 import { FlowerThumb } from '@/components/flower/FlowerThumb';
+import { MINT_OPEN } from '@/lib/mintVoucher';
 import { familyDistribution, recentFlowers } from './dashboardStats';
 
 export default function Index() {
@@ -14,7 +15,7 @@ export default function Index() {
 
   const totalFlowers = savedFlowers.length;
   const mintedCount = useMemo(() => savedFlowers.filter((f) => f.isMinted).length, [savedFlowers]);
-  const draftCount = useMemo(() => savedFlowers.filter((f) => !f.isMinted).length, [savedFlowers]);
+  const favoriteCount = useMemo(() => savedFlowers.filter((f) => f.isFavorite).length, [savedFlowers]);
 
   const distribution = useMemo(() => familyDistribution(savedFlowers).slice(0, 6), [savedFlowers]);
   const maxCount = distribution[0]?.count ?? 1;
@@ -22,8 +23,8 @@ export default function Index() {
   const familyGradients = useMemo(() => {
     const map = new Map<string, string>();
     for (const f of savedFlowers) {
-      const family = familyLabel(f.params);
-      if (!map.has(family)) map.set(family, paletteGradient(f.params.palette?.stops ?? []));
+      const kind = kindOf(f.generationWord);
+      if (!map.has(kind)) map.set(kind, tintOf(f.generationWord));
     }
     return map;
   }, [savedFlowers]);
@@ -37,8 +38,8 @@ export default function Index() {
 
   const stats = [
     { label: 'Total Flowers', value: String(totalFlowers), icon: Flower2, color: 'text-primary' },
-    { label: 'Minted NFTs', value: String(mintedCount), icon: Gem, color: 'text-accent' },
-    { label: 'Drafts', value: String(draftCount), icon: FileEdit, color: 'text-primary' },
+    { label: 'Favorites', value: String(favoriteCount), icon: Star, color: 'text-foreground' },
+    ...(MINT_OPEN ? [{ label: 'Minted NFTs', value: String(mintedCount), icon: Gem, color: 'text-foreground' }] : []),
   ];
 
   return (
@@ -50,7 +51,7 @@ export default function Index() {
       >
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">Welcome back! Here's your garden overview.</p>
+          <p className="text-sm text-muted-foreground mt-1">Your garden at a glance</p>
         </div>
         <Link
           to="/create"
@@ -60,7 +61,7 @@ export default function Index() {
         </Link>
       </motion.div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className={`grid gap-4 ${MINT_OPEN ? 'grid-cols-3' : 'grid-cols-2'}`}>
         {stats.map((stat, i) => (
           <motion.div
             key={stat.label}
@@ -95,10 +96,7 @@ export default function Index() {
           onClick={() => navigate('/my-flowers')}
           className="flex items-center gap-2 bg-secondary text-secondary-foreground px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <FileEdit className="w-4 h-4" /> Continue drafts
-          <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-mono">
-            {draftCount}
-          </span>
+          <Flower2 className="w-4 h-4" /> Open your garden
         </button>
       </motion.div>
 
@@ -121,7 +119,6 @@ export default function Index() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {recent.map((flower) => {
-              const imgId = flower.backendFlowerId ?? flower.params.flowerId;
               return (
                 <button
                   key={flower.id}
@@ -129,11 +126,7 @@ export default function Index() {
                   className="bg-card rounded-xl border border-border overflow-hidden text-left hover:border-primary/30 transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   title={`Edit ${flower.title}`}
                 >
-                  <FlowerThumb
-                    flowerId={imgId}
-                    params={flower.params}
-                    className="h-20 relative overflow-hidden"
-                  >
+                  <FlowerThumb name={flower.generationWord} className="h-20 relative overflow-hidden">
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors" />
                     {flower.isMinted && (
                       <span className="absolute top-2 right-2 flex items-center gap-1 bg-black/40 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
@@ -144,7 +137,7 @@ export default function Index() {
                   <div className="p-3">
                     <p className="text-sm font-semibold text-foreground truncate">{flower.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 capitalize">
-                      {familyLabel(flower.params)} · {flower.createdAt}
+                      {kindOf(flower.generationWord)} · {flower.createdAt}
                     </p>
                   </div>
                 </button>
@@ -154,7 +147,7 @@ export default function Index() {
         )}
       </motion.div>
 
-      {/* Family distribution */}
+      {/* Kinds of flower */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -162,7 +155,7 @@ export default function Index() {
         className="bg-card rounded-xl p-4 sm:p-6 border border-border"
       >
         <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 mb-4">
-          <BarChart3 className="w-4 h-4 text-muted-foreground" /> Family distribution
+          <BarChart3 className="w-4 h-4 text-muted-foreground" /> Kinds in your garden
         </h2>
         {distribution.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nothing to chart yet — generate a flower to see your garden's families.</p>

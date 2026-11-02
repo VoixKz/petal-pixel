@@ -14,7 +14,6 @@ vi.mock("@/integrations/garden/api", () => ({
 
 vi.mock('@/integrations/flowerBackend/client', () => ({
   createFlowerViaGrpc: vi.fn(),
-  checkFlowerBackendHealth: vi.fn(async () => true),
   prepareMintViaGrpc: vi.fn(),
   confirmMintViaGrpc: vi.fn(),
 }));
@@ -24,9 +23,7 @@ vi.mock('sonner', () => ({
 }));
 
 // Additional stubs for things the page imports
-vi.mock('@/components/flower/FlowerCanvas', () => ({ FlowerCanvas: () => null }));
-vi.mock('@/components/flower/FlowerControls', () => ({ FlowerControls: () => null }));
-vi.mock('@/components/flower/FlowerInfo', () => ({ FlowerInfo: () => null }));
+vi.mock('@/components/flower/BloomView', () => ({ BloomView: () => null }));
 
 import { runSaveFlow } from './CreateFlower';
 

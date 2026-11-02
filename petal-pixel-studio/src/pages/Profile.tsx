@@ -107,7 +107,7 @@ export default function Profile() {
           <div className="flex items-center gap-3 text-sm">
             <Shield className="w-4 h-4 text-muted-foreground shrink-0" />
             <span className="text-foreground">Role</span>
-            <span className="text-xs text-accent bg-accent/10 px-2 py-0.5 rounded-full ml-auto">
+            <span className="text-xs text-foreground bg-accent/10 px-2 py-0.5 rounded-full ml-auto">
               User
             </span>
           </div>

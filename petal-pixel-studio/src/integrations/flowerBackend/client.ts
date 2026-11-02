@@ -10,7 +10,7 @@ import {
   PrepareMintRequestSchema,
   UpdateMeRequestSchema,
 } from "@/gen/flower/v1/service_pb";
-import { getAccessToken } from "@/integrations/auth/oidc";
+import { getAccessToken } from "@/integrations/auth";
 
 export const flowerBackendBaseUrl = import.meta.env.VITE_FLOWER_BACKEND_URL || "http://localhost:50051";
 
@@ -121,7 +121,8 @@ export interface FlowerListItem {
  */
 export async function fetchFlowerById(flowerId: string): Promise<FlowerListItem> {
   const res = await fetch(`${flowerBackendBaseUrl}/api/flowers/${encodeURIComponent(flowerId)}`);
-  if (res.status === 404) throw new Error('not_found');
+  // A link with a mangled id is refused as bad input, and to its reader that is the same thing.
+  if (res.status === 404 || res.status === 400) throw new Error('not_found');
   if (!res.ok) throw new Error(`fetchFlowerById failed: ${res.status}`);
   // uint64-precision fix: backend `seed` is an UNQUOTED JSON number that would
   // lose its low digits under JSON.parse (doubles top out at 2^53). Read the raw
@@ -168,11 +169,3 @@ export function buildShareUrl(backendBaseUrl: string, flowerId: string): string 
   return `${base}/share/${encodeURIComponent(flowerId)}`;
 }
 
-export async function checkFlowerBackendHealth() {
-  const response = await fetch(`${flowerBackendBaseUrl}/healthz`, { method: "GET" });
-  if (!response.ok) {
-    throw new Error(`Health check failed with status ${response.status}`);
-  }
-  const payload = await response.json() as { status?: string };
-  return payload.status === "ok";
-}

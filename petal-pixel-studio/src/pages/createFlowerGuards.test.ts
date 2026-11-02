@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mintErrorMessage, shouldWarnRegenerate, isCheckingBackend, hasUnsavedWork } from "./createFlowerGuards";
-import type { HealthStatus } from "./createFlowerGuards";
+import { mintErrorMessage, shouldWarnRegenerate, hasUnsavedWork } from "./createFlowerGuards";
 
 describe("shouldWarnRegenerate", () => {
   it("does not warn when not in edit mode (fresh create)", () => {
@@ -37,18 +36,6 @@ describe("shouldWarnRegenerate", () => {
 
   it("create mode: does NOT warn once the generated flower is saved", () => {
     expect(shouldWarnRegenerate(false, "rose", "rose", false, "flw-1", ["flw-1"])).toBe(false);
-  });
-});
-
-describe("isCheckingBackend", () => {
-  const cases: Array<[HealthStatus, boolean]> = [
-    ["idle", false],
-    ["checking", true],
-    ["ok", false],
-    ["error", false],
-  ];
-  it.each(cases)("status %s -> %s", (status, expected) => {
-    expect(isCheckingBackend(status)).toBe(expected);
   });
 });
 

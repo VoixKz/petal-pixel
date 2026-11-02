@@ -1,55 +1,93 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from 'sonner';
+import { useEffect, useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { usesPasswordForm } from "@/integrations/auth";
+import { errorText, Field, Gate, useReturnTo } from "./auth/Gate";
+import { GoogleButton } from "./auth/GoogleButton";
 
-export default function Signup() {
-  const [isLoading, setIsLoading] = useState(false);
+function PasswordSignUp() {
+  const { signUpWithPassword, session } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = useReturnTo();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [problem, setProblem] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (session) navigate(returnTo, { replace: true });
+  }, [session, navigate, returnTo]);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setProblem("");
+    try {
+      await signUpWithPassword(name.trim(), email.trim(), password);
+    } catch (err) {
+      setProblem(errorText(err));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Gate title="Start your garden">
+      <form className="gate__fields" onSubmit={(e) => void submit(e)}>
+        <Field label="Name" type="text" autoComplete="name" value={name} onChange={setName} />
+        <Field label="Email" type="email" autoComplete="email" value={email} onChange={setEmail} />
+        <Field
+          label="Password"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          hint="At least 8 characters."
+          value={password}
+          onChange={setPassword}
+        />
+        {problem && <p className="gate__error" role="alert">{problem}</p>}
+        <button className="pp-button" type="submit" disabled={busy}>{busy ? "Creating account" : "Create account"}</button>
+      </form>
+      <div className="gate__or">
+        <GoogleButton returnTo={returnTo} onError={setProblem} />
+      </div>
+      <p className="gate__links">
+        <Link to="/login" state={location.state}>I already have an account</Link>
+      </p>
+    </Gate>
+  );
+}
+
+function RedirectSignUp() {
   const { signUp } = useAuth();
   const location = useLocation();
+  const returnTo = useReturnTo();
+  const [busy, setBusy] = useState(false);
 
-  const from = location.state?.from as { pathname?: string; search?: string } | undefined;
-  const returnTo = from?.pathname ? `${from.pathname}${from.search ?? ''}` : '/';
-
-  const handleSignUp = async () => {
-    setIsLoading(true);
+  const start = async () => {
+    setBusy(true);
     try {
       await signUp(returnTo);
     } catch {
-      setIsLoading(false);
+      setBusy(false);
       toast.error("Couldn't reach the sign-in service. Try again shortly.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm space-y-6"
-      >
-        <div className="text-center space-y-2">
-          <h1 className="text-xl font-bold text-foreground">Create account</h1>
-          <p className="text-sm text-muted-foreground">Start generating your unique 3D flowers</p>
-        </div>
-
-        <div className="bg-card rounded-xl border border-border p-6">
-          <button
-            type="button"
-            onClick={() => void handleSignUp()}
-            disabled={isLoading}
-            className="w-full bg-primary text-primary-foreground text-sm font-medium py-2.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {isLoading ? 'Opening sign-up…' : 'Create Account'}
-          </button>
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Already have an account?{' '}
-          <Link to="/login" state={location.state} className="text-primary hover:underline">Sign in</Link>
-        </p>
-      </motion.div>
-    </div>
+    <Gate title="Start your garden">
+      <button className="pp-button" type="button" disabled={busy} onClick={() => void start()}>
+        {busy ? "Opening sign-up…" : "Create account"}
+      </button>
+      <p className="gate__links">
+        <Link to="/login" state={location.state}>Sign in</Link>
+      </p>
+    </Gate>
   );
+}
+
+export default function Signup() {
+  return usesPasswordForm ? <PasswordSignUp /> : <RedirectSignUp />;
 }
