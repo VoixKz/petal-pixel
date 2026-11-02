@@ -136,7 +136,12 @@
   padding: 64px var(--margin) 0;
   overflow: hidden;
 }
-.hero__plant { position: absolute; inset: 0; }
+.hero__plant {
+  position: absolute;
+  inset: 0;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 44px), transparent);
+}
 .hero__canvas { position: absolute; inset: 0; cursor: grab; touch-action: pan-y; }
 .hero__canvas:active { cursor: grabbing; }
 /* Drawn with the stage's own camera, so the plant barely moves when the canvas takes over. */

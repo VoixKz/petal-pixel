@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { buildBlossom, speciesFor } from "@/math/blossom/build";
+import { identityOf } from "@/math/blossom/identity";
 import { FIRST_NAME, FIRST_SEED, LAMPS, lampOf, stillOf, SPECIMENS, type GrownFlower, type Specimen } from "./specimens";
 
 const KeptFlower = lazy(() => import("./KeptFlower"));
+const TYPING_PAUSE_MS = 350;
 
 function Tile({ specimen, onPick, delay }: { specimen: Specimen; onPick: (name: string) => void; delay: number }) {
   return (
@@ -55,7 +57,7 @@ export function How() {
   const dana = useMemo(() => buildBlossom(FIRST_SEED, speciesFor(FIRST_SEED)), []);
   return (
     <section className="how" id="how">
-      <h2 className="how__title rise">How a name grows</h2>
+      <h2 className="how__title rise">How a name grows.</h2>
       <div className="how__fields">
         <div className="how__field">
           <p className="how__name rise" data-ui>{FIRST_NAME}</p>
@@ -149,10 +151,22 @@ export function Close({ flower }: { flower: GrownFlower }) {
   const navigate = useNavigate();
   const section = useRef<HTMLElement>(null);
   const [value, setValue] = useState(flower.name);
+  const [shown, setShown] = useState(flower);
   const [near, setNear] = useState(false);
   const [visible, setVisible] = useState(false);
   const [drawn, setDrawn] = useState(false);
   useEffect(() => setValue(flower.name), [flower.name]);
+
+  // The flower beside the field is the one the field names, once the typing stops.
+  useEffect(() => {
+    const wanted = value.trim();
+    if (!wanted) return;
+    const wait = setTimeout(() => {
+      const { seed, kind } = identityOf(wanted);
+      setShown({ name: wanted, seed, species: kind });
+    }, TYPING_PAUSE_MS);
+    return () => clearTimeout(wait);
+  }, [value]);
 
   useEffect(() => {
     const el = section.current;
@@ -186,11 +200,11 @@ export function Close({ flower }: { flower: GrownFlower }) {
           </button>
         </form>
       </div>
-      <div className="close__flower" role="img" aria-label={`${flower.name}'s ${flower.species}, fully open`}>
+      <div className="close__flower" role="img" aria-label={`${shown.name}'s ${shown.species}, fully open`}>
         <img data-gone={drawn} src={stillOf(FIRST_NAME, false)} alt="" loading="lazy" width={900} height={900} />
         {near && (
           <Suspense fallback={null}>
-            <KeptFlower seed={flower.seed} active={visible} onReady={() => setDrawn(true)} />
+            <KeptFlower seed={shown.seed} active={visible} onReady={() => setDrawn(true)} />
           </Suspense>
         )}
       </div>

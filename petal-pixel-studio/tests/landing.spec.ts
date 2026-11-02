@@ -128,6 +128,22 @@ test("the visitor's own flower is waiting at the end of the page", async ({ page
   await expect(page.getByRole("img", { name: "Zara's tulip, fully open" })).toBeVisible();
 });
 
+test("the flower at the end of the page is always the one its field names", async ({ page }) => {
+  await page.goto("/#name=Oleg");
+  const field = page.getByLabel("The name to keep");
+  const flower = page.locator(".close__flower");
+  await field.scrollIntoViewIfNeeded();
+  await expect(flower).toHaveAttribute("aria-label", "Oleg's rose, fully open");
+
+  await field.fill("Maria");
+  await expect(flower).toHaveAttribute("aria-label", "Maria's lotus, fully open");
+  await expect(page.getByRole("button", { name: "Keep Maria's flower" })).toBeVisible();
+
+  // An empty field names nothing, so the last flower stays until there is a new name.
+  await field.fill("");
+  await expect(flower).toHaveAttribute("aria-label", "Maria's lotus, fully open");
+});
+
 test("the name is named on the way into the garden", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("A name to grow").fill("Zara");
