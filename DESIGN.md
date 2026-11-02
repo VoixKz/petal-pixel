@@ -160,7 +160,7 @@ The world has two rooms sharing one material. The public face (home page and sig
 - Hanken Grotesk only on the public face, weights 400 and 500.
 - Black pills for every action; large soft corners on every container.
 - Flat tonal steps, with a single shadow in the whole public face.
-- Real generator renders, never stock, illustration or model-made imagery.
+- Real generator renders, never stock, illustration or model-made imagery. The specimen tiles, the Night Shelf and the cover are the generator's own geometry path-traced in Blender, so a picture has richer light than the live flower but always its shape and colours.
 
 ## Colors
 
