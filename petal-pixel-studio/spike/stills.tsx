@@ -8,14 +8,14 @@ import { NIGHT_GROUND, Stage } from "@/components/flower/blossom/Stage";
 import { buildBlossom } from "@/math/blossom/build";
 import { seedOf } from "@/math/blossom/name";
 import { emptyPath, placeAt, traceStem } from "@/math/blossom/stem";
-import { GROWERS } from "@/pages/landing/growers";
+import { SPECIES } from "@/math/blossom/species";
 
 const q = new URLSearchParams(location.search);
 const name = q.get("name") ?? "Dana";
 const night = Number(q.get("night") ?? 0);
 const t = Number(q.get("t") ?? 1);
 const frame = q.get("frame") ?? "head";
-const grower = GROWERS.find((g) => g.id === q.get("grower"));
+const grower = SPECIES.find((s) => s.id === q.get("grower"));
 
 function NightBackdrop() {
   const scene = useThree((s) => s.scene);
@@ -37,7 +37,7 @@ function ClearBackdrop() {
 function Aim({ seed }: { seed: string }) {
   const camera = useThree((s) => s.camera);
   useEffect(() => {
-    const plan = buildBlossom(seed, grower?.species).stem;
+    const plan = buildBlossom(seed, grower).stem;
     const path = emptyPath();
     traceStem(plan, t, 0, path);
     const tip = placeAt(path, path.length);
@@ -86,7 +86,7 @@ function App() {
         {night > 0 && <NightBackdrop />}
         {frame === "first" && <ClearBackdrop />}
         <Aim seed={seed} />
-        <Plant seed={seed} species={grower?.species} life={{ value: t }} glow={{ value: night }} onHeadReady={() => ((window as unknown as { __head: boolean }).__head = true)} />
+        <Plant seed={seed} species={grower} life={{ value: t }} glow={{ value: night }} onHeadReady={() => ((window as unknown as { __head: boolean }).__head = true)} />
       </Stage>
     </Canvas>
   );

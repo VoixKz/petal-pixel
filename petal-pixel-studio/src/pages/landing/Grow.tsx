@@ -1,11 +1,10 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { GROWERS, STAGES, stageAt, type Grower } from "./growers";
-import { hasWebGL, picture } from "./specimens";
+import { identityOf } from "@/math/blossom/identity";
+import { STAGES, stageAt } from "./growers";
+import { hasWebGL, picture, type GrownFlower } from "./specimens";
 
 const GrowStage = lazy(() => import("./GrowStage"));
 
-/** Choosing a flower starts it at the bud, so the bloom is not a long wait. */
-const BUD_LIFE = 0.34;
 const SECONDS_PER_LIFE_TO_BUD = 14;
 const SECONDS_PER_LIFE_IN_BLOOM = 13;
 
@@ -16,18 +15,11 @@ const wantsLessMotion = () => window.matchMedia("(prefers-reduced-motion: reduce
  * the browser's own scrolling doesn't count it as covering anything, so this works it out.
  */
 function bringIntoSight(control: HTMLElement, stage: HTMLElement | null) {
-  const row = control.closest<HTMLElement>(".grow__picks");
-  if (row) {
-    const box = control.getBoundingClientRect();
-    const middle = box.left - row.getBoundingClientRect().left + box.width / 2;
-    row.scrollLeft += middle - row.clientWidth / 2;
-  }
   const holding = stage && getComputedStyle(stage).position === "sticky";
   if (!holding) return;
   const covered = stage.getBoundingClientRect().bottom + 12 - control.getBoundingClientRect().top;
   if (covered > 0) window.scrollBy({ top: -covered, behavior: "instant" });
 }
-const stillOfGrower = (grower: Grower) => picture(`/flowers/grow/${grower.id}.webp`);
 
 /** A flower that cannot load leaves its picture on the page, and the rest keeps working. */
 class StageGuard extends Component<{ flower: string; onFail: () => void; children: ReactNode }, { failed: boolean }> {
@@ -50,7 +42,8 @@ class StageGuard extends Component<{ flower: string; onFail: () => void; childre
   }
 }
 
-export function Grow() {
+/** The flower the visitor grew at the top of the page, from bare soil to full bloom. */
+export function Grow({ flower }: { flower: GrownFlower }) {
   const section = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const slider = useRef<HTMLInputElement>(null);
@@ -59,8 +52,6 @@ export function Grow() {
   const playing = useRef(false);
   const started = useRef(false);
 
-  const [grower, setGrower] = useState<Grower>(GROWERS[0]);
-  const [variant, setVariant] = useState(0);
   const [night, setNight] = useState(false);
   const [visible, setVisible] = useState(false);
   const [near, setNear] = useState(false);
@@ -102,12 +93,24 @@ export function Grow() {
     };
   }, []);
 
-  // The first time the section comes into view the flower grows by itself.
+  // A new name starts over from bare soil, and grows when it can be seen.
+  const growing = useRef(flower.seed);
+  useEffect(() => {
+    if (growing.current === flower.seed) return;
+    growing.current = flower.seed;
+    started.current = false;
+    playing.current = false;
+    life.value = 0;
+    show();
+    setFailed(false);
+    setHeadLoading(near);
+  }, [flower.seed, near, life, show]);
+
   useEffect(() => {
     if (!visible || started.current) return;
     started.current = true;
     growFrom(0);
-  }, [visible, growFrom]);
+  }, [visible, growFrom, flower.seed]);
 
   useEffect(() => {
     if (!visible) return;
@@ -130,13 +133,6 @@ export function Grow() {
     return () => cancelAnimationFrame(frame);
   }, [visible, night, life, glow, show]);
 
-  const choose = (next: Grower) => {
-    setGrower(next);
-    setVariant(0);
-    setFailed(false);
-    if (next.id !== grower.id) setHeadLoading(true);
-    growFrom(BUD_LIFE);
-  };
   const onDrawn = useCallback(() => setDrawn(true), []);
   const onHeadReady = useCallback(() => setHeadLoading(false), []);
   const onFail = useCallback(() => {
@@ -144,36 +140,38 @@ export function Grow() {
     setFailed(true);
   }, []);
 
+  const { species, kind } = identityOf(flower.name);
+  const whose = `${flower.name}'s ${kind}`;
+  const indefinite = `a ${kind}`;
   const live = webgl && !failed;
   let note = "Drag the flower to turn it.";
-  if (!webgl) note = "This browser cannot draw the plant, so here is each flower fully open.";
-  else if (failed) note = "This flower did not load. Pick another one.";
+  if (!webgl) note = `This browser cannot draw the plant, so here is ${indefinite} fully open.`;
+  else if (failed) note = "This flower did not load. Grow it again at the top of the page.";
   else if (headLoading) note = "Loading the flower.";
 
   return (
     <section className="grow" id="grow" ref={section} data-night={night}>
       <div className="grow__head">
-        <h2 className="rise">Watch one grow.</h2>
+        <h2 className="rise">Watch it grow.</h2>
         <p className="grow__lead rise">
-          Six real flowers a name can grow, from bud to bloom. Drag the slider, then turn the lights off and the colour comes from inside.
+          This is {whose}, from bare soil to full bloom. Drag the slider, then turn the lights off and the colour comes from inside.
         </p>
       </div>
 
-      <div ref={stage} className="grow__stage" role="img" aria-label={`${grower.label}, growing from soil to full bloom`}>
+      <div ref={stage} className="grow__stage" role="img" aria-label={`${whose}, growing from soil to full bloom`}>
         <img
           className="grow__poster"
-          src={stillOfGrower(grower)}
+          src={picture(`/flowers/grow/${species.id}.webp`)}
           alt=""
           width={480}
           height={480}
           data-hidden={live && drawn}
         />
         {webgl && near && (
-          <StageGuard flower={grower.id} onFail={onFail}>
+          <StageGuard flower={flower.seed} onFail={onFail}>
             <Suspense fallback={null}>
               <GrowStage
-                grower={grower}
-                seed={`grow-${grower.id}-${variant}`}
+                seed={flower.seed}
                 life={life}
                 glow={glow}
                 night={night}
@@ -188,21 +186,6 @@ export function Grow() {
       </div>
 
       <div className="grow__controls" onFocus={(event) => bringIntoSight(event.target, stage.current)}>
-        <div className="grow__picks rise" role="group" aria-label="Flower">
-          {GROWERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="grow__pick"
-              aria-pressed={item.id === grower.id}
-              onClick={() => choose(item)}
-            >
-              <img src={stillOfGrower(item)} alt="" loading="lazy" width={480} height={480} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
-
         {live && (
           <div className="grow__age rise">
             <input
@@ -231,9 +214,6 @@ export function Grow() {
             <button type="button" className="pp-button" onClick={() => growFrom(0)}>Grow again</button>
             <button type="button" className="pp-button pp-button--quiet" onClick={() => setNight((on) => !on)}>
               {night ? "Turn the lights on" : "Turn the lights off"}
-            </button>
-            <button type="button" className="pp-button pp-button--quiet" onClick={() => setVariant((n) => n + 1)}>
-              Another colour
             </button>
           </div>
         )}

@@ -65,7 +65,7 @@ export default function Landing() {
       </header>
       <main>
         <Hero name={wanted} onGrown={onGrown} />
-        <Grow />
+        <Grow flower={grown} />
         <Names onPick={pick} />
         <How />
         <Keep />

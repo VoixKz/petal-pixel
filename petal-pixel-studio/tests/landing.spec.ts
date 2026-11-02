@@ -4,18 +4,18 @@ import { ANNA, finishSignIn } from "./helpers";
 test("a guest grows a flower on the home page without signing in", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Every name");
-  await expect(page.getByText("Dana grows a rose.")).toBeVisible();
+  await expect(page.getByText("This is Dana's rose.")).toBeVisible();
 
   await page.getByLabel("A name to grow").fill("Zara");
   await page.getByRole("button", { name: "Grow it" }).click();
 
-  await expect(page.getByText("Zara grows a tiger lily.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zara is a tiger lily." })).toBeVisible();
   await expect(page).toHaveURL("/");
 });
 
 test("a name typed on the home page stays in the browser", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByText("Dana grows a rose.")).toBeVisible();
+  await expect(page.getByText("This is Dana's rose.")).toBeVisible();
   const sent: string[] = [];
   page.on("request", (request) => {
     if (request.method() === "POST") sent.push(request.url());
@@ -23,7 +23,7 @@ test("a name typed on the home page stays in the browser", async ({ page }) => {
 
   await page.getByLabel("A name to grow").fill("Zara");
   await page.getByRole("button", { name: "Grow it" }).click();
-  await expect(page.getByText("Zara grows a tiger lily.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zara is a tiger lily." })).toBeVisible();
 
   expect(sent).toEqual([]);
 });
@@ -33,52 +33,63 @@ test("the same name grows the same flower on a second visit", async ({ page }) =
     await page.goto("/");
     await page.getByLabel("A name to grow").fill("Omar");
     await page.getByRole("button", { name: "Grow it" }).click();
-    await expect(page.getByText("Omar grows a tiger lily.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Omar is a tiger lily." })).toBeVisible();
   }
 });
 
-test("a visitor watches a plant grow, picks a flower and turns the lights off", async ({ page }) => {
+test("a visitor watches a plant grow and turns the lights off", async ({ page }) => {
   await page.goto("/");
   const section = page.locator("#grow");
   await section.scrollIntoViewIfNeeded();
 
   // A trial click fails if anything is drawn over the heading.
-  await page.getByRole("heading", { name: "Watch one grow." }).click({ trial: true, timeout: 20_000 });
+  await page.getByRole("heading", { name: "Watch it grow." }).click({ trial: true, timeout: 20_000 });
 
   const age = page.getByLabel("Age of the plant");
   await expect.poll(async () => Number(await age.inputValue()), { timeout: 20_000 }).toBeGreaterThan(5);
-
-  const rose = page.getByRole("button", { name: "Rose", exact: true });
-  await rose.click();
-  await expect(rose).toHaveAttribute("aria-pressed", "true");
 
   await section.getByRole("button", { name: "Turn the lights off" }).click();
   await expect(section).toHaveAttribute("data-night", "true");
   await section.getByRole("button", { name: "Turn the lights on" }).click();
   await expect(section).toHaveAttribute("data-night", "false");
-
-  await page.getByRole("button", { name: "Hibiscus", exact: true }).click();
-  await expect(page.getByText("Drag the flower to turn it.")).toBeVisible({ timeout: 40_000 });
-  await expect(page.getByRole("button", { name: "Another colour" })).toBeVisible();
 });
 
-test("picking the flower already chosen does not leave it loading", async ({ page }) => {
+test("the Grow section grows the flower the visitor just grew", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#grow").scrollIntoViewIfNeeded();
-  const peony = page.getByRole("button", { name: "Peony", exact: true });
-  await peony.click();
-  await expect(page.getByText("Drag the flower to turn it.")).toBeVisible({ timeout: 40_000 });
-  await peony.click();
-  await expect(page.getByText("Drag the flower to turn it.")).toBeVisible();
-  await expect(page.getByText("Loading the flower.")).toHaveCount(0);
+  const section = page.locator("#grow");
+  await expect(section).toContainText("Dana's rose");
+
+  await page.getByLabel("A name to grow").fill("Zara");
+  await page.getByRole("button", { name: "Grow it" }).click();
+  await expect(section).toContainText("Zara's tiger lily");
+  await expect(section.getByRole("img", { name: "Zara's tiger lily, growing from soil to full bloom" })).toBeVisible();
+  await expect(section.getByRole("button", { name: "Another colour" })).toHaveCount(0);
 });
 
-test("every flower names who made it, as its licence asks", async ({ page }) => {
+test("a visitor's name takes over the headline, and only then can the flower be sent or kept", async ({ page }) => {
   await page.goto("/");
-  const credits = page.locator(".foot__credits");
-  await expect(credits).toContainText("0BNDT");
-  await expect(credits).toContainText("thesidekick");
-  await expect(credits.getByRole("link")).toHaveCount(6);
+  const title = page.getByRole("heading", { level: 1 });
+  await expect(title).toContainText("Every name");
+  await expect(page.getByRole("button", { name: "Send it" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Keep it" })).toHaveCount(0);
+
+  await page.getByLabel("A name to grow").fill("Zara");
+  await page.getByRole("button", { name: "Grow it" }).click();
+  await expect(title).toHaveText("Zara is a tiger lily.");
+  await expect(page.getByRole("button", { name: "Send it" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Keep it" })).toBeVisible();
+});
+
+test("a very long name still fits inside the headline", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("A name to grow").fill("Alexandria-Konstantinopolskaya Bexultanovna");
+  await page.getByRole("button", { name: "Grow it" }).click();
+  const width = await page.evaluate(() => {
+    const half = document.querySelector(".hero__half--first") as HTMLElement;
+    return { half: half.getBoundingClientRect().right, room: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth };
+  });
+  expect(width.half).toBeLessThan(width.room);
+  expect(width.scroll).toBeLessThanOrEqual(width.room);
 });
 
 for (const [width, height] of [[390, 664], [768, 1024]]) {
@@ -86,7 +97,7 @@ for (const [width, height] of [[390, 664], [768, 1024]]) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
     await page.locator("#grow").scrollIntoViewIfNeeded();
-    await page.getByRole("button", { name: "Water lily", exact: true }).focus();
+    await page.getByLabel("Age of the plant").focus();
 
     for (const key of [...Array(12).fill("Tab"), ...Array(12).fill("Shift+Tab")]) {
       await page.keyboard.press(key);
@@ -108,14 +119,14 @@ for (const [width, height] of [[390, 664], [768, 1024]]) {
 test("a flower from the gallery grows in the studio", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Grow Iris's rose" }).click();
-  await expect(page.getByText("Iris grows a rose.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Iris is a rose." })).toBeVisible();
 });
 
 test("a flower picked from the gallery clears what was typed in the field", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("A name to grow").fill("Maya");
   await page.getByRole("button", { name: "Grow Iris's rose" }).click();
-  await expect(page.getByText("Iris grows a rose.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Iris is a rose." })).toBeVisible();
   await expect(page.getByLabel("A name to grow")).toHaveValue("");
 });
 
@@ -123,7 +134,7 @@ test("a sent link opens on that flower, and the name never reaches a server", as
   const asked: string[] = [];
   page.on("request", (request) => asked.push(request.url()));
   await page.goto("/#name=Zara");
-  await expect(page.getByText("Zara grows a tiger lily.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zara is a tiger lily." })).toBeVisible();
   expect(asked.filter((url) => url.includes("Zara") && !url.includes("#"))).toEqual([]);
 });
 
@@ -156,7 +167,7 @@ test("the name is named on the way into the garden", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("A name to grow").fill("Zara");
   await page.getByRole("button", { name: "Grow it" }).click();
-  await expect(page.getByText("Zara grows a tiger lily.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Zara is a tiger lily." })).toBeVisible();
   await page.getByRole("button", { name: "Keep Zara's flower" }).click();
   await expect(page).toHaveURL(/\/login$/);
 });
@@ -175,7 +186,7 @@ test("keeping a flower leads through sign-in to that flower in the console", asy
   await page.goto("/");
   await page.getByLabel("A name to grow").fill("Sofia");
   await page.getByRole("button", { name: "Grow it" }).click();
-  await expect(page.getByText("Sofia grows a rose.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sofia is a rose." })).toBeVisible();
 
   await page.getByRole("button", { name: "Keep Sofia's flower" }).click();
   await expect(page).toHaveURL(/\/login$/);

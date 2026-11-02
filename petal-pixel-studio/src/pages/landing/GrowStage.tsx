@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { Plant } from "@/components/flower/blossom/Plant";
 import { Stage } from "@/components/flower/blossom/Stage";
 import { Turntable, useTurning } from "@/components/flower/blossom/Turntable";
-import type { Grower } from "./growers";
 
 const { lerp, smoothstep } = THREE.MathUtils;
 
@@ -31,7 +30,6 @@ function Rig({ life }: { life: { value: number } }) {
 }
 
 export interface GrowStageProps {
-  grower: Grower;
   seed: string;
   life: { value: number };
   glow: { value: number };
@@ -43,7 +41,7 @@ export interface GrowStageProps {
   onHeadFailed: () => void;
 }
 
-export default function GrowStage({ grower, seed, life, glow, night, active, onReady, onHeadReady, onHeadFailed }: GrowStageProps) {
+export default function GrowStage({ seed, life, glow, night, active, onReady, onHeadReady, onHeadFailed }: GrowStageProps) {
   const still = useRef(window.matchMedia("(prefers-reduced-motion: reduce)").matches).current;
   const { angle, handlers } = useTurning();
 
@@ -60,7 +58,7 @@ export default function GrowStage({ grower, seed, life, glow, night, active, onR
         <Stage glow={glow} bloom={night}>
           <Rig life={life} />
           <Turntable angle={angle}>
-            <Plant key={`${grower.id}-${seed}`} seed={seed} species={grower.species} onHeadReady={onHeadReady} onHeadFailed={onHeadFailed} life={life} glow={glow} sway={!still} />
+            <Plant key={seed} seed={seed} onHeadReady={onHeadReady} onHeadFailed={onHeadFailed} life={life} glow={glow} sway={!still} />
           </Turntable>
         </Stage>
       </Canvas>

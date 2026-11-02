@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { identityOf } from "@/math/blossom/identity";
 import { FIRST_NAME, hasWebGL, inkFor, picture, type GrownFlower } from "./specimens";
 
@@ -24,6 +24,17 @@ const nameInLink = () => new URLSearchParams(window.location.hash.slice(1)).get(
 
 const article = (word: string) => (/^[aeiou]/i.test(word) ? "an" : "a");
 
+/** How wide some words of the headline are, in units of its own font size. */
+function widthInEm(words: string): number {
+  try {
+    const context = document.createElement("canvas").getContext("2d") as CanvasRenderingContext2D;
+    context.font = '500 100px "Hanken Grotesk", sans-serif';
+    return (context.measureText(words).width * 0.97) / 100;
+  } catch {
+    return words.length * 0.52;
+  }
+}
+
 interface HeroProps {
   name: string;
   onGrown: (flower: GrownFlower, colours: readonly string[]) => void;
@@ -48,6 +59,8 @@ export function Hero({ name, onGrown }: HeroProps) {
   const [onScreen, setOnScreen] = useState(true);
   const [webgl] = useState(hasWebGL);
   const [lost, setLost] = useState(false);
+  /** Set once the flower on screen is one the visitor asked for, not the page's first. */
+  const [own, setOwn] = useState<{ name: string; kind: string } | null>(null);
 
   useEffect(() => setLost(false), [seed]);
 
@@ -84,6 +97,7 @@ export function Hero({ name, onGrown }: HeroProps) {
     setShown(clean);
     setSent("");
     setSentence(`${clean} grows ${article(flower.kind)} ${flower.kind}.`);
+    setOwn(clean === FIRST_NAME && start === FIRST_LIFE ? null : { name: clean, kind: flower.kind });
     onGrown({ name: clean, seed: flower.seed, species: flower.kind }, flower.colour);
     growFrom(start);
   };
@@ -169,16 +183,36 @@ export function Hero({ name, onGrown }: HeroProps) {
           )}
         </div>
 
-        <h1 className="hero__title">
-          <span className="hero__half hero__half--first">
-            Every <br />
-            name{" "}
-          </span>
-          <span className="hero__half hero__half--last">
-            is a <br />
-            flower.
-          </span>
-        </h1>
+        {own ? (
+          // Sized to the words themselves, so any name stands where "Every name" stood.
+          <h1
+            key={`${own.name}${own.kind}`}
+            className="hero__title hero__title--own"
+            style={
+              {
+                "--wide-em": Math.max(widthInEm(own.name), widthInEm(`${own.kind}.`)),
+                "--narrow-em": Math.max(widthInEm(own.name), widthInEm(`is ${article(own.kind)} ${own.kind}.`)),
+              } as CSSProperties
+            }
+          >
+            <span className="hero__half hero__half--first">{own.name} </span>
+            <span className="hero__half hero__half--last">
+              is {article(own.kind)} <br />
+              {own.kind}.
+            </span>
+          </h1>
+        ) : (
+          <h1 className="hero__title">
+            <span className="hero__half hero__half--first">
+              Every <br />
+              name{" "}
+            </span>
+            <span className="hero__half hero__half--last">
+              is a <br />
+              flower.
+            </span>
+          </h1>
+        )}
 
         <div className="hero__note">
           <p key={note}>{webgl ? NOTES[note] : "This browser cannot draw the plant. The flowers further down were grown from names in just the same way."}</p>
@@ -186,13 +220,14 @@ export function Hero({ name, onGrown }: HeroProps) {
 
         {webgl && (
           <div className="hero__grow">
-            <div className="hero__says">
-              <p aria-live="polite">{lost ? "This flower did not load. Grow it again in a moment." : sent || sentence}</p>
-              <span className="hero__next">
-                <button type="button" onClick={() => void send()}>Send it</button>
-                <a href="#save">Keep it</a>
-              </span>
-            </div>
+            <p className="hero__says" aria-live="polite">{lost ? "This flower did not load. Grow it again in a moment." : sent}</p>
+            {!own && !lost && !sent && <p className="hero__says">This is {FIRST_NAME}'s {identityOf(FIRST_NAME).kind}. Try your own name.</p>}
+            {own && (
+              <div className="hero__next">
+                <button type="button" className="pp-button pp-button--quiet" onClick={() => void send()}>Send it</button>
+                <a className="pp-button" href="#save">Keep it</a>
+              </div>
+            )}
             <form className="hero__form" onSubmit={submit}>
               <input
                 ref={field}
@@ -204,7 +239,7 @@ export function Hero({ name, onGrown }: HeroProps) {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
               />
-              <button className="pp-button" type="submit">Grow it</button>
+              <button className={own ? "pp-button pp-button--quiet" : "pp-button"} type="submit">Grow it</button>
             </form>
           </div>
         )}

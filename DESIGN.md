@@ -167,7 +167,7 @@ The world has two rooms sharing one material. The public face (home page and sig
 Cool, barely violet greys and warm near-black, with one colour on loan from a flower.
 
 ### Primary
-- **Petal Accent** (default in frontmatter): the middle stop of the last grown flower's palette, written onto the page root at runtime; the default is the middle stop of Dana's dahlia. It works as a ground for the open question and for text selection. The third How field keeps Dana's own colour, because that section is a worked example of Dana.
+- **Petal Accent** (default in frontmatter): the middle stop of the last grown flower's palette, written onto the page root at runtime; the default is the middle stop of Dana's rose. It works as a ground for the open question and for text selection. The third How field keeps Dana's own colour, because that section is a worked example of Dana.
 - **On Accent** (default in frontmatter): the text colour paired with the accent, recomputed as black or white, whichever reads better, whenever the accent changes.
 
 ### Neutral
@@ -293,7 +293,7 @@ The plant on its own stage, used in the console studio and on a shared flower's 
 Each card in the console shows the flower drawn on the visitor's own device from its name, kept in local storage, on the console's secondary ground. Nothing is fetched and nothing needs a picture store.
 
 ### Growth Stage
-A full-bleed band with the plant standing right of the words: a live plant growing from soil to bloom under one slider, six picture buttons for choosing a flower, and pills for growing again, the lights and another colour. Below 900px the words come first, then the plant holds at the top of the screen at 46svh while the controls pass under it, with the flowers in one scrolling row. Turning the lights off is the one place the public face goes dark on request: the band moves to Night over 900ms and the flower glows from its heart. Only the band changes; the bar and the rest of the page stay on Gallery Ground. Bloom needs an opaque canvas, so this canvas paints the band's exact colour as its background.
+A full-bleed band with the plant standing right of the words: the visitor's own flower growing from soil to bloom under one slider, and pills for growing again and for the lights. Below 900px the words come first, then the plant holds at the top of the screen at 46svh while the controls pass under it, with the flowers in one scrolling row. Turning the lights off is the one place the public face goes dark on request: the band moves to Night over 900ms and the flower glows from its heart. Only the band changes; the bar and the rest of the page stay on Gallery Ground. Bloom needs an opaque canvas, so this canvas paints the band's exact colour as its background.
 
 ### Reveal Motion
 Blocks rise once on entering view (24px, 620ms, `cubic-bezier(0.2, 0.7, 0.2, 1)`), staggered 70ms across a row. Content is only hidden after the script has marked the page, so it survives with no script. Reduced motion removes the rise and jumps growth to its end state.

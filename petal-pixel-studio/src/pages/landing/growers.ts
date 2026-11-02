@@ -1,20 +1,3 @@
-import { SPECIES, type Species } from "@/math/blossom/species";
-
-/** One flower visitors can grow in the section on the home page. */
-export interface Grower {
-  id: string;
-  label: string;
-  species: Species;
-}
-
-const kind = (id: string) => SPECIES.find((s) => s.id === id) as Species;
-
-export const GROWERS: readonly Grower[] = ["rose", "water-lily", "peony", "tiger-lily", "camellia", "hibiscus"].map((id) => ({
-  id,
-  label: kind(id).label,
-  species: kind(id),
-}));
-
 /** Where each stage falls on the slider, in the plant's 0 to 1 life. */
 export const STAGES = [
   { label: "Soil", at: 0 },
